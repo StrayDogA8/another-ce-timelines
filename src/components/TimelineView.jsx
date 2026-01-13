@@ -1,20 +1,23 @@
 import { useEffect, useRef } from "react";
-import { useTimelineData } from "../utils/useTimelineData";
 import {
   pickStep,
   buildSpanChildPlacement,
   calcSpanBandHeight,
   layoutSpans,
   layoutEvents,
+  formatYear,
 } from "../utils/timelineUtils";
 import "../styles/04-timeline.css";
 
-function TimelineView({ selectedId, onSelect }) {
+function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange }) {
   const scrollRef = useRef(null);
   const timelineRef = useRef(null);
-  const scaleRef = useRef(1); 
+  const scaleRef = useRef(1);
 
-  const { file, events, spans, eras } = useTimelineData();
+  const file = timelineData.file;
+  const events = timelineData.elements.filter(e => e.type === "event");
+  const spans = timelineData.elements.filter(e => e.type === "span");
+  const eras = timelineData.elements.filter(e => e.type === "era");
 
   const PX_PER_YEAR = file?.maxZoom ?? 10;
 
@@ -36,8 +39,6 @@ function TimelineView({ selectedId, onSelect }) {
 
   const yearToPx = (year) => (year - minYear) * PX_PER_YEAR;
 
-  const BASE_LINE_Y = 120;
-
   // spans
   const SPAN_HEIGHT = 23;
   const SPAN_OFFSET = 14;
@@ -46,10 +47,13 @@ function TimelineView({ selectedId, onSelect }) {
 
   const spanChildPlacement = buildSpanChildPlacement(spans);
 
-  const { finalSpans, spanLaneEnds } = layoutSpans({
+  // First pass: calculate with temporary BASE_LINE_Y to determine content extent
+  const TEMP_BASE_LINE_Y = 500;
+
+  const { spanLaneEnds } = layoutSpans({
     spans,
     yearToPx,
-    BASE_LINE_Y,
+    BASE_LINE_Y: TEMP_BASE_LINE_Y,
     SPAN_HEIGHT,
     SPAN_OFFSET,
     SPAN_GAP,
@@ -71,6 +75,45 @@ function TimelineView({ selectedId, onSelect }) {
   const LANE_SPACING = 37;
   const BOX_OFFSET = 50;
 
+  const tempEvents = layoutEvents({
+    events,
+    yearToPx,
+    BASE_LINE_Y: TEMP_BASE_LINE_Y,
+    spanBandHeight,
+    EVENT_WIDTH,
+    EVENT_GAP,
+    LANE_SPACING,
+    BOX_OFFSET,
+  });
+
+  // eras
+  const ERA_OFFSET = 30;
+
+  // Calculate dynamic timeline height based on temporary layout
+  const maxEventTop = tempEvents.length > 0 ? Math.min(...tempEvents.map(e => e.top)) : TEMP_BASE_LINE_Y;
+  const tempEraTop = TEMP_BASE_LINE_Y + ERA_OFFSET;
+  const maxEraTop = eras.length > 0 ? tempEraTop : TEMP_BASE_LINE_Y;
+
+  const topExtent = Math.min(maxEventTop, maxEraTop);
+  const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
+  const belowBaseline = ERA_OFFSET + 30; // Era height + some padding
+
+  const calculatedHeight = aboveBaseline + belowBaseline;
+
+  const BASE_LINE_Y = calculatedHeight;
+
+  const { finalSpans } = layoutSpans({
+    spans,
+    yearToPx,
+    BASE_LINE_Y,
+    SPAN_HEIGHT,
+    SPAN_OFFSET,
+    SPAN_GAP,
+    SPAN_VERTICAL_GAP,
+    spanChildPlacement,
+    PX_PER_YEAR,
+  });
+
   const finalEvents = layoutEvents({
     events,
     yearToPx,
@@ -82,8 +125,6 @@ function TimelineView({ selectedId, onSelect }) {
     BOX_OFFSET,
   });
 
-  // eras
-  const ERA_OFFSET = 30;
   const finalEras = eras.map((era) => {
     const left = yearToPx(era.start);
     const width = (era.end - era.start) * PX_PER_YEAR;
@@ -103,6 +144,13 @@ function TimelineView({ selectedId, onSelect }) {
     ticks.push(y);
   }
 
+  // Notify parent of height changes
+  useEffect(() => {
+    if (onHeightChange) {
+      onHeightChange(calculatedHeight);
+    }
+  }, [calculatedHeight, onHeightChange]);
+
   // DPI + zoom effect
   useEffect(() => {
     const scrollEl = scrollRef.current;
@@ -117,17 +165,27 @@ function TimelineView({ selectedId, onSelect }) {
     updateBackgroundForDPI();
     window.addEventListener("resize", updateBackgroundForDPI);
 
+    // Notify parent of initial zoom
+    if (onZoomChange) {
+      onZoomChange(scaleRef.current);
+    }
+
     let scale = scaleRef.current;
 
     const handleWheel = (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-
-      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        return;
+      }
 
       const scrollRect = scrollEl.getBoundingClientRect();
       const mouseXInScroll = e.clientX - scrollRect.left;
+      const mouseYInScroll = e.clientY - scrollRect.top;
 
       const prevScrollLeft = scrollEl.scrollLeft;
+      const prevScrollTop = scrollEl.scrollTop;
       const prevScale = scale;
 
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -137,8 +195,11 @@ function TimelineView({ selectedId, onSelect }) {
       timelineEl.style.transform = `scale(${newScale})`;
 
       const baseWidth = timelineEl.offsetWidth;
+      const baseHeight = timelineEl.offsetHeight;
       const scaledWidth = baseWidth * newScale;
+      const scaledHeight = baseHeight * newScale;
       const viewportWidth = scrollEl.clientWidth;
+      const viewportHeight = scrollEl.clientHeight;
 
       if (scaledWidth > viewportWidth) {
         const worldX = (prevScrollLeft + mouseXInScroll) / prevScale;
@@ -153,17 +214,25 @@ function TimelineView({ selectedId, onSelect }) {
         timelineEl.style.marginLeft = "0px";
       }
 
+      const worldY = (prevScrollTop + mouseYInScroll) / prevScale;
+      const newScrollTop = worldY * newScale - mouseYInScroll;
+      scrollEl.scrollTop = newScrollTop;
+
       scale = newScale;
-      scaleRef.current = newScale; 
+      scaleRef.current = newScale;
+
+      if (onZoomChange) {
+        onZoomChange(newScale);
+      }
     };
 
-    scrollEl.addEventListener("wheel", handleWheel, { passive: false });
+    scrollEl.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
       window.removeEventListener("resize", updateBackgroundForDPI);
-      scrollEl.removeEventListener("wheel", handleWheel);
+      scrollEl.removeEventListener("wheel", handleWheel, { capture: true });
     };
-  }, []);
+  }, [onZoomChange]);
 
   // auto-scroll to selected item
   useEffect(() => {
@@ -200,7 +269,7 @@ function TimelineView({ selectedId, onSelect }) {
       <div
         ref={timelineRef}
         className="timeline"
-        style={{ width: `${timelineWidth}px` }}
+        style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
       >
         <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
 
@@ -239,12 +308,70 @@ function TimelineView({ selectedId, onSelect }) {
           })}
         </div>
 
-        <div className="spans-layer">
+        {/* Connectors layer - behind everything */}
+        <div className="connectors-layer">
           {finalSpans.map((span) => {
             const placement = spanChildPlacement[span.id];
             const isChild = !!placement;
-            const isTopChild = isChild && placement.offset === 1;
-            const isBottomChild = isChild && placement.offset === -1;
+            const isTopChild = isChild && placement.offset > 0;
+            const isBottomChild = isChild && placement.offset < 0;
+
+            if (!isChild) return null;
+
+            // Calculate actual visual distance for connector height and offset
+            let connectorHeight = undefined;
+            let connectorOffset = undefined;
+            const parentSpan = finalSpans.find(s => s.id === placement.parentId);
+            if (parentSpan) {
+              const laneDifference = Math.abs(span.lane - parentSpan.lane);
+              if (laneDifference > 1) {
+                connectorHeight = `${18 + (laneDifference - 1) * 28}px`;
+                const extraOffset = (laneDifference - 1) * 24;
+                connectorOffset = isBottomChild ? `-${2 + extraOffset}px` : `${2 + extraOffset}px`;
+              }
+            }
+
+            return (
+              <div
+                key={`connector-${span.id}`}
+                style={{
+                  position: 'absolute',
+                  left: `${span.left}px`,
+                  top: `${span.top}px`,
+                  pointerEvents: 'none',
+                }}
+              >
+                {isTopChild && (
+                  <div
+                    className="span-connector-top"
+                    style={{
+                      backgroundColor: span.color || "var(--element-bg)",
+                      paddingTop: connectorHeight,
+                      transform: connectorOffset
+                        ? `translate(-20px, ${connectorOffset})`
+                        : undefined,
+                    }}
+                  />
+                )}
+                {isBottomChild && (
+                  <div
+                    className="span-connector-bottom"
+                    style={{
+                      backgroundColor: span.color || "var(--element-bg)",
+                      paddingTop: connectorHeight,
+                      transform: connectorOffset
+                        ? `translate(-20px, ${connectorOffset})`
+                        : undefined,
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="spans-layer">
+          {finalSpans.map((span) => {
             const isSelected = selectedId === span.id;
 
             return (
@@ -263,33 +390,17 @@ function TimelineView({ selectedId, onSelect }) {
                   onSelect?.(span.id);
                 }}
               >
-                {isTopChild && (
-                  <div
-                    className="span-connector-top"
-                    style={{
-                      backgroundColor: span.color || "var(--element-bg)",
-                    }}
-                  />
-                )}
-                {isBottomChild && (
-                  <div
-                    className="span-connector-bottom"
-                    style={{
-                      backgroundColor: span.color || "var(--element-bg)",
-                    }}
-                  />
-                )}
-
                 <span className="span-title">{span.title}</span>
                 <span className="span-years">
-                  {span.start} – {span.end} {file.posID}
+                  {formatYear(span.start, file.negID, file.posID)} – {formatYear(span.end, file.negID, file.posID)}
                 </span>
               </div>
             );
           })}
         </div>
 
-        <div className="events-layer">
+        {/* Event lines layer - behind spans and events */}
+        <div className="event-lines-layer">
           {finalEvents.map((event) => {
             const parentId = event.parents?.[0];
             const parentSpan = parentId
@@ -304,6 +415,55 @@ function TimelineView({ selectedId, onSelect }) {
 
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
+
+            return (
+              <div
+                key={`event-line-${event.id}`}
+                className="event-line-container"
+                style={{
+                  position: 'absolute',
+                  left: `${event._x}px`,
+                  top: `${eventBottom}px`,
+                  pointerEvents: 'none',
+                }}
+              >
+                <div
+                  className="event-line"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '0',
+                    transform: 'translateX(-50%)',
+                    width: '2px',
+                    height: `${lineHeight}px`,
+                    background: parentColor || 'var(--element-bg)',
+                  }}
+                />
+                <div
+                  className="event-dot"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: `${lineHeight}px`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '8px',
+                    height: '8px',
+                    background: parentColor || 'var(--element-bg)',
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="events-layer">
+          {finalEvents.map((event) => {
+            const parentId = event.parents?.[0];
+            const parentSpan = parentId
+              ? finalSpans.find((span) => span.id === parentId)
+              : null;
+
+            const parentColor = parentSpan?.color;
             const isSelected = selectedId === event.id;
 
             return (
@@ -315,8 +475,6 @@ function TimelineView({ selectedId, onSelect }) {
                   left: `${event._x}px`,
                   top: `${event.top}px`,
                   position: "absolute",
-                  "--event-line-height": `${lineHeight}px`,
-                  "--event-line-color": parentColor || "var(--element-bg)",
                   border: parentColor
                     ? `2px solid ${parentColor}`
                     : "2px solid var(--element-bg)",
@@ -327,7 +485,7 @@ function TimelineView({ selectedId, onSelect }) {
                 }}
               >
                 <div className="event-title">{event.title}</div>
-                <div className="event-date">{event.date}</div>
+                <div className="event-date">{formatYear(event.date, file.negID, file.posID)}</div>
               </div>
             );
           })}
@@ -343,7 +501,7 @@ function TimelineView({ selectedId, onSelect }) {
             }}
           >
             <div className="tick-line" />
-            <div className="tick-label">{year}</div>
+            <div className="tick-label">{formatYear(year, file.negID, file.posID)}</div>
           </div>
         ))}
       </div>

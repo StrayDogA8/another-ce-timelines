@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import { PanelLeft, PanelRight, ChevronDown } from "lucide-react";
-import { useTimelineData } from "../utils/useTimelineData";
 
 export default function Sidebar({
   isCollapsed,
   onToggle,
   selectedId,
   onSelect,
+  timelineData,
 }) {
-  const { file, events, spans, eras } = useTimelineData();
+  const file = timelineData.file;
+  const events = timelineData.elements.filter(e => e.type === "event");
+  const spans = timelineData.elements.filter(e => e.type === "span");
+  const eras = timelineData.elements.filter(e => e.type === "era");
 
   const [openEras, setOpenEras] = useState(true);
   const [openSpans, setOpenSpans] = useState(true);

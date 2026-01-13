@@ -2,18 +2,37 @@ import { useState, useRef, useEffect } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
+import AddPanel from "./components/AddPanel";
+import { sampleData } from "./data/sampleData";
+import { saveTimelineToFile } from "./utils/api";
+import { updateElementWithNewId } from "./utils/idUtils";
+import { generateIdFromTitle } from "./utils/idUtils";
 import "./index.css";
 
 function App() {
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 455;
   const COLLAPSED_WIDTH = 44;
+  const DEFAULT_LEFT_WIDTH = 350;
+  const DEFAULT_RIGHT_WIDTH = 270;
 
-  const [sidebarWidth, setSidebarWidth] = useState(MIN_WIDTH);
-  const [rightWidth, setRightWidth] = useState(MIN_WIDTH);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_LEFT_WIDTH);
+  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [timelineHeight, setTimelineHeight] = useState(1000);
+
+  const [timelineData, setTimelineData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('timelineData');
+      return saved ? JSON.parse(saved) : sampleData;
+    } catch (error) {
+      console.error('Failed to parse saved timeline data:', error);
+      return sampleData;
+    }
+  });
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
@@ -53,11 +72,199 @@ function App() {
     };
   }, [isLeftCollapsed]);
 
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.key === 'Backspace' || e.key === 'Delete') && selectedId) {
+        const target = e.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        e.preventDefault();
+
+        const element = timelineData.elements.find(el => el.id === selectedId);
+        if (!element) return;
+
+        const confirmMessage = `Are you sure you want to delete this ${element.type}?\n\nTitle: ${element.title}\nID: ${element.id}\n\nThis action cannot be undone.`;
+
+        if (window.confirm(confirmMessage)) {
+          handleDelete(selectedId);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedId, timelineData]);
+
   const currentLeftWidth = isLeftCollapsed ? COLLAPSED_WIDTH : sidebarWidth;
 
   const handleSelect = (id) => {
     setSelectedId(id);
   };
+
+  const handleUpdate = async (updatedElement) => {
+    const originalId = updatedElement.id;
+
+    setTimelineData((prevData) => {
+      const updatedData = updateElementWithNewId(prevData, updatedElement, originalId);
+
+      const newId = updatedData.elements.find(el =>
+        el.title === updatedElement.title && el.type === updatedElement.type
+      )?.id;
+
+      if (newId && newId !== originalId) {
+        setSelectedId(newId);
+      }
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+
+      saveTimelineToFile(updatedData, 'sampleData')
+        .then(() => {
+          console.log('Timeline saved to file successfully');
+        })
+        .catch((error) => {
+          console.error('Failed to save timeline to file:', error);
+        });
+
+      return updatedData;
+    });
+  };
+
+  const handleAddEvent = () => {
+    const newEvent = {
+      id: generateIdFromTitle("New Event", "event"),
+      type: "event",
+      title: "New Event",
+      date: timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2),
+      parents: [],
+      importance: 3,
+      color: "#EDE6DA",
+      tags: [],
+    };
+
+    setTimelineData((prevData) => {
+      const updatedData = {
+        ...prevData,
+        elements: [...prevData.elements, newEvent],
+      };
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+
+      return updatedData;
+    });
+
+    setSelectedId(newEvent.id);
+  };
+
+  const handleAddSpan = () => {
+    const midpoint = timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
+    const duration = Math.floor((timelineData.file.end - timelineData.file.start) / 4);
+
+    const newSpan = {
+      id: generateIdFromTitle("New Span", "span"),
+      type: "span",
+      title: "New Span",
+      start: midpoint - duration / 2,
+      end: midpoint + duration / 2,
+      color: "#A6977E",
+      branches: [],
+      forks: [],
+      tags: [],
+    };
+
+    setTimelineData((prevData) => {
+      const updatedData = {
+        ...prevData,
+        elements: [...prevData.elements, newSpan],
+      };
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+
+      return updatedData;
+    });
+
+    setSelectedId(newSpan.id);
+  };
+
+  const handleAddEra = () => {
+    const midpoint = timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
+    const duration = Math.floor((timelineData.file.end - timelineData.file.start) / 3);
+
+    const newEra = {
+      id: generateIdFromTitle("New Era", "era"),
+      type: "era",
+      title: "New Era",
+      start: midpoint - duration / 2,
+      end: midpoint + duration / 2,
+      color: "#F4D05A",
+      tags: [],
+    };
+
+    setTimelineData((prevData) => {
+      const updatedData = {
+        ...prevData,
+        elements: [...prevData.elements, newEra],
+      };
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+
+      return updatedData;
+    });
+
+    setSelectedId(newEra.id);
+  };
+
+  const handleDelete = (elementId) => {
+    setTimelineData((prevData) => {
+      const filteredElements = prevData.elements.filter(el => el.id !== elementId);
+
+      const cleanedElements = filteredElements.map(el => {
+        if (el.type === "event" && el.parents?.includes(elementId)) {
+          return {
+            ...el,
+            parents: el.parents.filter(id => id !== elementId),
+          };
+        }
+
+        if (el.type === "span" && el.branches?.includes(elementId)) {
+          return {
+            ...el,
+            branches: el.branches.filter(id => id !== elementId),
+          };
+        }
+
+        if (el.type === "span" && el.forks?.includes(elementId)) {
+          return {
+            ...el,
+            forks: el.forks.filter(id => id !== elementId),
+          };
+        }
+
+        return el;
+      });
+
+      const updatedData = {
+        ...prevData,
+        elements: cleanedElements,
+      };
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+
+      return updatedData;
+    });
+
+    setSelectedId(null);
+  };
+
+  const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
 
   return (
     <div className="app-shell">
@@ -70,6 +277,7 @@ function App() {
           onToggle={() => setIsLeftCollapsed((v) => !v)}
           selectedId={selectedId}
           onSelect={handleSelect}
+          timelineData={timelineData}
         />
       </aside>
 
@@ -89,6 +297,9 @@ function App() {
         <TimelineView
           selectedId={selectedId}
           onSelect={handleSelect}
+          timelineData={timelineData}
+          onZoomChange={setZoom}
+          onHeightChange={setTimelineHeight}
         />
       </main>
 
@@ -109,12 +320,23 @@ function App() {
             style={{ width: rightWidth }}
           >
             <RightPanel
-              selectedId={selectedId}
               onSelect={handleSelect}
+              selectedElement={selectedElement}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+              timelineData={timelineData}
             />
           </aside>
         </>
       )}
+
+      <AddPanel
+        onAddEvent={handleAddEvent}
+        onAddSpan={handleAddSpan}
+        onAddEra={handleAddEra}
+        zoom={zoom}
+        timelineHeight={timelineHeight}
+      />
     </div>
   );
 }

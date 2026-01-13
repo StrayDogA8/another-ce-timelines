@@ -1,0 +1,248 @@
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--secondary-bg);
+  border-left: 1px solid var(--active-bg);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.right-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px;
+  padding-top: 15px;
+  border-bottom: 1px solid var(--active-bg);
+  background-color: var(--secondary-bg);
+}
+
+.right-panel-header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dark-bg);
+}
+
+.element-id-container {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.element-id {
+  margin: 0;
+  font-size: 11px;
+  color: var(--gray-1);
+  font-family: monospace;
+}
+
+.copy-id-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.125rem;
+  color: var(--gray-1);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.copy-id-button:hover {
+  background-color: var(--active-bg);
+  color: var(--dark-bg);
+}
+
+.copy-id-button:active {
+  background-color: color-mix(in srgb, var(--active-bg), black 5%);
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--dark-bg);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.close-button:hover {
+  background-color: var(--active-bg);
+}
+
+.right-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.validation-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.validation-error {
+  padding: 8px 10px;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  color: #c33;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-group label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--element-bg);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"] {
+  padding: 6px 8px;
+  border: 1px solid var(--active-bg);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background-color: white;
+  transition: border-color 0.15s ease;
+  color: var(--dark-bg);
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus {
+  outline: none;
+  border-color: var(--info-blue);
+  box-shadow: 0 0 0 3px rgba(135, 198, 250, 0.1);
+}
+
+.color-input-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.color-picker {
+  width: 48px;
+  height: 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  padding: 2px;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.color-text {
+  flex: 1;
+  font-family: monospace;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--active-bg);
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--dark-bg);
+  color: white;
+  flex: 1;
+}
+
+.btn-primary:hover {
+  background-color: #5a4e46;
+}
+
+.btn-primary:active {
+  background-color: #4d4139;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--dark-bg);
+  border: 1px solid var(--active-bg);
+}
+
+.btn-secondary:hover {
+  background-color: var(--active-bg);
+}
+
+.btn-secondary:active {
+  background-color: color-mix(in srgb, var(--active-bg), black 5%);
+}
+
+.form-delete-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--active-bg);
+}
+
+.btn-delete {
+  width: 100%;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #fcc;
+  background-color: #fee;
+  color: #c33;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-delete:hover {
+  background-color: #fcc;
+  border-color: #faa;
+}
+
+.btn-delete:active {
+  background-color: #faa;
+}

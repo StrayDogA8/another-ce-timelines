@@ -1,4 +1,13 @@
-/* for timeline tick spacing */
+export function formatYear(year, negID = "BCE", posID = "CE") {
+  if (year < 0) {
+    return `${Math.abs(year)} ${negID}`;
+  } else if (year > 0) {
+    return `${year} ${posID}`;
+  } else {
+    return "0";
+  }
+}
+
 export function pickStep(range) {
   const absRange = Math.abs(range);
   const targetTicks = 10;
@@ -16,23 +25,36 @@ export function pickStep(range) {
 }
 
 // build child -> { parentId, offset } from spans
+// Rules:
+// - Branches: must start within parent's time span, alternate above/below with increasing offset
+// - Forks: must start in the exact year parent ends, alternate above/below with increasing offset
+// Pattern: -1, +1, -2, +2, -3, +3, ...
 export function buildSpanChildPlacement(spans) {
   const placement = {};
   for (const span of spans) {
-    // branches go BELOW parent (change later)
+    // branches alternate below/above
+    // offset -1 = lower lane number = larger Y = BELOW parent (lower on screen)
+    // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
+    // Pattern: index 0 → -1, index 1 → +1, index 2 → -2, index 3 → +2, etc.
     if (Array.isArray(span.branches)) {
-      for (const childId of span.branches) {
+      span.branches.forEach((childId, index) => {
+        const magnitude = index + 1;
+        const offset = index % 2 === 0 ? -magnitude : +magnitude;
         placement[childId] = {
           parentId: span.id,
-          offset: -1,
+          offset,
         };
-      }
+      });
     }
 
     // forks alternate above/below
+    // offset -1 = lower lane number = larger Y = BELOW parent (lower on screen)
+    // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
+    // Pattern: index 0 → +1, index 1 → -2, index 2 → +3, index 3 → -4, etc.
     if (Array.isArray(span.forks)) {
       span.forks.forEach((childId, index) => {
-        const offset = index % 2 === 0 ? 1 : -1;
+        const magnitude = index + 1;
+        const offset = index % 2 === 0 ? +magnitude : -magnitude;
         placement[childId] = {
           parentId: span.id,
           offset,
@@ -48,7 +70,6 @@ export function calcSpanBandHeight(rows, offset, height, gap) {
   return offset + height + (rows - 1) * (height + gap);
 }
 
-// return positioned spans + lane info
 export function layoutSpans({
   spans,
   yearToPx,
@@ -62,83 +83,154 @@ export function layoutSpans({
 }) {
   const spanLaneEnds = [];
   const spanLaneById = {};
+  const spanById = Object.fromEntries(spans.map(s => [s.id, s]));
+  const finalSpans = [];
 
-  const finalSpans = [...spans]
-    .sort((a, b) => {
-      if (a.start === b.start) {
-        return (b.end - b.start) - (a.end - a.start);
+  const childToParent = {};
+  Object.entries(spanChildPlacement).forEach(([childId, { parentId }]) => {
+    childToParent[childId] = parentId;
+  });
+
+  const sortedSpans = [...spans].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    const aIsChild = !!childToParent[a.id];
+    const bIsChild = !!childToParent[b.id];
+    if (aIsChild !== bIsChild) return aIsChild ? 1 : -1;
+    return 0;
+  });
+
+  const processed = new Set();
+
+  function spanFitsInLane(lane, start, end) {
+    const startPx = yearToPx(start);
+    const laneEnd = spanLaneEnds[lane];
+    return laneEnd === undefined || laneEnd + SPAN_GAP <= startPx;
+  }
+
+  // Calculate how many lanes a family needs (parent + children)
+  function getFamilyLaneExtent(span) {
+    const childIds = [...(span.branches || []), ...(span.forks || [])];
+    if (childIds.length === 0) return { minOffset: 0, maxOffset: 0 };
+
+    let minOffset = 0;
+    let maxOffset = 0;
+
+    childIds.forEach(childId => {
+      const childPlacement = spanChildPlacement[childId];
+      if (childPlacement) {
+        const offset = childPlacement.offset;
+        minOffset = Math.min(minOffset, offset);
+        maxOffset = Math.max(maxOffset, offset);
       }
-      return a.start - b.start;
-    })
-    .map((span) => {
-      const left = yearToPx(span.start);
-      const width = (span.end - span.start) * PX_PER_YEAR;
-
-      function spanFitsInLane(lane) {
-        const end = spanLaneEnds[lane];
-        return end === undefined || end + SPAN_GAP <= left;
-      }
-
-      // 1) figure out base lane (normal or parent-based)
-      let baseLane;
-      const placement = spanChildPlacement[span.id];
-      if (placement) {
-        const parentLane = spanLaneById[placement.parentId];
-        if (parentLane !== undefined) {
-          let desiredLane = parentLane + placement.offset;
-          if (desiredLane < 0) desiredLane = 0;
-
-          if (spanFitsInLane(desiredLane)) {
-            baseLane = desiredLane;
-          } else {
-            baseLane = spanLaneEnds.length;
-          }
-        }
-      }
-
-      // 2) if no parent-based placement, pack from bottom
-      if (baseLane === undefined) {
-        let l = 0;
-        while (true) {
-          if (spanFitsInLane(l)) {
-            baseLane = l;
-            break;
-          }
-          l++;
-        }
-      }
-
-      // 3) if span has forks, bump it up one lane if possible
-      const hasForks = Array.isArray(span.forks) && span.forks.length > 0;
-      let laneToUse = baseLane;
-      if (hasForks) {
-        const bumped = baseLane + 1;
-        if (spanFitsInLane(bumped)) {
-          laneToUse = bumped;
-        } else {
-          laneToUse = spanLaneEnds.length;
-        }
-      }
-
-      // record usage + lane
-      spanLaneEnds[laneToUse] = left + width;
-      spanLaneById[span.id] = laneToUse;
-
-      const top =
-        BASE_LINE_Y -
-        SPAN_OFFSET -
-        SPAN_HEIGHT -
-        laneToUse * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
-
-      return {
-        ...span,
-        left,
-        width,
-        top,
-      };
     });
 
-  return { finalSpans, spanLaneEnds, spanLaneById };
+    return { minOffset, maxOffset };
+  }
+
+  function familyFitsAtLane(span, baseLane, start, end) {
+    const { minOffset, maxOffset } = getFamilyLaneExtent(span);
+
+    if (baseLane + minOffset < 0) return false;
+
+    if (!spanFitsInLane(baseLane, start, end)) return false;
+
+    for (let offset = minOffset; offset <= maxOffset; offset++) {
+      if (offset === 0) continue; 
+      const childLane = baseLane + offset;
+
+      const childIds = [...(span.branches || []), ...(span.forks || [])];
+      for (const childId of childIds) {
+        const childPlacement = spanChildPlacement[childId];
+        if (childPlacement && childPlacement.offset === offset) {
+          const child = spanById[childId];
+          if (child && !spanFitsInLane(childLane, child.start, child.end)) {
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
+  function placeSpan(span) {
+    if (processed.has(span.id)) return;
+    processed.add(span.id);
+
+    const left = yearToPx(span.start);
+    const width = (span.end - span.start) * PX_PER_YEAR;
+    const right = left + width;
+    const placement = spanChildPlacement[span.id];
+
+    let lane;
+
+    if (placement) {
+      const parentLane = spanLaneById[placement.parentId];
+      if (parentLane !== undefined) {
+        const direction = placement.offset > 0 ? 1 : -1; 
+        let searchLane = parentLane + direction;
+
+        while (true) {
+          if (searchLane < 0) {
+            searchLane = parentLane + 1;
+            while (!spanFitsInLane(searchLane, span.start, span.end)) {
+              searchLane++;
+            }
+            break;
+          }
+
+          if (spanFitsInLane(searchLane, span.start, span.end)) {
+            break;
+          }
+
+          searchLane += direction;
+        }
+
+        lane = searchLane;
+      } else {
+        lane = 0;
+        while (!spanFitsInLane(lane, span.start, span.end)) {
+          lane++;
+        }
+      }
+    } else {
+      lane = 0;
+      while (!familyFitsAtLane(span, lane, span.start, span.end)) {
+        lane++;
+      }
+    }
+
+    spanLaneEnds[lane] = right;
+    spanLaneById[span.id] = lane;
+
+    const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - lane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+
+    finalSpans.push({
+      ...span,
+      left,
+      width,
+      top,
+      lane,
+    });
+
+    const children = [];
+    if (span.branches) {
+      span.branches.forEach((childId) => {
+        if (spanById[childId]) children.push(spanById[childId]);
+      });
+    }
+    if (span.forks) {
+      span.forks.forEach((childId) => {
+        if (spanById[childId]) children.push(spanById[childId]);
+      });
+    }
+
+    children.forEach(child => placeSpan(child));
+  }
+
+  sortedSpans.forEach(span => placeSpan(span));
+
+  return { finalSpans, spanLaneEnds, spanLaneById, spanChildPlacement };
 }
 
 export function layoutEvents({
@@ -151,7 +243,6 @@ export function layoutEvents({
   LANE_SPACING,
   BOX_OFFSET,
 }) {
-  // add x-coords
   const laidOut = [...events]
     .sort((a, b) => a.date - b.date)
     .map((ev) => ({ ...ev, _x: yearToPx(ev.date) }));
