@@ -173,53 +173,44 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     let scale = scaleRef.current;
 
     const handleWheel = (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-      } else {
+      if (!(e.ctrlKey || e.metaKey)) {
         return;
       }
 
+      e.preventDefault();
+      e.stopPropagation();
+
+      const oldScale = scale;
+
+      // Get mouse position relative to the scroll container
       const scrollRect = scrollEl.getBoundingClientRect();
-      const mouseXInScroll = e.clientX - scrollRect.left;
-      const mouseYInScroll = e.clientY - scrollRect.top;
+      const pointerX = e.clientX - scrollRect.left;
+      const pointerY = e.clientY - scrollRect.top;
 
-      const prevScrollLeft = scrollEl.scrollLeft;
-      const prevScrollTop = scrollEl.scrollTop;
-      const prevScale = scale;
+      const computedStyle = window.getComputedStyle(timelineEl);
+      const marginTop = parseFloat(computedStyle.marginTop) || 0;
 
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newScale = Math.min(Math.max(prevScale * zoomFactor, 0.25), 5);
+      const mousePointTo = {
+        x: (pointerX + scrollEl.scrollLeft) / oldScale,
+        y: (pointerY + scrollEl.scrollTop - marginTop) / oldScale,
+      };
 
-      timelineEl.style.transformOrigin = "top left";
-      timelineEl.style.transform = `scale(${newScale})`;
-
-      const baseWidth = timelineEl.offsetWidth;
-      const baseHeight = timelineEl.offsetHeight;
-      const scaledWidth = baseWidth * newScale;
-      const scaledHeight = baseHeight * newScale;
-      const viewportWidth = scrollEl.clientWidth;
-      const viewportHeight = scrollEl.clientHeight;
-
-      if (scaledWidth > viewportWidth) {
-        const worldX = (prevScrollLeft + mouseXInScroll) / prevScale;
-        const newScrollLeft = worldX * newScale - mouseXInScroll;
-        scrollEl.scrollLeft = newScrollLeft;
-      } else {
-        scrollEl.scrollLeft = 0;
-        timelineEl.style.marginLeft = `${(viewportWidth - scaledWidth) / 2}px`;
-      }
-
-      if (scaledWidth > viewportWidth) {
-        timelineEl.style.marginLeft = "0px";
-      }
-
-      const worldY = (prevScrollTop + mouseYInScroll) / prevScale;
-      const newScrollTop = worldY * newScale - mouseYInScroll;
-      scrollEl.scrollTop = newScrollTop;
+      // Calculate & apply the new scale
+      const delta = e.deltaY;
+      const zoomFactor = delta < 0 ? 1.1 : 0.9;
+      const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.25), 5);
 
       scale = newScale;
       scaleRef.current = newScale;
+      timelineEl.style.transformOrigin = "0 0";
+      timelineEl.style.transform = `scale(${newScale})`;
+
+      // Calculate new scroll position 
+      const newScrollLeft = mousePointTo.x * newScale - pointerX;
+      const newScrollTop = mousePointTo.y * newScale + marginTop - pointerY;
+
+      scrollEl.scrollLeft = newScrollLeft;
+      scrollEl.scrollTop = newScrollTop;
 
       if (onZoomChange) {
         onZoomChange(newScale);
@@ -348,7 +339,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
                       transform: connectorOffset
-                        ? `translate(-20px, ${connectorOffset})`
+                        ? `translate(-19px, ${connectorOffset})`
                         : undefined,
                     }}
                   />
@@ -360,7 +351,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
                       transform: connectorOffset
-                        ? `translate(-20px, ${connectorOffset})`
+                        ? `translate(-19px, ${connectorOffset})`
                         : undefined,
                     }}
                   />
