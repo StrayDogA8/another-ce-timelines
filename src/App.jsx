@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
-import AddPanel from "./components/AddPanel";
 import { sampleData } from "./data/sampleData";
 import { saveTimelineToFile } from "./utils/api";
 import { updateElementWithNewId } from "./utils/idUtils";
@@ -21,8 +20,6 @@ function App() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
-  const [zoom, setZoom] = useState(1);
-  const [timelineHeight, setTimelineHeight] = useState(1000);
 
   const [timelineData, setTimelineData] = useState(() => {
     try {
@@ -274,6 +271,9 @@ function App() {
           selectedId={selectedId}
           onSelect={handleSelect}
           timelineData={timelineData}
+          onAddEvent={handleAddEvent}
+          onAddSpan={handleAddSpan}
+          onAddEra={handleAddEra}
         />
       </aside>
 
@@ -294,8 +294,9 @@ function App() {
           selectedId={selectedId}
           onSelect={handleSelect}
           timelineData={timelineData}
-          onZoomChange={setZoom}
-          onHeightChange={setTimelineHeight}
+          onAddEvent={handleAddEvent}
+          onAddSpan={handleAddSpan}
+          onAddEra={handleAddEra}
         />
       </main>
 
@@ -325,14 +326,6 @@ function App() {
           </aside>
         </>
       )}
-
-      <AddPanel
-        onAddEvent={handleAddEvent}
-        onAddSpan={handleAddSpan}
-        onAddEra={handleAddEra}
-        zoom={zoom}
-        timelineHeight={timelineHeight}
-      />
     </div>
   );
 }

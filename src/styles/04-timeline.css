@@ -158,3 +158,49 @@
   outline: 3px solid var(--info-bg);
   z-index: 100;
 }
+
+/* Context Menu */
+.timeline-context-menu {
+  background: var(--secondary-bg);
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 1000;
+  min-width: 130px;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 5px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--dark-bg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background: var(--active-bg);
+}
+
+.context-menu-item:active {
+  background: color-mix(in srgb, var(--active-bg), black 8%);
+}
+
+.context-menu-item svg {
+  color: var(--dark-bg);
+  flex-shrink: 0;
+  padding-right: 0px;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: var(--active-bg);
+  margin: 4px 0;
+}

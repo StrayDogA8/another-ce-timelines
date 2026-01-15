@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -7,12 +7,14 @@ import {
   layoutEvents,
   formatYear,
 } from "../utils/timelineUtils";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal } from "lucide-react";
 import "../styles/04-timeline.css";
 
-function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange }) {
+function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra }) {
   const scrollRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
+  const [contextMenu, setContextMenu] = useState(null);
 
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -251,11 +253,42 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     });
   }, [selectedId]);
 
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [contextMenu]);
+
+  const handleContextMenu = (e) => {
+    // Check if the click target is an element (event, span, or era)
+    const target = e.target;
+    const isElement = target.closest('.event, .span-item, .era-item');
+
+    if (isElement) {
+      return; // Don't show context menu on elements
+    }
+
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+    });
+  };
+
+  const handleMenuAction = (action) => {
+    setContextMenu(null);
+    action();
+  };
+
   return (
     <div
       ref={scrollRef}
       className="timeline-scroll"
       onClick={() => onSelect?.(null)} // clear selection on background click
+      onContextMenu={handleContextMenu}
     >
       <div
         ref={timelineRef}
@@ -496,6 +529,67 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
           </div>
         ))}
       </div>
+
+      {contextMenu && (
+        <div
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(onAddEvent)}
+          >
+            <RectangleHorizontal size={16} />
+            <span>Add Event</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(onAddSpan)}
+          >
+            <RectangleEllipsis size={16} />
+            <span>Add Span</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(onAddEra)}
+          >
+            <SquareSplitHorizontal size={16} />
+            <span>Add Era</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('Download JSON'))}
+          >
+            <FileJson size={16} />
+            <span>Download .json</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('Download PNG'))}
+          >
+            <Image size={16} />
+            <span>Download .png</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('Settings'))}
+          >
+            <Settings size={16} />
+            <span>Settings</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

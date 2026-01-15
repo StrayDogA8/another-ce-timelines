@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PanelLeft, PanelRight, ChevronDown } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal } from "lucide-react";
 
 export default function Sidebar({
   isCollapsed,
@@ -7,6 +7,9 @@ export default function Sidebar({
   selectedId,
   onSelect,
   timelineData,
+  onAddEvent,
+  onAddSpan,
+  onAddEra,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -180,6 +183,37 @@ export default function Sidebar({
           </div>
         </div>
       )}
+
+      {!isCollapsed && (
+        <div className="sidebar-add-container">
+          <p className="sidebar-add-label">ADD ELEMENT</p>
+          <div className="sidebar-add-buttons">
+            <button
+              className="sidebar-add-button"
+              onClick={onAddEvent}
+              title="Add Event"
+            >
+              <RectangleHorizontal size={20} />
+            </button>
+            <button
+              className="sidebar-add-button"
+              onClick={onAddSpan}
+              title="Add Span"
+            >
+              <RectangleEllipsis size={20} />
+            </button>
+            <button
+              className="sidebar-add-button"
+              onClick={onAddEra}
+              title="Add Era"
+            >
+              <SquareSplitHorizontal size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }
