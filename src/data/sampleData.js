@@ -17,6 +17,7 @@ export const sampleData = {
       "start": -2700,
       "end": -1100,
       "color": "#8B7355",
+      "description": "The Bronze Age in Greece saw the rise of the first advanced civilizations, including the Minoans on Crete and the Mycenaeans on the mainland. This period was characterized by palace-centered economies, the development of writing systems like Linear A and B, and extensive trade networks throughout the Mediterranean.",
       "tags": [
         "era",
         "bronze-age"
@@ -29,6 +30,7 @@ export const sampleData = {
       "start": -1100,
       "end": -800,
       "color": "#4B4B4B",
+      "description": "Following the collapse of the Mycenaean civilization, Greece entered a period of economic and cultural decline. Writing was lost, populations decreased, and monumental architecture ceased. However, this period also saw the emergence of the Greek alphabet and the composition of Homer's epic poems.",
       "tags": [
         "era",
         "dark-age"
@@ -41,6 +43,7 @@ export const sampleData = {
       "start": -800,
       "end": -480,
       "color": "#A68A64",
+      "description": "The Archaic Period marked Greece's recovery and expansion. City-states emerged as the dominant political units, colonization spread Greek culture across the Mediterranean, and the foundations of democracy were laid. This era saw the establishment of the Olympic Games and significant developments in art, architecture, and philosophy.",
       "tags": [
         "era",
         "archaic"
@@ -52,7 +55,8 @@ export const sampleData = {
       "title": "Classical Period",
       "start": -480,
       "end": -323,
-      "color": "#F4D05A",
+      "color": "#cca72e",
+      "description": "The Classical Period of Ancient Greece is considered the height of Greek civilization, marked by significant achievements in art, philosophy, democracy, and military prowess. This era saw the rise of Athens as a cultural and political center.",
       "tags": [
         "era",
         "classical"
@@ -65,6 +69,7 @@ export const sampleData = {
       "start": -323,
       "end": -146,
       "color": "#8A7FAF",
+      "description": "Following Alexander the Great's conquests and death, Greek culture spread across a vast territory from the Mediterranean to India. The Hellenistic kingdoms that emerged blended Greek and Eastern traditions, producing remarkable advances in science, mathematics, philosophy, and art. This era ended with Rome's conquest of the Greek world.",
       "tags": [
         "era",
         "hellenistic"
@@ -77,6 +82,7 @@ export const sampleData = {
       "start": -2700,
       "end": -1450,
       "color": "#B8860B",
+      "description": "The Minoans on Crete created Europe's first advanced civilization. They built elaborate palaces at Knossos and other sites, developed the Linear A writing system, and established extensive maritime trade networks. Their culture featured sophisticated art, complex religious practices, and advanced engineering. The civilization declined after the massive Thera volcanic eruption.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -91,6 +97,7 @@ export const sampleData = {
       "start": -1600,
       "end": -1100,
       "color": "#8B4513",
+      "description": "The Mycenaeans dominated mainland Greece during the late Bronze Age, building impressive fortified palaces at Mycenae, Tiryns, and Pylos. They adopted and modified Minoan culture, developed the Linear B script, and may have been the historical basis for Homer's Achaeans. Their civilization collapsed around 1100 BCE, possibly due to invasions, natural disasters, or internal conflicts.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -105,6 +112,7 @@ export const sampleData = {
       "start": -800,
       "end": -146,
       "color": "#2E4C6D",
+      "description": "Athens emerged as one of the most powerful and influential city-states in ancient Greece. Birthplace of democracy, home to philosophers like Socrates, Plato, and Aristotle, and center of arts and learning, Athens reached its zenith during the 5th century BCE. The city led the Delian League and competed with Sparta for dominance, ultimately losing the Peloponnesian War but maintaining its cultural prestige.",
       "branches": [
         "span-delian-league"
       ],
@@ -120,7 +128,8 @@ export const sampleData = {
       "title": "Sparta",
       "start": -800,
       "end": -146,
-      "color": "#8B0000",
+      "color": "#735454",
+      "description": "Sparta was a prominent city-state in ancient Greece known for its military prowess and austere way of life. The Spartan political system was unique, featuring two hereditary kings and a council of elders, with a strong emphasis on military training from childhood.",
       "branches": [
         "span-peloponnesian-league"
       ],
@@ -137,6 +146,7 @@ export const sampleData = {
       "start": -478,
       "end": -404,
       "color": "#4A7BA7",
+      "description": "Founded after the Persian Wars to defend against future Persian aggression, the Delian League was an alliance of Greek city-states led by Athens. Over time, Athens transformed it into an empire, using the league's treasury to fund its own projects like the Parthenon. The league's oppressive nature contributed to tensions leading to the Peloponnesian War.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -151,6 +161,7 @@ export const sampleData = {
       "start": -550,
       "end": -366,
       "color": "#A52A2A",
+      "description": "Led by Sparta, the Peloponnesian League was a military alliance of city-states in the Peloponnese and beyond. Unlike the centralized Delian League, member states retained more autonomy. The league served as Sparta's main power base in its rivalry with Athens and played a crucial role in the Peloponnesian War.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -165,6 +176,7 @@ export const sampleData = {
       "start": -808,
       "end": -146,
       "color": "#6A5ACD",
+      "description": "Originally considered semi-barbarian by southern Greeks, Macedon rose to dominate the Greek world under Philip II and his son Alexander the Great. Philip's military innovations and diplomatic skill unified Greece under Macedonian hegemony, while Alexander's conquests spread Greek culture across the known world, ushering in the Hellenistic age.",
       "branches": [
         "span-macedon-expansion",
         "span-ptolemaic-egypt",
@@ -197,6 +209,7 @@ export const sampleData = {
       "start": -323,
       "end": -146,
       "color": "#DAA520",
+      "description": "Founded by Ptolemy I, one of Alexander's generals, this Hellenistic kingdom ruled Egypt for nearly three centuries. The Ptolemies blended Greek and Egyptian cultures, made Alexandria a center of learning with its famous library, and patronized science and the arts. The dynasty ended with Cleopatra VII's death and Roman conquest.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -211,6 +224,7 @@ export const sampleData = {
       "start": -323,
       "end": -146,
       "color": "#CD853F",
+      "description": "The largest of Alexander's successor kingdoms, the Seleucid Empire stretched from Anatolia to India at its height. Founded by Seleucus I, another of Alexander's generals, it promoted Hellenistic culture while ruling over diverse populations. The empire gradually contracted under pressure from Rome, Parthia, and internal rebellions.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -268,6 +282,7 @@ export const sampleData = {
       "start": -550,
       "end": -330,
       "color": "#df95a4",
+      "description": "The Achaemenid Empire was the largest empire the ancient world had yet seen, stretching from the Indus Valley to the Mediterranean. Under rulers like Cyrus, Darius, and Xerxes, it attempted to conquer Greece, leading to the Persian Wars. Despite repeated invasions, the Greek city-states successfully resisted until Alexander the Great finally conquered the empire.",
       "branches": [],
       "forks": [],
       "tags": [
@@ -369,6 +384,7 @@ export const sampleData = {
       "parents": [],
       "importance": 5,
       "color": "#FFD700",
+      "description": "The first recorded Olympic Games were held at Olympia in honor of Zeus. Initially featuring only a single footrace, the games grew to include various athletic competitions. Held every four years, they united the Greek world in peaceful competition and became one of the most important Panhellenic festivals, continuing for over a thousand years.",
       "tags": [
         "athletics",
         "religion",
@@ -459,6 +475,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#4169E1",
+      "description": "Cleisthenes reformed Athenian government, creating the world's first known democracy. He reorganized the citizen body into ten tribes, established the Council of 500, and introduced ostracism. These reforms broke the power of aristocratic families and gave ordinary citizens unprecedented political participation, laying the foundation for Athens' democratic golden age.",
       "tags": [
         "politics",
         "democracy",
@@ -491,6 +508,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#4682B4",
+      "description": "Athens and Plataea defeated a much larger Persian invasion force on the plain of Marathon. The Athenian hoplites, led by Miltiades, employed superior tactics to achieve a stunning victory. This battle proved that the Persians could be beaten and became a defining moment in Athenian identity. The legendary run of Pheidippides to announce the victory gave rise to the modern marathon race.",
       "tags": [
         "battle",
         "persian-wars",
@@ -507,6 +525,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#8B0000",
+      "description": "King Leonidas and 300 Spartans, along with several thousand other Greeks, held the narrow pass at Thermopylae against Xerxes' massive Persian army for three days. Though ultimately defeated after betrayal revealed a mountain path, their heroic last stand became legendary, exemplifying Spartan valor and Greek resistance. The delay allowed the Greek fleet to prepare for the Battle of Salamis.",
       "tags": [
         "battle",
         "persian-wars",
@@ -523,6 +542,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#1E90FF",
+      "description": "In the narrow straits near Athens, the Greek fleet under Themistocles decisively defeated the Persian navy. The Greeks' smaller, more maneuverable triremes exploited the confined waters to devastating effect. This naval victory turned the tide of the Persian invasion, forcing Xerxes to retreat and leaving his army vulnerable to defeat at Plataea the following year.",
       "tags": [
         "battle",
         "naval",
@@ -586,6 +606,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#F0E68C",
+      "description": "The Parthenon, Athens' magnificent temple to Athena, was completed on the Acropolis. Designed by Ictinus and Callicrates, with sculptures by Pheidias, it represented the pinnacle of Classical Greek architecture. Built with Delian League funds, it symbolized Athenian power and cultural achievement during the city's golden age under Pericles.",
       "tags": [
         "architecture",
         "culture",
@@ -633,6 +654,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#9370DB",
+      "description": "Socrates, the influential Athenian philosopher, was tried and executed for allegedly corrupting the youth and impiety. His method of questioning conventional wisdom and his association with anti-democratic figures made him controversial. Rather than flee, he accepted his death sentence by drinking hemlock, becoming a martyr for philosophy. His student Plato immortalized him in his dialogues.",
       "tags": [
         "philosophy",
         "culture",
@@ -679,6 +701,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#DDA0DD",
+      "description": "Plato established the Academy in Athens, one of the first institutions of higher learning in the Western world. For nearly 900 years, it served as a center for philosophical and scientific study. Students including Aristotle studied mathematics, astronomy, and philosophy there. The Academy profoundly influenced Western intellectual tradition.",
       "tags": [
         "philosophy",
         "education",
@@ -725,6 +748,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#9370DB",
+      "description": "Philip II of Macedon decisively defeated the combined forces of Athens and Thebes at Chaeronea, ending Greek city-state independence. The young Alexander led the decisive cavalry charge. This battle established Macedonian hegemony over Greece and paved the way for Alexander's later conquests. The age of the independent polis effectively ended.",
       "tags": [
         "battle",
         "macedon"
@@ -803,6 +827,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#8B008B",
+      "description": "Alexander the Great died in Babylon at age 32, possibly from fever, poisoning, or disease. In just 13 years, he had created one of history's largest empires, spreading Greek culture from Egypt to India. His death without a clear heir led to the Wars of the Diadochi as his generals divided his empire, ushering in the Hellenistic period.",
       "tags": [
         "death",
         "alexander"
@@ -848,6 +873,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#FFD700",
+      "description": "The Great Library of Alexandria was established by Ptolemy II, becoming antiquity's largest repository of knowledge. It aimed to collect all the world's written works, housing hundreds of thousands of scrolls. Scholars from across the Mediterranean came to study there. The library symbolized the Hellenistic commitment to learning and scientific inquiry, though its eventual destruction remains one of history's great losses.",
       "tags": [
         "education",
         "library",
@@ -1135,6 +1161,7 @@ export const sampleData = {
       ],
       "importance": 5,
       "color": "#98FB98",
+      "description": "Euclid compiled his groundbreaking mathematical treatise 'Elements' in Alexandria. This systematic presentation of geometry, starting from basic axioms and building to complex proofs, became one of the most influential works in mathematics. It remained the standard geometry textbook for over 2000 years and established the axiomatic method still used in mathematics today.",
       "tags": [
         "mathematics",
         "geometry"

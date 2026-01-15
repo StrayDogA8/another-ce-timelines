@@ -9,7 +9,6 @@
   scrollbar-width: none;     /* Firefox */
   -ms-overflow-style: none;  /* IE/Edge Legacy */
 
-
 }
 
 .timeline-scroll::-webkit-scrollbar { display: none; }
@@ -32,6 +31,7 @@
   right: 0;
   height: 3px;
   background: var(--dark-bg);
+  
 }
 
 .tick {
@@ -123,7 +123,7 @@
 }
 
 .event-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 
   white-space: nowrap;

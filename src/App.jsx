@@ -141,9 +141,7 @@ function App() {
       title: "New Event",
       date: timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2),
       parents: [],
-      importance: 3,
       color: "#EDE6DA",
-      tags: [],
     };
 
     setTimelineData((prevData) => {
@@ -174,7 +172,6 @@ function App() {
       color: "#A6977E",
       branches: [],
       forks: [],
-      tags: [],
     };
 
     setTimelineData((prevData) => {
@@ -203,7 +200,6 @@ function App() {
       start: midpoint - duration / 2,
       end: midpoint + duration / 2,
       color: "#F4D05A",
-      tags: [],
     };
 
     setTimelineData((prevData) => {
