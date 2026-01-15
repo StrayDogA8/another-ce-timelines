@@ -3,8 +3,8 @@ export const sampleData = {
     "id": "ancient-greece-timeline",
     "type": "timeline",
     "title": "Ancient Greece",
-    "start": -2700,
-    "end": -146,
+    "start": -2800,
+    "end": -100,
     "maxZoom": 5,
     "negID": "BCE",
     "posID": "CE"
@@ -175,7 +175,7 @@ export const sampleData = {
       "title": "Kingdom of Macedon",
       "start": -808,
       "end": -146,
-      "color": "#6B8B8B",
+      "color": "#9B6B6B",
       "description": "Originally considered semi-barbarian by southern Greeks, Macedon rose to dominate the Greek world under Philip II and his son Alexander the Great. Philip's military innovations and diplomatic skill unified Greece under Macedonian hegemony, while Alexander's conquests spread Greek culture across the known world, ushering in the Hellenistic age.",
       "branches": [
         "span-macedon-expansion",

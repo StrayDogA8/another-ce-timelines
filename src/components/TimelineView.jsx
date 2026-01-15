@@ -7,7 +7,7 @@ import {
   layoutEvents,
   formatYear,
 } from "../utils/timelineUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal } from "lucide-react";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
 
 function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra }) {
@@ -15,6 +15,10 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
   const [contextMenu, setContextMenu] = useState(null);
+  const [sliderValue, setSliderValue] = useState(0);
+  const [currentScale, setCurrentScale] = useState(1);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const animationFrameRef = useRef(null);
 
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -207,23 +211,52 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
       timelineEl.style.transformOrigin = "0 0";
       timelineEl.style.transform = `scale(${newScale})`;
 
-      // Calculate new scroll position 
+      // Calculate new scroll position
       const newScrollLeft = mousePointTo.x * newScale - pointerX;
       const newScrollTop = mousePointTo.y * newScale + marginTop - pointerY;
 
-      scrollEl.scrollLeft = newScrollLeft;
-      scrollEl.scrollTop = newScrollTop;
+      // When zoomed out (scale < 1), constrain scrolling to the scaled bounds
+      const actualWidth = timelineEl.offsetWidth * newScale;
+      const actualHeight = timelineEl.offsetHeight * newScale;
+      const maxScrollX = Math.max(0, actualWidth - scrollEl.clientWidth);
+      const maxScrollY = Math.max(0, actualHeight - scrollEl.clientHeight);
+
+      scrollEl.scrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollX));
+      scrollEl.scrollTop = Math.max(0, Math.min(newScrollTop, maxScrollY));
+
+      // Update scale state to trigger slider update
+      setCurrentScale(newScale);
 
       if (onZoomChange) {
         onZoomChange(newScale);
       }
     };
 
+    // Constrain scroll during regular scrolling when zoomed
+    const constrainScroll = () => {
+      const currentScale = scaleRef.current;
+      if (currentScale >= 1) return; // Only constrain when zoomed out
+
+      const actualWidth = timelineEl.offsetWidth * currentScale;
+      const actualHeight = timelineEl.offsetHeight * currentScale;
+      const maxScrollX = Math.max(0, actualWidth - scrollEl.clientWidth);
+      const maxScrollY = Math.max(0, actualHeight - scrollEl.clientHeight);
+
+      if (scrollEl.scrollLeft > maxScrollX) {
+        scrollEl.scrollLeft = maxScrollX;
+      }
+      if (scrollEl.scrollTop > maxScrollY) {
+        scrollEl.scrollTop = maxScrollY;
+      }
+    };
+
     scrollEl.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    scrollEl.addEventListener("scroll", constrainScroll, { passive: true });
 
     return () => {
       window.removeEventListener("resize", updateBackgroundForDPI);
       scrollEl.removeEventListener("wheel", handleWheel, { capture: true });
+      scrollEl.removeEventListener("scroll", constrainScroll);
     };
   }, [onZoomChange]);
 
@@ -282,6 +315,153 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     setContextMenu(null);
     action();
   };
+
+  const handleDownloadJSON = () => {
+    const dataStr = JSON.stringify(timelineData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${file?.id || 'timeline'}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPNG = async () => {
+    const timelineEl = timelineRef.current;
+    if (!timelineEl) return;
+
+    try {
+      // Dynamically import html2canvas
+      const html2canvas = (await import('html2canvas')).default;
+
+      // Calculate the actual content height
+      const contentHeight = calculatedHeight;
+
+      const canvas = await html2canvas(timelineEl, {
+        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim(),
+        scale: 2, // Higher quality
+        logging: false,
+        height: contentHeight,
+        windowHeight: contentHeight,
+      });
+
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${file?.id || 'timeline'}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      });
+    } catch (error) {
+      console.error('Error generating PNG:', error);
+    }
+  };
+
+  const handleSliderChange = (e) => {
+    const value = parseFloat(e.target.value);
+    setSliderValue(value);
+
+    const scrollEl = scrollRef.current;
+    const timelineEl = timelineRef.current;
+    if (!scrollEl || !timelineEl) return;
+
+    const currentScale = scaleRef.current;
+    const actualWidth = timelineEl.offsetWidth * currentScale;
+
+    // Calculate scroll position based on the full range
+    const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
+    const scrollPosition = (value / 100) * maxScroll;
+
+    scrollEl.scrollLeft = scrollPosition;
+  };
+
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  // Animation effect
+  useEffect(() => {
+    if (!isPlaying) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    const animate = () => {
+      setSliderValue((prevValue) => {
+        const newValue = prevValue + 0.02; // Speed of animation
+        if (newValue >= 100) {
+          setIsPlaying(false);
+          return 100;
+        }
+        return newValue;
+      });
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isPlaying]);
+
+  // Update scroll position when slider value changes during animation
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const scrollEl = scrollRef.current;
+    const timelineEl = timelineRef.current;
+    if (!scrollEl || !timelineEl) return;
+
+    const currentScale = scaleRef.current;
+    const actualWidth = timelineEl.offsetWidth * currentScale;
+    const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
+    const scrollPosition = (sliderValue / 100) * maxScroll;
+
+    scrollEl.scrollLeft = scrollPosition;
+  }, [sliderValue, isPlaying]);
+
+  // Update slider when user scrolls manually or when zoom changes
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    const timelineEl = timelineRef.current;
+    if (!scrollEl || !timelineEl) return;
+
+    const updateSlider = () => {
+      // Don't update if playing to avoid conflicts
+      if (isPlaying) return;
+
+      // Calculate max scroll based on scaled dimensions
+      const scale = scaleRef.current;
+      const actualWidth = timelineEl.offsetWidth * scale;
+      const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
+
+      if (maxScroll <= 0) {
+        setSliderValue(0);
+        return;
+      }
+      const scrollPercentage = (scrollEl.scrollLeft / maxScroll) * 100;
+      setSliderValue(scrollPercentage);
+    };
+
+    scrollEl.addEventListener('scroll', updateSlider);
+
+    // Update slider immediately when this effect runs (including after zoom changes)
+    updateSlider();
+
+    return () => scrollEl.removeEventListener('scroll', updateSlider);
+  }, [currentScale, isPlaying]);
 
   return (
     <div
@@ -566,14 +746,14 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('Download JSON'))}
+            onClick={() => handleMenuAction(handleDownloadJSON)}
           >
             <FileJson size={16} />
             <span>Download .json</span>
           </button>
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('Download PNG'))}
+            onClick={() => handleMenuAction(handleDownloadPNG)}
           >
             <Image size={16} />
             <span>Download .png</span>
@@ -590,6 +770,47 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
           </button>
         </div>
       )}
+
+      <div className="timeline-slider-container">
+        <button
+          className="slider-play-button"
+          onClick={handlePlayPause}
+          aria-label={isPlaying ? "Pause" : "Play"}
+          title={isPlaying ? "Pause" : "Play"}
+        >
+          {isPlaying ? (
+            <Pause size={16} strokeWidth={2} />
+          ) : (
+            <Play size={16} strokeWidth={2} />
+          )}
+        </button>
+        <div className="slider-track">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value={sliderValue}
+            onChange={handleSliderChange}
+            className="timeline-slider"
+          />
+          <div
+            className="slider-viewport-indicator"
+            style={{
+              left: (() => {
+                if (!scrollRef.current) return '50%';
+                const viewportWidthPercent = Math.min(100, (scrollRef.current.clientWidth / (timelineWidth * scaleRef.current) * 100));
+                const halfWidth = viewportWidthPercent / 2;
+                // Map sliderValue (0-100) to the safe range (halfWidth to 100-halfWidth)
+                const safeRange = 100 - viewportWidthPercent;
+                const mappedPosition = halfWidth + (sliderValue / 100) * safeRange;
+                return `${mappedPosition}%`;
+              })(),
+              width: `${Math.min(100, scrollRef.current ? (scrollRef.current.clientWidth / (timelineWidth * scaleRef.current) * 100) : 10)}%`
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

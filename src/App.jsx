@@ -13,7 +13,7 @@ function App() {
   const MAX_WIDTH = 455;
   const COLLAPSED_WIDTH = 44;
   const DEFAULT_LEFT_WIDTH = 350;
-  const DEFAULT_RIGHT_WIDTH = 270;
+  const DEFAULT_RIGHT_WIDTH = 385;
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
