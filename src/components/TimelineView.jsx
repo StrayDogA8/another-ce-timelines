@@ -70,7 +70,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   );
 
   // events
-  const EVENT_WIDTH = 150;
+  const EVENT_WIDTH = 160;
   const EVENT_GAP = 6;
   const LANE_SPACING = 37;
   const BOX_OFFSET = 50;

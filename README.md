@@ -7,6 +7,8 @@
 
 A free app that allows users to create and share customized timelines for use in historical chronologies, world-building, and project management. 
 
+![Screenshot](docs/screenshot-011426.png)
+
 ![Design Doc](docs/design-doc.png)
 
 **Target release: Early 2026.**

@@ -24,6 +24,8 @@
   color: var(--gray-1);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+
+  color: var(--element-bg);
 }
 
 .element-id-container {

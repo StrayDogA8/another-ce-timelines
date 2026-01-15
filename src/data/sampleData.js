@@ -111,7 +111,7 @@ export const sampleData = {
       "title": "Athens",
       "start": -800,
       "end": -146,
-      "color": "#2E4C6D",
+      "color": "#6B7B8B",
       "description": "Athens emerged as one of the most powerful and influential city-states in ancient Greece. Birthplace of democracy, home to philosophers like Socrates, Plato, and Aristotle, and center of arts and learning, Athens reached its zenith during the 5th century BCE. The city led the Delian League and competed with Sparta for dominance, ultimately losing the Peloponnesian War but maintaining its cultural prestige.",
       "branches": [
         "span-delian-league"
@@ -128,7 +128,7 @@ export const sampleData = {
       "title": "Sparta",
       "start": -800,
       "end": -146,
-      "color": "#735454",
+      "color": "#9B6B6B",
       "description": "Sparta was a prominent city-state in ancient Greece known for its military prowess and austere way of life. The Spartan political system was unique, featuring two hereditary kings and a council of elders, with a strong emphasis on military training from childhood.",
       "branches": [
         "span-peloponnesian-league"
@@ -145,7 +145,7 @@ export const sampleData = {
       "title": "Delian League",
       "start": -478,
       "end": -404,
-      "color": "#4A7BA7",
+      "color": "#8B7D6B",
       "description": "Founded after the Persian Wars to defend against future Persian aggression, the Delian League was an alliance of Greek city-states led by Athens. Over time, Athens transformed it into an empire, using the league's treasury to fund its own projects like the Parthenon. The league's oppressive nature contributed to tensions leading to the Peloponnesian War.",
       "branches": [],
       "forks": [],
@@ -160,7 +160,7 @@ export const sampleData = {
       "title": "Peloponnesian League",
       "start": -550,
       "end": -366,
-      "color": "#A52A2A",
+      "color": "#6B8B6B",
       "description": "Led by Sparta, the Peloponnesian League was a military alliance of city-states in the Peloponnese and beyond. Unlike the centralized Delian League, member states retained more autonomy. The league served as Sparta's main power base in its rivalry with Athens and played a crucial role in the Peloponnesian War.",
       "branches": [],
       "forks": [],
@@ -175,7 +175,7 @@ export const sampleData = {
       "title": "Kingdom of Macedon",
       "start": -808,
       "end": -146,
-      "color": "#6A5ACD",
+      "color": "#6B8B8B",
       "description": "Originally considered semi-barbarian by southern Greeks, Macedon rose to dominate the Greek world under Philip II and his son Alexander the Great. Philip's military innovations and diplomatic skill unified Greece under Macedonian hegemony, while Alexander's conquests spread Greek culture across the known world, ushering in the Hellenistic age.",
       "branches": [
         "span-macedon-expansion",
@@ -194,7 +194,7 @@ export const sampleData = {
       "title": "Macedonian Hegemony",
       "start": -338,
       "end": -146,
-      "color": "#7B68EE",
+      "color": "#9B6B6B",
       "branches": [],
       "forks": [],
       "tags": [
@@ -208,7 +208,7 @@ export const sampleData = {
       "title": "Ptolemaic Kingdom",
       "start": -323,
       "end": -146,
-      "color": "#DAA520",
+      "color": "#6B8B6B",
       "description": "Founded by Ptolemy I, one of Alexander's generals, this Hellenistic kingdom ruled Egypt for nearly three centuries. The Ptolemies blended Greek and Egyptian cultures, made Alexandria a center of learning with its famous library, and patronized science and the arts. The dynasty ended with Cleopatra VII's death and Roman conquest.",
       "branches": [],
       "forks": [],
@@ -223,7 +223,7 @@ export const sampleData = {
       "title": "Seleucid Empire",
       "start": -323,
       "end": -146,
-      "color": "#CD853F",
+      "color": "#8B7D6B",
       "description": "The largest of Alexander's successor kingdoms, the Seleucid Empire stretched from Anatolia to India at its height. Founded by Seleucus I, another of Alexander's generals, it promoted Hellenistic culture while ruling over diverse populations. The empire gradually contracted under pressure from Rome, Parthia, and internal rebellions.",
       "branches": [],
       "forks": [],
@@ -238,7 +238,7 @@ export const sampleData = {
       "title": "Corinth",
       "start": -700,
       "end": -146,
-      "color": "#5F9EA0",
+      "color": "#8B7D6B",
       "branches": [],
       "forks": [],
       "tags": [
@@ -252,7 +252,7 @@ export const sampleData = {
       "title": "Thebes",
       "start": -800,
       "end": -335,
-      "color": "#8B4789",
+      "color": "#6B7B8B",
       "branches": [],
       "forks": [],
       "tags": [
@@ -266,28 +266,13 @@ export const sampleData = {
       "title": "Syracuse",
       "start": -734,
       "end": -146,
-      "color": "#CD5C5C",
+      "color": "#6B8B8B",
       "branches": [],
       "forks": [],
       "tags": [
         "city-state",
         "colony",
         "sicily"
-      ]
-    },
-    {
-      "id": "span-persian-empire",
-      "type": "span",
-      "title": "Achaemenid Persian Empire",
-      "start": -550,
-      "end": -330,
-      "color": "#df95a4",
-      "description": "The Achaemenid Empire was the largest empire the ancient world had yet seen, stretching from the Indus Valley to the Mediterranean. Under rulers like Cyrus, Darius, and Xerxes, it attempted to conquer Greece, leading to the Persian Wars. Despite repeated invasions, the Greek city-states successfully resisted until Alexander the Great finally conquered the empire.",
-      "branches": [],
-      "forks": [],
-      "tags": [
-        "empire",
-        "persia"
       ]
     },
     {
@@ -487,9 +472,7 @@ export const sampleData = {
       "type": "event",
       "title": "Ionian Revolt",
       "date": -499,
-      "parents": [
-        "span-persian-empire"
-      ],
+      "parents": [],
       "importance": 4,
       "color": "#DC143C",
       "tags": [

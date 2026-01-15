@@ -8,7 +8,6 @@
 
   scrollbar-width: none;     /* Firefox */
   -ms-overflow-style: none;  /* IE/Edge Legacy */
-
 }
 
 .timeline-scroll::-webkit-scrollbar { display: none; }
@@ -21,7 +20,6 @@
 /* canvas */
 .timeline {
   position: relative;
-
   margin-top: 25vh;
 }
 
