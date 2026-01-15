@@ -204,7 +204,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
       // Calculate & apply the new scale
       const delta = e.deltaY;
       const zoomFactor = delta < 0 ? 1.1 : 0.9;
-      const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.25), 5);
+      const newScale = Math.min(Math.max(oldScale * zoomFactor, 1), 5);
 
       scale = newScale;
       scaleRef.current = newScale;
@@ -344,8 +344,8 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim(),
         scale: 2, // Higher quality
         logging: false,
-        height: contentHeight,
-        windowHeight: contentHeight,
+        height: calculatedHeight + 100,
+        windowHeight: calculatedHeight + 100,
       });
 
       canvas.toBlob((blob) => {
