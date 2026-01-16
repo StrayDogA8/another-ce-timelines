@@ -10,7 +10,7 @@ import {
 import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
 
-function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings }) {
+function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings, downloadPngTrigger }) {
   const scrollRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
@@ -331,11 +331,22 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   const handleDownloadPNG = async () => {
     const timelineEl = timelineRef.current;
-    if (!timelineEl) return;
+    const scrollEl = scrollRef.current;
+    if (!timelineEl || !scrollEl) return;
 
     try {
       // Dynamically import html2canvas
       const html2canvas = (await import('html2canvas')).default;
+
+      // Store the current transform and scroll position
+      const currentTransform = timelineEl.style.transform;
+      const currentTransformOrigin = timelineEl.style.transformOrigin;
+      const currentScrollLeft = scrollEl.scrollLeft;
+      const currentScrollTop = scrollEl.scrollTop;
+
+      // Temporarily remove transform
+      timelineEl.style.transform = 'none';
+      timelineEl.style.transformOrigin = '';
 
       // Calculate the actual content height
       const contentHeight = calculatedHeight;
@@ -347,6 +358,12 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         height: calculatedHeight + 100,
         windowHeight: calculatedHeight + 100,
       });
+
+      // Restore the transform and scroll position
+      timelineEl.style.transform = currentTransform;
+      timelineEl.style.transformOrigin = currentTransformOrigin;
+      scrollEl.scrollLeft = currentScrollLeft;
+      scrollEl.scrollTop = currentScrollTop;
 
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
@@ -462,6 +479,13 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
     return () => scrollEl.removeEventListener('scroll', updateSlider);
   }, [currentScale, isPlaying]);
+
+  // Trigger PNG download when requested from outside (e.g., Sidebar)
+  useEffect(() => {
+    if (downloadPngTrigger > 0) {
+      handleDownloadPNG();
+    }
+  }, [downloadPngTrigger]);
 
   return (
     <div

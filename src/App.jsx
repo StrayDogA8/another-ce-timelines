@@ -22,6 +22,7 @@ function App() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
 
   const [timelineData, setTimelineData] = useState(() => {
     try {
@@ -279,6 +280,24 @@ function App() {
     });
   };
 
+  const handleDownloadJSON = () => {
+    const dataStr = JSON.stringify(timelineData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${timelineData.file?.id || 'timeline'}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPNG = () => {
+    // Trigger the PNG download in TimelineView
+    setDownloadPngTrigger(prev => prev + 1);
+  };
+
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
 
   return (
@@ -297,6 +316,8 @@ function App() {
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onDownloadJson={handleDownloadJSON}
+          onDownloadPng={handleDownloadPNG}
         />
       </aside>
 
@@ -321,6 +342,7 @@ function App() {
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          downloadPngTrigger={downloadPngTrigger}
         />
       </main>
 
