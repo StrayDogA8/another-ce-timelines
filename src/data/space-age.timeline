@@ -1,0 +1,82 @@
+{
+  "file": {
+    "id": "space-age-timeline",
+    "type": "timeline",
+    "title": "Space Age",
+    "start": 1950,
+    "end": 2030,
+    "detailLevel": 5,
+    "negID": "BCE",
+    "posID": "CE"
+  },
+  "elements": [
+    {
+      "id": "sputnik-1",
+      "type": "event",
+      "title": "Sputnik 1 Launch",
+      "date": 1957,
+      "parents": [],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "first-human-space",
+      "type": "event",
+      "title": "Yuri Gagarin First Human in Space",
+      "date": 1961,
+      "parents": ["sputnik-1"],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "moon-landing",
+      "type": "event",
+      "title": "Apollo 11 Moon Landing",
+      "date": 1969,
+      "parents": ["first-human-space"],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "space-race",
+      "type": "era",
+      "title": "Space Race",
+      "start": 1955,
+      "end": 1975,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "space-shuttle-program",
+      "type": "span",
+      "title": "Space Shuttle Program",
+      "start": 1981,
+      "end": 2011,
+      "color": "#A6977E",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "iss-construction",
+      "type": "span",
+      "title": "International Space Station",
+      "start": 1998,
+      "end": 2030,
+      "color": "#A6977E",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "spacex-founded",
+      "type": "event",
+      "title": "SpaceX Founded",
+      "date": 2002,
+      "parents": [],
+      "color": "#EDE6DA"
+    },
+    {
+      "id": "first-private-orbit",
+      "type": "event",
+      "title": "First Private Spacecraft to Orbit",
+      "date": 2008,
+      "parents": ["spacex-founded"],
+      "color": "#EDE6DA"
+    }
+  ]
+}

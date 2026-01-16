@@ -14,6 +14,7 @@ export default function Sidebar({
   onOpenSettings,
   onDownloadJson,
   onDownloadPng,
+  onLoadTimeline,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -95,12 +96,20 @@ export default function Sidebar({
 
   // Fetch timeline files on mount
   useEffect(() => {
-    // For now, we'll just use sample data files
-    // In the future, this could fetch from an API or scan the data directory
-    setTimelineFiles([
-      { id: 'ancient-greece', name: 'Ancient Greece' },
-      // Add more timeline files here as they're created
-    ]);
+    const timelineModules = import.meta.glob('../data/*.timeline', { eager: true });
+
+    const files = Object.keys(timelineModules).map(path => {
+      const filename = path.split('/').pop().replace('.timeline', '');
+      const module = timelineModules[path];
+      const data = module.default || module;
+
+      return {
+        id: filename,
+        name: data.file?.title || filename
+      };
+    });
+
+    setTimelineFiles(files);
   }, []);
 
   // Close menu when clicking outside
@@ -265,7 +274,7 @@ export default function Sidebar({
               key={file.id}
               className="context-menu-item"
               onClick={() => {
-                handleMenuAction(() => console.log('Load timeline:', file.id));
+                handleMenuAction(() => onLoadTimeline?.(file.id));
                 handleCloseSubmenu();
               }}
             >

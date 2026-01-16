@@ -299,6 +299,28 @@ function App() {
     setDownloadPngTrigger(prev => prev + 1);
   };
 
+  const handleLoadTimeline = async (timelineId) => {
+    try {
+      // Dynamically import the timeline file
+      const module = await import(`./data/${timelineId}.timeline`);
+      const loadedTimeline = module.default || module;
+
+      // Update the timeline data
+      setTimelineData(loadedTimeline);
+
+      // Save to localStorage
+      localStorage.setItem('timelineData', JSON.stringify(loadedTimeline));
+
+      // Clear selection when loading new timeline
+      setSelectedId(null);
+
+      console.log(`Loaded timeline: ${timelineId}`);
+    } catch (error) {
+      console.error('Failed to load timeline:', error);
+      alert(`Failed to load timeline: ${error.message}`);
+    }
+  };
+
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
   const isElectron = window.electron !== undefined;
 
@@ -322,6 +344,7 @@ function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDownloadJson={handleDownloadJSON}
           onDownloadPng={handleDownloadPNG}
+          onLoadTimeline={handleLoadTimeline}
         />
       </aside>
 
