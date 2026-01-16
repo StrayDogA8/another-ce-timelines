@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal } from "lucide-react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, Save, Copy, FileJson, Image, Settings } from "lucide-react";
 
 export default function Sidebar({
   isCollapsed,
@@ -10,6 +10,9 @@ export default function Sidebar({
   onAddEvent,
   onAddSpan,
   onAddEra,
+  onOpenSettings,
+  onDownloadJson,
+  onDownloadPng,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -19,6 +22,8 @@ export default function Sidebar({
   const [openEras, setOpenEras] = useState(true);
   const [openSpans, setOpenSpans] = useState(true);
   const [openEvents, setOpenEvents] = useState(true);
+  const [timelineMenu, setTimelineMenu] = useState(null);
+  const menuRef = useRef(null);
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -51,6 +56,51 @@ export default function Sidebar({
     [events]
   );
 
+  const allExpanded = openEras && openSpans && openEvents;
+  const allCollapsed = !openEras && !openSpans && !openEvents;
+
+  const handleToggleAll = () => {
+    if (allExpanded) {
+      // Collapse all
+      setOpenEras(false);
+      setOpenSpans(false);
+      setOpenEvents(false);
+    } else {
+      // Expand all
+      setOpenEras(true);
+      setOpenSpans(true);
+      setOpenEvents(true);
+    }
+  };
+
+  const handleTimelineMenuClick = (e) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTimelineMenu({
+      x: rect.left,
+      y: rect.bottom + 4,
+    });
+  };
+
+  const handleMenuAction = (action) => {
+    setTimelineMenu(null);
+    if (action) action();
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!timelineMenu) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setTimelineMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [timelineMenu]);
+
   const Row = ({ item, rightText, level = 0 }) => {
     const isSelected = selectedId && selectedId === item.id;
 
@@ -77,6 +127,8 @@ export default function Sidebar({
               size={16}
               color="var(--dark-bg)"
               strokeWidth={2}
+              onClick={handleTimelineMenuClick}
+              style={{ cursor: 'pointer' }}
             />
           </>
         )}
@@ -95,9 +147,109 @@ export default function Sidebar({
         </button>
       </div>
 
+      {timelineMenu && (
+        <div
+          ref={menuRef}
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${timelineMenu.x}px`,
+            top: `${timelineMenu.y}px`,
+          }}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('New Timeline'))}
+          >
+            <FilePlus size={16} />
+            <span>New Timeline</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('Save Timeline'))}
+          >
+            <Save size={16} />
+            <span>Save Timeline</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => console.log('Save Duplicate'))}
+          >
+            <Copy size={16} />
+            <span>Save Duplicate</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onDownloadJson?.())}
+          >
+            <FileJson size={16} />
+            <span>Download .json</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onDownloadPng?.())}
+          >
+            <Image size={16} />
+            <span>Download .png</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onOpenSettings?.())}
+          >
+            <Settings size={16} />
+            <span>Settings</span>
+          </button>
+        </div>
+      )}
+
       {!isCollapsed && file && (
         <div className="sidebar-info">
           <h3 className="sidebar-info-title">{file.title}</h3>
+        </div>
+      )}
+
+      {!isCollapsed && (
+        <div className="sidebar-add-container">
+          <div className="sidebar-add-buttons">
+            <button
+              className="sidebar-add-button"
+              onClick={onAddEvent}
+              title="Add Event"
+            >
+              <RectangleHorizontal size={17} />
+            </button>
+            <button
+              className="sidebar-add-button"
+              onClick={onAddSpan}
+              title="Add Span"
+            >
+              <RectangleEllipsis size={17} />
+            </button>
+            <button
+              className="sidebar-add-button"
+              onClick={onAddEra}
+              title="Add Era"
+            >
+              <SquareSplitHorizontal size={17} />
+            </button>
+            <button
+              className="sidebar-add-button"
+              onClick={handleToggleAll}
+              title={allExpanded ? "Collapse All" : "Expand All"}
+            >
+              {allExpanded ? (
+                <ListChevronsDownUp size={17} strokeWidth={2} />
+              ) : (
+                <ListChevronsUpDown size={17} strokeWidth={2} />
+              )}
+            </button>
+          </div>
         </div>
       )}
 
@@ -184,34 +336,7 @@ export default function Sidebar({
         </div>
       )}
 
-      {!isCollapsed && (
-        <div className="sidebar-add-container">
-          <p className="sidebar-add-label">ADD ELEMENT</p>
-          <div className="sidebar-add-buttons">
-            <button
-              className="sidebar-add-button"
-              onClick={onAddEvent}
-              title="Add Event"
-            >
-              <RectangleHorizontal size={20} />
-            </button>
-            <button
-              className="sidebar-add-button"
-              onClick={onAddSpan}
-              title="Add Span"
-            >
-              <RectangleEllipsis size={20} />
-            </button>
-            <button
-              className="sidebar-add-button"
-              onClick={onAddEra}
-              title="Add Era"
-            >
-              <SquareSplitHorizontal size={20} />
-            </button>
-          </div>
-        </div>
-      )}
+
 
 
     </div>

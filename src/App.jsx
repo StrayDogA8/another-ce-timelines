@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
+import SettingsModal from "./components/SettingsModal";
 import { sampleData } from "./data/sampleData";
 import { saveTimelineToFile } from "./utils/api";
 import { updateElementWithNewId } from "./utils/idUtils";
@@ -20,6 +21,7 @@ function App() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [timelineData, setTimelineData] = useState(() => {
     try {
@@ -257,6 +259,26 @@ function App() {
     setSelectedId(null);
   };
 
+  const handleUpdateTimeline = ({ title, start, end, detailLevel }) => {
+    setTimelineData((prevData) => {
+      const updatedData = {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          title,
+          start,
+          end,
+          detailLevel,
+        },
+      };
+
+      localStorage.setItem('timelineData', JSON.stringify(updatedData));
+      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+
+      return updatedData;
+    });
+  };
+
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
 
   return (
@@ -274,6 +296,7 @@ function App() {
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </aside>
 
@@ -297,8 +320,16 @@ function App() {
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </main>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        timelineData={timelineData}
+        onUpdateTimeline={handleUpdateTimeline}
+      />
 
       {selectedId && (
         <>

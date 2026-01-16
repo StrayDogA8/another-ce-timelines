@@ -10,7 +10,7 @@ import {
 import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
 
-function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra }) {
+function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings }) {
   const scrollRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
@@ -25,7 +25,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const spans = timelineData.elements.filter(e => e.type === "span");
   const eras = timelineData.elements.filter(e => e.type === "era");
 
-  const PX_PER_YEAR = file?.maxZoom ?? 10;
+  const PX_PER_YEAR = file?.detailLevel ?? 10;
 
   const allYears = [
     ...events.map((e) => e.date),
@@ -763,7 +763,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('Settings'))}
+            onClick={() => handleMenuAction(() => onOpenSettings?.())}
           >
             <Settings size={16} />
             <span>Settings</span>

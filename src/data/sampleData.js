@@ -5,7 +5,7 @@ export const sampleData = {
     "title": "Ancient Greece",
     "start": -2800,
     "end": -100,
-    "maxZoom": 5,
+    "detailLevel": 5,
     "negID": "BCE",
     "posID": "CE"
   },
@@ -394,7 +394,9 @@ export const sampleData = {
       "type": "event",
       "title": "Foundation of Syracuse",
       "date": -734,
-      "parents": [],
+      "parents": [
+        "span-syracuse"
+      ],
       "importance": 4,
       "color": "#FA8072",
       "tags": [
