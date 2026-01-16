@@ -22,9 +22,9 @@ app.post('/api/timeline/save', async (req, res) => {
     }
 
     const safeFilename = filename.replace(/[^a-z0-9-_]/gi, '-');
-    const filePath = join(__dirname, 'src', 'data', `${safeFilename}.js`);
+    const filePath = join(__dirname, 'src', 'data', `${safeFilename}.timeline`);
 
-    const fileContent = `export const ${safeFilename.replace(/-/g, '_')} = ${JSON.stringify(data, null, 2)};\n`;
+    const fileContent = JSON.stringify(data, null, 2);
 
     await writeFile(filePath, fileContent, 'utf8');
 
@@ -46,7 +46,7 @@ app.get('/api/timeline/list', async (req, res) => {
   try {
     const dataDir = join(__dirname, 'src', 'data');
     const files = await readdir(dataDir);
-    const timelineFiles = files.filter(f => f.endsWith('.js') && f !== 'index.js');
+    const timelineFiles = files.filter(f => f.endsWith('.timeline'));
 
     res.json({
       success: true,

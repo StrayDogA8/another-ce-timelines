@@ -1,6 +1,6 @@
 const API_BASE_URL = 'http://localhost:3001/api';
 
-export async function saveTimelineToFile(timelineData, filename = 'sampleData') {
+export async function saveTimelineToFile(timelineData, filename = 'ancient-greece') {
   try {
     const response = await fetch(`${API_BASE_URL}/timeline/save`, {
       method: 'POST',

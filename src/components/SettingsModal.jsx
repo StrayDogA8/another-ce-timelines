@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import "../styles/07-settings-modal.css";
+import "../styles/07-modals-menus.css";
 
 export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateTimeline }) {
   const [title, setTitle] = useState("");

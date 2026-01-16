@@ -1,4 +1,4 @@
-export const sampleData = {
+{
   "file": {
     "id": "ancient-greece-timeline",
     "type": "timeline",
@@ -1166,4 +1166,4 @@ export const sampleData = {
       ]
     }
   ]
-};
+}

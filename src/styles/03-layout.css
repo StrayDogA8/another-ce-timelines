@@ -1,8 +1,13 @@
 .app-shell {
   display: grid;
-  grid-template-columns: auto 1fr auto; 
+  grid-template-columns: auto 1fr auto;
   height: 100vh;
   position: relative;
+}
+
+.app-shell.with-title-bar {
+  height: calc(100vh - 32px);
+  margin-top: 32px;
 }
 
 .app-content {

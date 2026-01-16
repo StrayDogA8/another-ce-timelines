@@ -3,8 +3,9 @@ import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
 import SettingsModal from "./components/SettingsModal";
-import { sampleData } from "./data/sampleData";
-import { saveTimelineToFile } from "./utils/api";
+import TopBar from "./components/TopBar";
+import ancientGreeceTimeline from "./data/ancient-greece.timeline";
+import { saveTimelineToFile } from "./utils/electronApi";
 import { updateElementWithNewId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
 import "./index.css";
@@ -27,10 +28,10 @@ function App() {
   const [timelineData, setTimelineData] = useState(() => {
     try {
       const saved = localStorage.getItem('timelineData');
-      return saved ? JSON.parse(saved) : sampleData;
+      return saved ? JSON.parse(saved) : ancientGreeceTimeline;
     } catch (error) {
       console.error('Failed to parse saved timeline data:', error);
-      return sampleData;
+      return ancientGreeceTimeline;
     }
   });
 
@@ -122,7 +123,7 @@ function App() {
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
 
-      saveTimelineToFile(updatedData, 'sampleData')
+      saveTimelineToFile(updatedData, 'ancient-greece')
         .then(() => {
           console.log('Timeline saved to file successfully');
         })
@@ -151,7 +152,7 @@ function App() {
       };
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
 
       return updatedData;
     });
@@ -181,7 +182,7 @@ function App() {
       };
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
 
       return updatedData;
     });
@@ -209,7 +210,7 @@ function App() {
       };
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
 
       return updatedData;
     });
@@ -252,7 +253,7 @@ function App() {
       };
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
 
       return updatedData;
     });
@@ -274,7 +275,7 @@ function App() {
       };
 
       localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'sampleData').catch(console.error);
+      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
 
       return updatedData;
     });
@@ -299,9 +300,12 @@ function App() {
   };
 
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
+  const isElectron = window.electron !== undefined;
 
   return (
-    <div className="app-shell">
+    <>
+      <TopBar title={timelineData.file?.title || "Timelines"} />
+      <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
       <aside
         className="app-sidebar overlay-sidebar"
         style={{ width: currentLeftWidth }}
@@ -379,7 +383,8 @@ function App() {
           </aside>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

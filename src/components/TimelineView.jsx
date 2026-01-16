@@ -9,6 +9,7 @@ import {
 } from "../utils/timelineUtils";
 import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
+import "../styles/07-modals-menus.css";
 
 function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings, downloadPngTrigger }) {
   const scrollRef = useRef(null);

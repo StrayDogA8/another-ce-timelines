@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, Save, Copy, FileJson, Image, Settings } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight } from "lucide-react";
+import "../styles/07-modals-menus.css";
 
 export default function Sidebar({
   isCollapsed,
@@ -23,7 +24,12 @@ export default function Sidebar({
   const [openSpans, setOpenSpans] = useState(true);
   const [openEvents, setOpenEvents] = useState(true);
   const [timelineMenu, setTimelineMenu] = useState(null);
+  const [openSubmenu, setOpenSubmenu] = useState(null);
+  const [timelineFiles, setTimelineFiles] = useState([]);
+  const [submenuPosition, setSubmenuPosition] = useState(null);
   const menuRef = useRef(null);
+  const submenuRef = useRef(null);
+  const openTimelineRef = useRef(null);
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -87,19 +93,46 @@ export default function Sidebar({
     if (action) action();
   };
 
+  // Fetch timeline files on mount
+  useEffect(() => {
+    // For now, we'll just use sample data files
+    // In the future, this could fetch from an API or scan the data directory
+    setTimelineFiles([
+      { id: 'ancient-greece', name: 'Ancient Greece' },
+      // Add more timeline files here as they're created
+    ]);
+  }, []);
+
   // Close menu when clicking outside
   useEffect(() => {
-    if (!timelineMenu) return;
+    if (!timelineMenu && !openSubmenu) return;
 
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+      if (menuRef.current && !menuRef.current.contains(e.target) &&
+          submenuRef.current && !submenuRef.current.contains(e.target)) {
         setTimelineMenu(null);
+        setOpenSubmenu(null);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [timelineMenu]);
+  }, [timelineMenu, openSubmenu]);
+
+  const handleOpenSubmenu = (e, submenuType) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setOpenSubmenu(submenuType);
+    setSubmenuPosition({
+      x: rect.right + 4,
+      y: rect.top,
+    });
+  };
+
+  const handleCloseSubmenu = () => {
+    setOpenSubmenu(null);
+    setSubmenuPosition(null);
+  };
 
   const Row = ({ item, rightText, level = 0 }) => {
     const isSelected = selectedId && selectedId === item.id;
@@ -164,13 +197,21 @@ export default function Sidebar({
             <FilePlus size={16} />
             <span>New Timeline</span>
           </button>
+
           <button
+            ref={openTimelineRef}
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('Save Timeline'))}
+            onMouseEnter={(e) => handleOpenSubmenu(e, 'open-timeline')}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenSubmenu(e, 'open-timeline');
+            }}
           >
-            <Save size={16} />
-            <span>Save Timeline</span>
+            <File size={16} />
+            <span>Open Timeline</span>
+            <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
           </button>
+
           <button
             className="context-menu-item"
             onClick={() => handleMenuAction(() => console.log('Save Duplicate'))}
@@ -205,6 +246,38 @@ export default function Sidebar({
             <Settings size={16} />
             <span>Settings</span>
           </button>
+        </div>
+      )}
+
+      {openSubmenu === 'open-timeline' && submenuPosition && (
+        <div
+          ref={submenuRef}
+          className="timeline-context-menu timeline-submenu"
+          style={{
+            position: 'fixed',
+            left: `${submenuPosition.x}px`,
+            top: `${submenuPosition.y}px`,
+          }}
+          onMouseLeave={handleCloseSubmenu}
+        >
+          {timelineFiles.map((file) => (
+            <button
+              key={file.id}
+              className="context-menu-item"
+              onClick={() => {
+                handleMenuAction(() => console.log('Load timeline:', file.id));
+                handleCloseSubmenu();
+              }}
+            >
+              <File size={16} />
+              <span>{file.name}</span>
+            </button>
+          ))}
+          {timelineFiles.length === 0 && (
+            <div className="context-menu-item" style={{ opacity: 0.5, cursor: 'default' }}>
+              <span>No timelines found</span>
+            </div>
+          )}
         </div>
       )}
 
