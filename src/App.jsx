@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
 import SettingsModal from "./components/SettingsModal";
 import TopBar from "./components/TopBar";
-import ancientGreeceTimeline from "./data/ancient-greece.timeline";
+import HomePage from "./components/HomePage";
 import { saveTimelineToFile } from "./utils/electronApi";
 import { updateElementWithNewId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
@@ -24,16 +24,8 @@ function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
-
-  const [timelineData, setTimelineData] = useState(() => {
-    try {
-      const saved = localStorage.getItem('timelineData');
-      return saved ? JSON.parse(saved) : ancientGreeceTimeline;
-    } catch (error) {
-      console.error('Failed to parse saved timeline data:', error);
-      return ancientGreeceTimeline;
-    }
-  });
+  const [timelineData, setTimelineData] = useState(null);
+  const [currentTimelineId, setCurrentTimelineId] = useState(null);
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
@@ -121,9 +113,9 @@ function App() {
         setSelectedId(newId);
       }
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-
-      saveTimelineToFile(updatedData, 'ancient-greece')
+      
+      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId)
         .then(() => {
           console.log('Timeline saved to file successfully');
         })
@@ -151,8 +143,8 @@ function App() {
         elements: [...prevData.elements, newEvent],
       };
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
+            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -181,8 +173,8 @@ function App() {
         elements: [...prevData.elements, newSpan],
       };
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
+            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -209,8 +201,8 @@ function App() {
         elements: [...prevData.elements, newEra],
       };
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
+            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -252,8 +244,8 @@ function App() {
         elements: cleanedElements,
       };
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
+            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -261,7 +253,7 @@ function App() {
     setSelectedId(null);
   };
 
-  const handleUpdateTimeline = ({ title, start, end, detailLevel }) => {
+  const handleUpdateTimeline = ({ title, start, end, detailLevel, negID, posID }) => {
     setTimelineData((prevData) => {
       const updatedData = {
         ...prevData,
@@ -271,11 +263,15 @@ function App() {
           start,
           end,
           detailLevel,
+          negID,
+          posID,
         },
       };
 
-      localStorage.setItem('timelineData', JSON.stringify(updatedData));
-      saveTimelineToFile(updatedData, 'ancient-greece').catch(console.error);
+      
+      // Get the timeline ID from the file, removing the '-timeline' suffix if present
+      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -301,15 +297,27 @@ function App() {
 
   const handleLoadTimeline = async (timelineId) => {
     try {
-      // Dynamically import the timeline file
-      const module = await import(`./data/${timelineId}.timeline`);
-      const loadedTimeline = module.default || module;
+      let loadedTimeline;
+
+      // Try to load from Electron first (if available)
+      if (window.electron?.loadTimeline) {
+        try {
+          loadedTimeline = await window.electron.loadTimeline(timelineId);
+          console.log('Loaded timeline from Electron file system');
+        } catch (electronError) {
+          console.log('Electron load failed, falling back to static import');
+        }
+      }
+
+      // Fall back to static import if Electron load failed or not available
+      if (!loadedTimeline) {
+        const module = await import(`./data/${timelineId}.timeline`);
+        loadedTimeline = module.default || module;
+      }
 
       // Update the timeline data
       setTimelineData(loadedTimeline);
-
-      // Save to localStorage
-      localStorage.setItem('timelineData', JSON.stringify(loadedTimeline));
+      setCurrentTimelineId(timelineId);
 
       // Clear selection when loading new timeline
       setSelectedId(null);
@@ -321,12 +329,31 @@ function App() {
     }
   };
 
-  const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
+  const handleBackToHome = () => {
+    setTimelineData(null);
+    setCurrentTimelineId(null);
+    setSelectedId(null);
+  };
+
   const isElectron = window.electron !== undefined;
+
+  // Show HomePage if no timeline is loaded
+  if (!timelineData) {
+    return (
+      <>
+        <TopBar title="Timelines" />
+        <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
+          <HomePage onSelectTimeline={handleLoadTimeline} />
+        </div>
+      </>
+    );
+  }
+
+  const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
 
   return (
     <>
-      <TopBar title={timelineData.file?.title || "Timelines"} />
+      <TopBar title={timelineData.file?.title || "Timelines"} onBackToHome={handleBackToHome} />
       <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
       <aside
         className="app-sidebar overlay-sidebar"

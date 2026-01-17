@@ -289,11 +289,17 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   // Close context menu on click outside
   useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener("click", handleClickOutside);
-      return () => document.removeEventListener("click", handleClickOutside);
-    }
+    if (!contextMenu) return;
+
+    const handleClickOutside = (e) => {
+      const menu = document.querySelector('.timeline-context-menu');
+      if (menu && !menu.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [contextMenu]);
 
   const handleContextMenu = (e) => {

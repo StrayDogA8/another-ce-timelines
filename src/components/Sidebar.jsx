@@ -31,6 +31,7 @@ export default function Sidebar({
   const menuRef = useRef(null);
   const submenuRef = useRef(null);
   const openTimelineRef = useRef(null);
+  const submenuCloseTimer = useRef(null);
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -96,20 +97,35 @@ export default function Sidebar({
 
   // Fetch timeline files on mount
   useEffect(() => {
-    const timelineModules = import.meta.glob('../data/*.timeline', { eager: true });
+    const loadTimelineList = async () => {
+      if (window.electron?.listTimelines) {
+        // Load from Electron (AppData)
+        try {
+          const files = await window.electron.listTimelines();
+          setTimelineFiles(files);
+        } catch (error) {
+          console.error('Failed to list timelines:', error);
+        }
+      } else {
+        // Fallback to static imports for web version
+        const timelineModules = import.meta.glob('../data/*.timeline', { eager: true });
 
-    const files = Object.keys(timelineModules).map(path => {
-      const filename = path.split('/').pop().replace('.timeline', '');
-      const module = timelineModules[path];
-      const data = module.default || module;
+        const files = Object.keys(timelineModules).map(path => {
+          const filename = path.split('/').pop().replace('.timeline', '');
+          const module = timelineModules[path];
+          const data = module.default || module;
 
-      return {
-        id: filename,
-        name: data.file?.title || filename
-      };
-    });
+          return {
+            id: filename,
+            name: data.file?.title || filename
+          };
+        });
 
-    setTimelineFiles(files);
+        setTimelineFiles(files);
+      }
+    };
+
+    loadTimelineList();
   }, []);
 
   // Close menu when clicking outside
@@ -117,19 +133,37 @@ export default function Sidebar({
     if (!timelineMenu && !openSubmenu) return;
 
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target) &&
-          submenuRef.current && !submenuRef.current.contains(e.target)) {
+      const clickedInsideMenu = menuRef.current?.contains(e.target);
+      const clickedInsideSubmenu = submenuRef.current?.contains(e.target);
+
+      if (!clickedInsideMenu && !clickedInsideSubmenu) {
+        // Clear any pending close timer
+        if (submenuCloseTimer.current) {
+          clearTimeout(submenuCloseTimer.current);
+          submenuCloseTimer.current = null;
+        }
         setTimelineMenu(null);
         setOpenSubmenu(null);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      // Clean up timer on unmount
+      if (submenuCloseTimer.current) {
+        clearTimeout(submenuCloseTimer.current);
+      }
+    };
   }, [timelineMenu, openSubmenu]);
 
   const handleOpenSubmenu = (e, submenuType) => {
     e.stopPropagation();
+    // Clear any pending close timer
+    if (submenuCloseTimer.current) {
+      clearTimeout(submenuCloseTimer.current);
+      submenuCloseTimer.current = null;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     setOpenSubmenu(submenuType);
     setSubmenuPosition({
@@ -139,8 +173,19 @@ export default function Sidebar({
   };
 
   const handleCloseSubmenu = () => {
-    setOpenSubmenu(null);
-    setSubmenuPosition(null);
+    // Delay closing to allow mouse to move to submenu
+    submenuCloseTimer.current = setTimeout(() => {
+      setOpenSubmenu(null);
+      setSubmenuPosition(null);
+    }, 150);
+  };
+
+  const handleSubmenuMouseEnter = () => {
+    // Cancel closing if mouse enters submenu
+    if (submenuCloseTimer.current) {
+      clearTimeout(submenuCloseTimer.current);
+      submenuCloseTimer.current = null;
+    }
   };
 
   const Row = ({ item, rightText, level = 0 }) => {
@@ -211,6 +256,7 @@ export default function Sidebar({
             ref={openTimelineRef}
             className="context-menu-item"
             onMouseEnter={(e) => handleOpenSubmenu(e, 'open-timeline')}
+            onMouseLeave={handleCloseSubmenu}
             onClick={(e) => {
               e.stopPropagation();
               handleOpenSubmenu(e, 'open-timeline');
@@ -267,6 +313,7 @@ export default function Sidebar({
             left: `${submenuPosition.x}px`,
             top: `${submenuPosition.y}px`,
           }}
+          onMouseEnter={handleSubmenuMouseEnter}
           onMouseLeave={handleCloseSubmenu}
         >
           {timelineFiles.map((file) => (

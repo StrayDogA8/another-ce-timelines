@@ -34,7 +34,39 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+// Initialize user data directory and copy templates on first run
+async function initializeUserData() {
+  const userDataDir = path.join(app.getPath('userData'), 'timelines');
+
+  try {
+    await fs.mkdir(userDataDir, { recursive: true });
+
+    // Check if this is first run by looking for any .timeline files
+    const files = await fs.readdir(userDataDir);
+    const hasTimelineFiles = files.some(f => f.endsWith('.timeline'));
+
+    if (!hasTimelineFiles) {
+      // First run - copy template files from src/data
+      console.log('First run detected, copying template files...');
+      const templatesDir = path.join(__dirname, '..', 'src', 'data');
+      const templateFiles = await fs.readdir(templatesDir);
+
+      for (const file of templateFiles) {
+        if (file.endsWith('.timeline')) {
+          const srcPath = path.join(templatesDir, file);
+          const destPath = path.join(userDataDir, file);
+          await fs.copyFile(srcPath, destPath);
+          console.log(`Copied template: ${file}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing user data:', error);
+  }
+}
+
+app.whenReady().then(async () => {
+  await initializeUserData();
   createWindow();
 
   app.on('activate', () => {
@@ -98,45 +130,43 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
 
 ipcMain.handle('list-timelines', async () => {
   try {
-    const dataDir = path.join(app.getPath('userData'), 'timelines');
-
-    await fs.mkdir(dataDir, { recursive: true });
-
-    const files = await fs.readdir(dataDir);
+    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const files = await fs.readdir(userDataDir);
     const timelineFiles = files.filter(f => f.endsWith('.timeline'));
 
-    return {
-      success: true,
-      files: timelineFiles,
-    };
+    const timelines = await Promise.all(
+      timelineFiles.map(async (file) => {
+        const filePath = path.join(userDataDir, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const data = JSON.parse(content);
+        const filename = file.replace('.timeline', '');
+
+        return {
+          id: filename,
+          name: data.file?.title || filename
+        };
+      })
+    );
+
+    return timelines;
   } catch (error) {
     console.error('Error listing timelines:', error);
-    return {
-      success: false,
-      error: error.message,
-      files: [],
-    };
+    return [];
   }
 });
 
 ipcMain.handle('load-timeline', async (event, filename) => {
   try {
-    const dataDir = path.join(app.getPath('userData'), 'timelines');
-    const filePath = path.join(dataDir, filename);
+    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const filePath = path.join(userDataDir, `${filename}.timeline`);
 
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
-
-    return {
-      success: true,
-      data,
-    };
+    console.log(`Loaded timeline: ${filename}`);
+    return data;
   } catch (error) {
     console.error('Error loading timeline:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    throw error;
   }
 });
 

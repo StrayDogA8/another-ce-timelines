@@ -7,8 +7,6 @@
   "scripts": {
     "theme": "node scripts/generateThemeCSS.js",
     "dev": "npm run theme && vite",
-    "server": "node server.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "electron:dev": "npm run theme && concurrently \"npm run dev\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
     "build": "npm run theme && vite build",
     "electron:build": "npm run build && electron-builder",

@@ -31,6 +31,30 @@
   -webkit-app-region: no-drag;
 }
 
+.title-bar-back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--gray-3);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-back-button:hover {
+  background: var(--active-bg);
+  color: var(--dark-bg);
+}
+
+.title-bar-back-button:active {
+  opacity: 0.7;
+}
+
 .title-bar-title {
   font-size: 13px;
   font-weight: 400;
