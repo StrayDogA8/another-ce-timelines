@@ -306,3 +306,51 @@
 .settings-toggle input:checked + .settings-toggle-slider:before {
   transform: translateX(32px);
 }
+
+/* Settings Footer */
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--active-bg);
+}
+
+.settings-footer-button {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-cancel-button {
+  background: transparent;
+  color: var(--element-bg);
+  border: 1px solid var(--active-bg);
+}
+
+.settings-cancel-button:hover {
+  background: var(--active-bg);
+}
+
+.settings-cancel-button:active {
+  transform: scale(0.98);
+}
+
+.settings-create-button {
+  background: var(--element-bg);
+  color: var(--secondary-bg);
+}
+
+.settings-create-button:hover {
+  background: var(--dark-bg);
+}
+
+.settings-create-button:active {
+  transform: scale(0.98);
+}

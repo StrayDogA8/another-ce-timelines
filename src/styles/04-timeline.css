@@ -22,11 +22,14 @@
 .timeline {
   position: relative;
   margin-top: 25vh;
+
+ /* margin-left: 500px;
+  margin-right: 500px; */
 }
 
 .timeline-line {
   position: absolute;
-  left: -100px; /* change this */
+  left: -100px;
   right: 0;
   height: 3px;
   background: var(--dark-bg);

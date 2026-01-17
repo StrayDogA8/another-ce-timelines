@@ -3,6 +3,7 @@ import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
 import SettingsModal from "./components/SettingsModal";
+import NewTimelineModal from "./components/NewTimelineModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
 import { saveTimelineToFile } from "./utils/electronApi";
@@ -26,6 +27,7 @@ function App() {
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
+  const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
@@ -335,6 +337,73 @@ function App() {
     setSelectedId(null);
   };
 
+  const handleNewTimeline = () => {
+    setIsNewTimelineModalOpen(true);
+  };
+
+  const handleCreateTimeline = async (timelineConfig) => {
+    setIsNewTimelineModalOpen(false);
+
+    // Create new timeline data structure
+    const timelineId = timelineConfig.title.toLowerCase().replace(/\s+/g, '-');
+    const newTimeline = {
+      file: {
+        id: `${timelineId}-timeline`,
+        type: "timeline",
+        title: timelineConfig.title,
+        start: timelineConfig.start,
+        end: timelineConfig.end,
+        detailLevel: timelineConfig.detailLevel,
+        negID: timelineConfig.negID,
+        posID: timelineConfig.posID,
+      },
+      elements: []
+    };
+
+    // Save to file system
+    try {
+      await saveTimelineToFile(newTimeline, timelineId);
+
+      // Load the newly created timeline
+      setTimelineData(newTimeline);
+      setCurrentTimelineId(timelineId);
+      setSelectedId(null);
+    } catch (error) {
+      console.error('Failed to create timeline:', error);
+      alert(`Failed to create timeline: ${error.message}`);
+    }
+  };
+
+  const handleDuplicateTimeline = async () => {
+    if (!timelineData || !currentTimelineId) return;
+
+    try {
+      // Create duplicate with new name
+      const duplicateName = `${timelineData.file.title} Copy`;
+      const duplicateId = duplicateName.toLowerCase().replace(/\s+/g, '-');
+
+      const duplicateData = {
+        ...timelineData,
+        file: {
+          ...timelineData.file,
+          id: `${duplicateId}-timeline`,
+          title: duplicateName,
+        },
+      };
+
+      // Save the duplicate
+      await saveTimelineToFile(duplicateData, duplicateId);
+
+      // Load the newly created duplicate
+      setTimelineData(duplicateData);
+      setCurrentTimelineId(duplicateId);
+      setSelectedId(null);
+    } catch (error) {
+      console.error('Failed to duplicate timeline:', error);
+      alert(`Failed to duplicate timeline: ${error.message}`);
+    }
+  };
+
   const isElectron = window.electron !== undefined;
 
   // Show HomePage if no timeline is loaded
@@ -343,7 +412,10 @@ function App() {
       <>
         <TopBar title="Timelines" />
         <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
-          <HomePage onSelectTimeline={handleLoadTimeline} />
+          <HomePage
+            onSelectTimeline={handleLoadTimeline}
+            onCreateTimeline={handleCreateTimeline}
+          />
         </div>
       </>
     );
@@ -353,7 +425,7 @@ function App() {
 
   return (
     <>
-      <TopBar title={timelineData.file?.title || "Timelines"} onBackToHome={handleBackToHome} />
+      <TopBar title={timelineData.file?.title || "Timelines"} />
       <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
       <aside
         className="app-sidebar overlay-sidebar"
@@ -372,6 +444,9 @@ function App() {
           onDownloadJson={handleDownloadJSON}
           onDownloadPng={handleDownloadPNG}
           onLoadTimeline={handleLoadTimeline}
+          onNewTimeline={handleNewTimeline}
+          onDuplicateTimeline={handleDuplicateTimeline}
+          onBackToHome={handleBackToHome}
         />
       </aside>
 
@@ -433,6 +508,12 @@ function App() {
           </aside>
         </>
       )}
+
+      <NewTimelineModal
+        isOpen={isNewTimelineModalOpen}
+        onClose={() => setIsNewTimelineModalOpen(false)}
+        onCreate={handleCreateTimeline}
+      />
       </div>
     </>
   );

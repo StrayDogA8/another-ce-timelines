@@ -229,3 +229,23 @@ ipcMain.handle('import-timeline', async () => {
     };
   }
 });
+
+ipcMain.handle('delete-timeline', async (event, filename) => {
+  try {
+    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const filePath = path.join(userDataDir, `${filename}.timeline`);
+
+    await fs.unlink(filePath);
+    console.log(`Deleted timeline: ${filename}`);
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Error deleting timeline:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});

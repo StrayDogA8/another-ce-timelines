@@ -1,10 +1,15 @@
-import { useState, useEffect } from "react";
-import { File, FilePlus } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { File, FilePlus, Copy, Trash2 } from "lucide-react";
+import NewTimelineModal from "./NewTimelineModal";
 import "../styles/09-homepage.css";
+import "../styles/07-modals-menus.css";
 
-export default function HomePage({ onSelectTimeline }) {
+export default function HomePage({ onSelectTimeline, onCreateTimeline }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -38,9 +43,101 @@ export default function HomePage({ onSelectTimeline }) {
     loadTimelineList();
   }, []);
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [contextMenu]);
+
   const handleNewTimeline = () => {
-    // TODO: Implement new timeline creation
-    console.log('New timeline');
+    setIsNewTimelineModalOpen(true);
+  };
+
+  const handleCreateTimeline = (timelineConfig) => {
+    setIsNewTimelineModalOpen(false);
+    onCreateTimeline(timelineConfig);
+  };
+
+  const handleContextMenu = (e, file) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      file: file,
+    });
+  };
+
+  const handleMenuAction = (action) => {
+    setContextMenu(null);
+    if (action) action();
+  };
+
+  const handleDuplicate = async (file) => {
+    try {
+      // Load the original timeline
+      let originalData;
+      if (window.electron?.loadTimeline) {
+        originalData = await window.electron.loadTimeline(file.id);
+      } else {
+        const module = await import(`../data/${file.id}.timeline`);
+        originalData = module.default || module;
+      }
+
+      // Create duplicate with new name
+      const duplicateName = `${file.name} Copy`;
+      const duplicateId = duplicateName.toLowerCase().replace(/\s+/g, '-');
+
+      const duplicateData = {
+        ...originalData,
+        file: {
+          ...originalData.file,
+          id: `${duplicateId}-timeline`,
+          title: duplicateName,
+        },
+      };
+
+      // Save the duplicate
+      if (window.electron?.saveTimeline) {
+        await window.electron.saveTimeline(duplicateData, duplicateId);
+      }
+
+      // Reload timeline list
+      if (window.electron?.listTimelines) {
+        const files = await window.electron.listTimelines();
+        setTimelineFiles(files);
+      }
+    } catch (error) {
+      console.error('Failed to duplicate timeline:', error);
+      alert(`Failed to duplicate timeline: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (file) => {
+    const confirmed = confirm(`Are you sure you want to delete "${file.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      if (window.electron?.deleteTimeline) {
+        await window.electron.deleteTimeline(file.id);
+
+        // Reload timeline list
+        const files = await window.electron.listTimelines();
+        setTimelineFiles(files);
+      } else {
+        alert('Delete is only available in the desktop app');
+      }
+    } catch (error) {
+      console.error('Failed to delete timeline:', error);
+      alert(`Failed to delete timeline: ${error.message}`);
+    }
   };
 
   if (loading) {
@@ -70,6 +167,7 @@ export default function HomePage({ onSelectTimeline }) {
               key={file.id}
               className="timeline-card"
               onClick={() => onSelectTimeline(file.id)}
+              onContextMenu={(e) => handleContextMenu(e, file)}
             >
               <File size={32} strokeWidth={1.5} />
               <span>{file.name}</span>
@@ -83,6 +181,50 @@ export default function HomePage({ onSelectTimeline }) {
           </div>
         )}
       </div>
+
+      <NewTimelineModal
+        isOpen={isNewTimelineModalOpen}
+        onClose={() => setIsNewTimelineModalOpen(false)}
+        onCreate={handleCreateTimeline}
+      />
+
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onSelectTimeline(contextMenu.file.id))}
+          >
+            <File size={16} />
+            <span>Open</span>
+          </button>
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => handleDuplicate(contextMenu.file))}
+          >
+            <Copy size={16} />
+            <span>Duplicate</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => handleDelete(contextMenu.file))}
+          >
+            <Trash2 size={16} />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -396,7 +396,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     if (!scrollEl || !timelineEl) return;
 
     const currentScale = scaleRef.current;
-    const actualWidth = timelineEl.offsetWidth * currentScale;
+    const actualWidth = timelineEl.scrollWidth * currentScale;
 
     // Calculate scroll position based on the full range
     const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
@@ -449,7 +449,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     if (!scrollEl || !timelineEl) return;
 
     const currentScale = scaleRef.current;
-    const actualWidth = timelineEl.offsetWidth * currentScale;
+    const actualWidth = timelineEl.scrollWidth * currentScale;
     const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
     const scrollPosition = (sliderValue / 100) * maxScroll;
 
@@ -468,7 +468,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
       // Calculate max scroll based on scaled dimensions
       const scale = scaleRef.current;
-      const actualWidth = timelineEl.offsetWidth * scale;
+      const actualWidth = timelineEl.scrollWidth * scale;
       const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
 
       if (maxScroll <= 0) {
@@ -829,15 +829,16 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
             className="slider-viewport-indicator"
             style={{
               left: (() => {
-                if (!scrollRef.current) return '50%';
-                const viewportWidthPercent = Math.min(100, (scrollRef.current.clientWidth / (timelineWidth * scaleRef.current) * 100));
+                if (!scrollRef.current || !timelineRef.current) return '50%';
+                const totalScrollableWidth = timelineRef.current.scrollWidth * scaleRef.current;
+                const viewportWidthPercent = Math.min(100, (scrollRef.current.clientWidth / totalScrollableWidth) * 100);
                 const halfWidth = viewportWidthPercent / 2;
                 // Map sliderValue (0-100) to the safe range (halfWidth to 100-halfWidth)
                 const safeRange = 100 - viewportWidthPercent;
                 const mappedPosition = halfWidth + (sliderValue / 100) * safeRange;
                 return `${mappedPosition}%`;
               })(),
-              width: `${Math.min(100, scrollRef.current ? (scrollRef.current.clientWidth / (timelineWidth * scaleRef.current) * 100) : 10)}%`
+              width: `${Math.min(100, scrollRef.current && timelineRef.current ? (scrollRef.current.clientWidth / (timelineRef.current.scrollWidth * scaleRef.current)) * 100 : 10)}%`
             }}
           />
         </div>

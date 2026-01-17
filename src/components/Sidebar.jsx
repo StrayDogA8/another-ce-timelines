@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft } from "lucide-react";
 import "../styles/07-modals-menus.css";
 
 export default function Sidebar({
@@ -15,6 +15,9 @@ export default function Sidebar({
   onDownloadJson,
   onDownloadPng,
   onLoadTimeline,
+  onNewTimeline,
+  onDuplicateTimeline,
+  onBackToHome,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -246,7 +249,17 @@ export default function Sidebar({
         >
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('New Timeline'))}
+            onClick={() => handleMenuAction(() => onBackToHome?.())}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Files</span>
+          </button>
+
+          <div className="context-menu-separator" />
+
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onNewTimeline?.())}
           >
             <FilePlus size={16} />
             <span>New Timeline</span>
@@ -269,10 +282,10 @@ export default function Sidebar({
 
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => console.log('Save Duplicate'))}
+            onClick={() => handleMenuAction(() => onDuplicateTimeline?.())}
           >
             <Copy size={16} />
-            <span>Save Duplicate</span>
+            <span>Duplicate</span>
           </button>
 
           <div className="context-menu-separator" />

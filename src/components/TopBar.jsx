@@ -1,6 +1,6 @@
-import { Minus, Square, X, ArrowLeft } from "lucide-react";
+import { Minus, Square, X } from "lucide-react";
 
-export default function TopBar({ title = "Timelines", onBackToHome }) {
+export default function TopBar({ title = "Timelines" }) {
   const isElectron = window.electron !== undefined;
 
   const handleMinimize = () => {
@@ -23,11 +23,6 @@ export default function TopBar({ title = "Timelines", onBackToHome }) {
     <div className="custom-title-bar">
       <div className="title-bar-drag-region">
         <img src="/favicon/favicon-light-96x96.png" alt="" className="title-bar-icon" />
-        {onBackToHome && (
-          <button className="title-bar-back-button" onClick={onBackToHome} title="Back to Home">
-            <ArrowLeft size={16} />
-          </button>
-        )}
         <span className="title-bar-title">{title}</span>
       </div>
       <div className="title-bar-controls">
