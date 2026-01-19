@@ -1,0 +1,88 @@
+{
+  "file": {
+    "id": "project-2024",
+    "type": "timeline",
+    "title": "Project 2024",
+    "start": 2024,
+    "end": 2025,
+    "detailLevel": 1,
+    "negID": "BCE",
+    "posID": "CE"
+  },
+  "elements": [
+    {
+      "id": "kickoff",
+      "type": "event",
+      "title": "Project Kickoff",
+      "date": 2024.1,
+      "parents": [],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "prototype",
+      "type": "event",
+      "title": "Prototype Complete",
+      "date": 2024.4,
+      "parents": ["kickoff"],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "beta",
+      "type": "event",
+      "title": "Beta Release",
+      "date": 2024.7,
+      "parents": ["prototype"],
+      "color": "#A6977E"
+    },
+    {
+      "id": "launch",
+      "type": "event",
+      "title": "Product Launch",
+      "date": 2024.9,
+      "parents": ["beta"],
+      "color": "#EDE6DA"
+    },
+    {
+      "id": "development",
+      "type": "span",
+      "title": "Development Phase",
+      "start": 2024.1,
+      "end": 2024.7,
+      "color": "#87C6FA",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "q1",
+      "type": "era",
+      "title": "Q1",
+      "start": 2024,
+      "end": 2024.25,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "q2",
+      "type": "era",
+      "title": "Q2",
+      "start": 2024.25,
+      "end": 2024.5,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "q3",
+      "type": "era",
+      "title": "Q3",
+      "start": 2024.5,
+      "end": 2024.75,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "q4",
+      "type": "era",
+      "title": "Q4",
+      "start": 2024.75,
+      "end": 2025,
+      "color": "#F4D05A"
+    }
+  ]
+}

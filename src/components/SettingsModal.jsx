@@ -6,7 +6,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [detailLevel, setDetailLevel] = useState(5);
+  const [detailLevel, setDetailLevel] = useState(1);
   const [layout, setLayout] = useState("Horizontal");
   const [negID, setNegID] = useState("BCE");
   const [posID, setPosID] = useState("CE");
@@ -19,7 +19,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
       setTitle(timelineData.file.title || "");
       setStart(timelineData.file.start || 0);
       setEnd(timelineData.file.end || 0);
-      setDetailLevel(timelineData.file.detailLevel || 5);
+      setDetailLevel(timelineData.file.detailLevel || 1);
       setNegID(timelineData.file.negID || "BCE");
       setPosID(timelineData.file.posID || "CE");
       setIsInitialized(true);
@@ -115,18 +115,20 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Detail Level</div>
-              <div className="settings-row-description">Higher values let you add more events between years.</div>
+              <div className="settings-row-description">Multiplier for zoom level. 1 is default, 0.2 is most zoomed out, 5 is most zoomed in.</div>
             </div>
             <div className="settings-row-right">
               <input
                 type="range"
-                min="1"
-                max="20"
+                min="0.2"
+                max="5"
+                step="0.1"
                 className="settings-slider"
                 value={detailLevel}
                 onChange={(e) => setDetailLevel(e.target.value)}
-                title={`Detail Level: ${detailLevel}`}
+                title={`Detail Level: ${detailLevel}x`}
               />
+              <span className="settings-value">{Number(detailLevel).toFixed(1)}x</span>
             </div>
           </div>
 

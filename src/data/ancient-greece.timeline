@@ -5,7 +5,7 @@
     "title": "Ancient Greece",
     "start": -2800,
     "end": -100,
-    "detailLevel": 5,
+    "detailLevel": 1,
     "negID": "BCE",
     "posID": "CE"
   },

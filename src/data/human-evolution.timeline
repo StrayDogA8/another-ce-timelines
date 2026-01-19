@@ -1,0 +1,88 @@
+{
+  "file": {
+    "id": "human-evolution",
+    "type": "timeline",
+    "title": "Human Evolution",
+    "start": -7000000,
+    "end": 0,
+    "detailLevel": 1,
+    "negID": "Years Ago",
+    "posID": "CE"
+  },
+  "elements": [
+    {
+      "id": "sahelanthropus",
+      "type": "event",
+      "title": "Sahelanthropus tchadensis",
+      "date": -7000000,
+      "parents": [],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "australopithecus",
+      "type": "event",
+      "title": "Australopithecus afarensis",
+      "date": -3900000,
+      "parents": ["sahelanthropus"],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "homo-habilis",
+      "type": "event",
+      "title": "Homo habilis",
+      "date": -2400000,
+      "parents": ["australopithecus"],
+      "color": "#A6977E"
+    },
+    {
+      "id": "homo-erectus",
+      "type": "event",
+      "title": "Homo erectus",
+      "date": -1900000,
+      "parents": ["homo-habilis"],
+      "color": "#EDE6DA"
+    },
+    {
+      "id": "homo-sapiens",
+      "type": "event",
+      "title": "Homo sapiens",
+      "date": -300000,
+      "parents": ["homo-erectus"],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "stone-age",
+      "type": "span",
+      "title": "Stone Age",
+      "start": -2600000,
+      "end": -3300,
+      "color": "#87C6FA",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "miocene",
+      "type": "era",
+      "title": "Miocene",
+      "start": -7000000,
+      "end": -5000000,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "pliocene",
+      "type": "era",
+      "title": "Pliocene",
+      "start": -5000000,
+      "end": -2000000,
+      "color": "#A6977E"
+    },
+    {
+      "id": "pleistocene",
+      "type": "era",
+      "title": "Pleistocene",
+      "start": -2000000,
+      "end": -11700,
+      "color": "#D4CAB8"
+    }
+  ]
+}

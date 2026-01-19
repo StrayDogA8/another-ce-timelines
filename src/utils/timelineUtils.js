@@ -8,6 +8,18 @@ export function formatYear(year, negID = "BCE", posID = "CE") {
   }
 }
 
+ // Scrollbar Width = (viewport width / (range * detail * scale)) * 100
+ // (1200 / (range × detail × 0.5)) × 100 = 20 (Solving for detail: detail = 12000 / range)
+
+export function calculateDetailLevel(range) {
+  const absRange = Math.abs(range);
+
+  // Calculate detail level so scrollbar is 20% at min zoom (0.5) with 1200px viewport
+  const detailLevel = 12000 / absRange;
+
+  return detailLevel;
+}
+
 export function pickStep(range) {
   const absRange = Math.abs(range);
   const targetTicks = 10;

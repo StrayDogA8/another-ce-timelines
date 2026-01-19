@@ -1,0 +1,80 @@
+{
+  "file": {
+    "id": "medieval-history",
+    "type": "timeline",
+    "title": "Medieval History",
+    "start": 500,
+    "end": 1500,
+    "detailLevel": 1,
+    "negID": "BCE",
+    "posID": "CE"
+  },
+  "elements": [
+    {
+      "id": "fall-rome",
+      "type": "event",
+      "title": "Fall of Western Roman Empire",
+      "date": 476,
+      "parents": [],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "charlemagne",
+      "type": "event",
+      "title": "Charlemagne Crowned Emperor",
+      "date": 800,
+      "parents": ["fall-rome"],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "magna-carta",
+      "type": "event",
+      "title": "Magna Carta Signed",
+      "date": 1215,
+      "parents": [],
+      "color": "#A6977E"
+    },
+    {
+      "id": "constantinople",
+      "type": "event",
+      "title": "Fall of Constantinople",
+      "date": 1453,
+      "parents": [],
+      "color": "#EDE6DA"
+    },
+    {
+      "id": "crusades",
+      "type": "span",
+      "title": "The Crusades",
+      "start": 1096,
+      "end": 1291,
+      "color": "#87C6FA",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "early-medieval",
+      "type": "era",
+      "title": "Early Medieval",
+      "start": 500,
+      "end": 1000,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "high-medieval",
+      "type": "era",
+      "title": "High Medieval",
+      "start": 1000,
+      "end": 1300,
+      "color": "#A6977E"
+    },
+    {
+      "id": "late-medieval",
+      "type": "era",
+      "title": "Late Medieval",
+      "start": 1300,
+      "end": 1500,
+      "color": "#D4CAB8"
+    }
+  ]
+}

@@ -244,7 +244,7 @@
   pointer-events: none;
   transition: background 0.15s ease;
   z-index: 1;
-  min-width: 20px;
+  min-width: 8px;
 }
 
 .slider-track::before {

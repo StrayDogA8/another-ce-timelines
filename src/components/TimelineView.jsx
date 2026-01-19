@@ -6,6 +6,7 @@ import {
   layoutSpans,
   layoutEvents,
   formatYear,
+  calculateDetailLevel,
 } from "../utils/timelineUtils";
 import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
@@ -29,8 +30,6 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const spans = timelineData.elements.filter(e => e.type === "span");
   const eras = timelineData.elements.filter(e => e.type === "era");
 
-  const PX_PER_YEAR = file?.detailLevel ?? 10;
-
   const allYears = [
     ...events.map((e) => e.date),
     ...spans.flatMap((s) => [s.start, s.end]),
@@ -43,6 +42,12 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const minYear = file?.start ?? rawMin;
   const maxYear = file?.end ?? rawMax;
   const range = maxYear - minYear;
+
+  // Calculate detail level automatically based on range
+  // The detailLevel setting will be used as a multiplier later
+  const baseDetailLevel = calculateDetailLevel(range);
+  const detailMultiplier = file?.detailLevel ?? 1;
+  const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
 
   const step = pickStep(range);
   const timelineWidth = range * PX_PER_YEAR;
@@ -320,7 +325,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     };
   }, [onZoomChange, timelineWidth, isPlaying]);
 
-  // Pan to selected item
+  // Pan to selected item with smooth animation
   useEffect(() => {
     if (!selectedId) return;
 
@@ -335,19 +340,68 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     const rect = dom.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
 
-    // Calculate target position (center the element)
-    const elementCenterX = rect.left + rect.width / 2 - containerRect.left;
-    const elementCenterY = rect.top + rect.height / 2 - containerRect.top;
+    // Find the selected element to check its type
+    const selectedElement = timelineData.elements.find(el => el.id === selectedId);
+    const isSpan = selectedElement?.type === 'span';
+
+    // Calculate target position
+    let elementTargetX, elementTargetY;
+
+    if (isSpan) {
+      // For spans, go to the start (left edge)
+      elementTargetX = rect.left - containerRect.left;
+      elementTargetY = rect.top + rect.height / 2 - containerRect.top;
+    } else {
+      // For events and eras, center the element
+      elementTargetX = rect.left + rect.width / 2 - containerRect.left;
+      elementTargetY = rect.top + rect.height / 2 - containerRect.top;
+    }
 
     const viewportCenterX = containerRect.width / 2;
     const viewportCenterY = containerRect.height / 2;
 
-    // Adjust translate to center the element
-    translateRef.current.x += (viewportCenterX - elementCenterX);
-    translateRef.current.y += (viewportCenterY - elementCenterY);
+    // Calculate target translate values
+    const targetX = translateRef.current.x + (viewportCenterX - elementTargetX);
+    const targetY = translateRef.current.y + (viewportCenterY - elementTargetY);
 
-    applyTransform();
-  }, [selectedId]);
+    // Animate to target position
+    const startX = translateRef.current.x;
+    const startY = translateRef.current.y;
+    const duration = 500; // ms
+    const startTime = performance.now();
+
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      translateRef.current.x = startX + (targetX - startX) * easeProgress;
+      translateRef.current.y = startY + (targetY - startY) * easeProgress;
+
+      applyTransform();
+
+      // Update scrollbar during animation
+      if (!isPlaying) {
+        const scale = scaleRef.current;
+        const scaledTimelineWidth = timelineWidth * scale;
+        const viewportWidth = container.clientWidth;
+        const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+
+        if (maxPan > 0) {
+          const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+          setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+        }
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [selectedId, timelineData.elements]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -876,16 +930,22 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
             className="slider-viewport-indicator"
             style={{
               left: (() => {
-                if (!containerRef.current || !timelineRef.current) return '50%';
-                const timelineWidth = timelineRef.current.offsetWidth * scaleRef.current;
-                const viewportWidthPercent = Math.min(100, (containerRef.current.clientWidth / timelineWidth) * 100);
+                if (!containerRef.current) return '50%';
+                const scaledTimelineWidth = timelineWidth * currentScale;
+                const viewportWidthPercent = Math.min(100, (containerRef.current.clientWidth / scaledTimelineWidth) * 100);
                 const halfWidth = viewportWidthPercent / 2;
                 // Map sliderValue (0-100) to the safe range (halfWidth to 100-halfWidth)
                 const safeRange = 100 - viewportWidthPercent;
                 const mappedPosition = halfWidth + (sliderValue / 100) * safeRange;
                 return `${mappedPosition}%`;
               })(),
-              width: `${Math.min(100, containerRef.current && timelineRef.current ? (containerRef.current.clientWidth / (timelineRef.current.offsetWidth * scaleRef.current)) * 100 : 10)}%`
+              width: (() => {
+                if (!containerRef.current) return '10%';
+                const scaledTimelineWidth = timelineWidth * currentScale;
+                const viewportWidth = containerRef.current.clientWidth;
+                const widthPercent = Math.min(100, (viewportWidth / scaledTimelineWidth) * 100);
+                return `${widthPercent}%`;
+              })()
             }}
           />
         </div>

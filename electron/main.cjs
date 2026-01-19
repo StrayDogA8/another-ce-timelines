@@ -34,7 +34,7 @@ function createWindow() {
   }
 }
 
-// Initialize user data directory and copy templates on first run
+// Initialize user data directory and copy example timelines on first run
 async function initializeUserData() {
   const userDataDir = path.join(app.getPath('userData'), 'timelines');
 
@@ -46,8 +46,8 @@ async function initializeUserData() {
     const hasTimelineFiles = files.some(f => f.endsWith('.timeline'));
 
     if (!hasTimelineFiles) {
-      // First run - copy template files from src/data
-      console.log('First run detected, copying template files...');
+      // First run - copy example timelines from src/data
+      console.log('First run detected, copying example timelines...');
       const templatesDir = path.join(__dirname, '..', 'src', 'data');
       const templateFiles = await fs.readdir(templatesDir);
 
@@ -56,7 +56,7 @@ async function initializeUserData() {
           const srcPath = path.join(templatesDir, file);
           const destPath = path.join(userDataDir, file);
           await fs.copyFile(srcPath, destPath);
-          console.log(`Copied template: ${file}`);
+          console.log(`Copied example: ${file}`);
         }
       }
     }

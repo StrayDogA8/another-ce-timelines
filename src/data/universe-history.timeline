@@ -1,0 +1,104 @@
+{
+  "file": {
+    "id": "universe-history",
+    "type": "timeline",
+    "title": "History of the Universe",
+    "start": -13800000000,
+    "end": 0,
+    "detailLevel": 1,
+    "negID": "Years Ago",
+    "posID": "Present"
+  },
+  "elements": [
+    {
+      "id": "big-bang",
+      "type": "event",
+      "title": "Big Bang",
+      "date": -13800000000,
+      "parents": [],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "first-stars",
+      "type": "event",
+      "title": "First Stars Form",
+      "date": -13600000000,
+      "parents": ["big-bang"],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "milky-way",
+      "type": "event",
+      "title": "Milky Way Formation",
+      "date": -13500000000,
+      "parents": ["first-stars"],
+      "color": "#A6977E"
+    },
+    {
+      "id": "solar-system",
+      "type": "event",
+      "title": "Solar System Forms",
+      "date": -4600000000,
+      "parents": ["milky-way"],
+      "color": "#EDE6DA"
+    },
+    {
+      "id": "life-on-earth",
+      "type": "event",
+      "title": "First Life on Earth",
+      "date": -3800000000,
+      "parents": ["solar-system"],
+      "color": "#87C6FA"
+    },
+    {
+      "id": "dinosaurs",
+      "type": "event",
+      "title": "Age of Dinosaurs",
+      "date": -230000000,
+      "parents": [],
+      "color": "#D4CAB8"
+    },
+    {
+      "id": "humans",
+      "type": "event",
+      "title": "Modern Humans",
+      "date": -300000,
+      "parents": [],
+      "color": "#A6977E"
+    },
+    {
+      "id": "stellar-era",
+      "type": "span",
+      "title": "Stelliferous Era",
+      "start": -13600000000,
+      "end": 0,
+      "color": "#87C6FA",
+      "branches": [],
+      "forks": []
+    },
+    {
+      "id": "dark-ages",
+      "type": "era",
+      "title": "Cosmic Dark Ages",
+      "start": -13800000000,
+      "end": -13600000000,
+      "color": "#F4D05A"
+    },
+    {
+      "id": "hadean",
+      "type": "era",
+      "title": "Hadean Eon",
+      "start": -4600000000,
+      "end": -4000000000,
+      "color": "#A6977E"
+    },
+    {
+      "id": "phanerozoic",
+      "type": "era",
+      "title": "Phanerozoic Eon",
+      "start": -541000000,
+      "end": 0,
+      "color": "#D4CAB8"
+    }
+  ]
+}
