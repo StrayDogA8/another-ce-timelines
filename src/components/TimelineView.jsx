@@ -12,9 +12,12 @@ import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
 function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings, downloadPngTrigger }) {
-  const scrollRef = useRef(null);
+  const containerRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
+  const translateRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
   const [sliderValue, setSliderValue] = useState(0);
   const [currentScale, setCurrentScale] = useState(1);
@@ -158,74 +161,101 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     }
   }, [calculatedHeight, onHeightChange]);
 
-  // DPI + zoom effect
-  useEffect(() => {
-    const scrollEl = scrollRef.current;
+  // Helper function to apply transform
+  const applyTransform = () => {
     const timelineEl = timelineRef.current;
-    if (!scrollEl || !timelineEl) return;
+    if (!timelineEl) return;
 
-    const updateBackgroundForDPI = () => {
-      const dpi = window.devicePixelRatio * 96;
-      const size = Math.max(0.5, 1.3 - (dpi - 96) / 400);
-      scrollEl.style.backgroundImage = `radial-gradient(var(--active-bg) ${size}px, transparent 0.4px)`;
-    };
-    updateBackgroundForDPI();
-    window.addEventListener("resize", updateBackgroundForDPI);
+    const { x, y } = translateRef.current;
+    const scale = scaleRef.current;
+    timelineEl.style.transformOrigin = "0 0";
+    timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+
+  // DPI + zoom/pan effect
+  useEffect(() => {
+    const container = containerRef.current;
+    const timelineEl = timelineRef.current;
+    if (!container || !timelineEl) return;
+
+    // Initialize with vertical centering (similar to margin-top: 25vh)
+    if (translateRef.current.x === 0 && translateRef.current.y === 0) {
+      translateRef.current.y = container.clientHeight * 0.25;
+      applyTransform();
+    }
 
     // Notify parent of initial zoom
     if (onZoomChange) {
       onZoomChange(scaleRef.current);
     }
 
-    let scale = scaleRef.current;
-
+    // Zoom to cursor with transforms
     const handleWheel = (e) => {
       if (!(e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+
+        // Shift + scroll = vertical pan only
+        if (e.shiftKey) {
+          translateRef.current.y -= e.deltaY;
+        }
+        // Horizontal scroll (trackpad swipe) = horizontal pan only
+        else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          translateRef.current.x -= e.deltaX;
+        }
+        // Regular scroll = horizontal pan (main timeline movement)
+        else {
+          translateRef.current.x -= e.deltaY;
+        }
+
+        // Clamp horizontal pan to timeline bounds
+        const scale = scaleRef.current;
+        const scaledTimelineWidth = timelineWidth * scale;
+        const viewportWidth = container.clientWidth;
+        const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+
+        // Clamp translateRef.current.x between -maxPan and 0
+        translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+
+        applyTransform();
+
+        if (!isPlaying && maxPan > 0) {
+          const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+          setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+        }
+
         return;
       }
 
       e.preventDefault();
       e.stopPropagation();
 
-      const oldScale = scale;
+      const oldScale = scaleRef.current;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-      // Get mouse position relative to the scroll container
-      const scrollRect = scrollEl.getBoundingClientRect();
-      const pointerX = e.clientX - scrollRect.left;
-      const pointerY = e.clientY - scrollRect.top;
+      // Point in canvas coordinates before zoom
+      const canvasX = (mouseX - translateRef.current.x) / oldScale;
+      const canvasY = (mouseY - translateRef.current.y) / oldScale;
 
-      const computedStyle = window.getComputedStyle(timelineEl);
-      const marginTop = parseFloat(computedStyle.marginTop) || 0;
-
-      const mousePointTo = {
-        x: (pointerX + scrollEl.scrollLeft) / oldScale,
-        y: (pointerY + scrollEl.scrollTop - marginTop) / oldScale,
-      };
-
-      // Calculate & apply the new scale
+      // Calculate new scale
       const delta = e.deltaY;
       const zoomFactor = delta < 0 ? 1.1 : 0.9;
-      const newScale = Math.min(Math.max(oldScale * zoomFactor, 1), 5);
+      const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.5), 5);
 
-      scale = newScale;
       scaleRef.current = newScale;
-      timelineEl.style.transformOrigin = "0 0";
-      timelineEl.style.transform = `scale(${newScale})`;
 
-      // Calculate new scroll position
-      const newScrollLeft = mousePointTo.x * newScale - pointerX;
-      const newScrollTop = mousePointTo.y * newScale + marginTop - pointerY;
+      // Adjust translate so canvas point stays under mouse
+      translateRef.current.x = mouseX - canvasX * newScale;
+      translateRef.current.y = mouseY - canvasY * newScale;
 
-      // When zoomed out (scale < 1), constrain scrolling to the scaled bounds
-      const actualWidth = timelineEl.offsetWidth * newScale;
-      const actualHeight = timelineEl.offsetHeight * newScale;
-      const maxScrollX = Math.max(0, actualWidth - scrollEl.clientWidth);
-      const maxScrollY = Math.max(0, actualHeight - scrollEl.clientHeight);
+      // Clamp horizontal pan to timeline bounds after zoom
+      const scaledTimelineWidth = timelineWidth * newScale;
+      const viewportWidth = container.clientWidth;
+      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+      translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
 
-      scrollEl.scrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollX));
-      scrollEl.scrollTop = Math.max(0, Math.min(newScrollTop, maxScrollY));
-
-      // Update scale state to trigger slider update
+      applyTransform();
       setCurrentScale(newScale);
 
       if (onZoomChange) {
@@ -233,58 +263,90 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
       }
     };
 
-    // Constrain scroll during regular scrolling when zoomed
-    const constrainScroll = () => {
-      const currentScale = scaleRef.current;
-      if (currentScale >= 1) return; // Only constrain when zoomed out
-
-      const actualWidth = timelineEl.offsetWidth * currentScale;
-      const actualHeight = timelineEl.offsetHeight * currentScale;
-      const maxScrollX = Math.max(0, actualWidth - scrollEl.clientWidth);
-      const maxScrollY = Math.max(0, actualHeight - scrollEl.clientHeight);
-
-      if (scrollEl.scrollLeft > maxScrollX) {
-        scrollEl.scrollLeft = maxScrollX;
-      }
-      if (scrollEl.scrollTop > maxScrollY) {
-        scrollEl.scrollTop = maxScrollY;
+    // Pan with mouse drag
+    const handleMouseDown = (e) => {
+      // Only pan with middle mouse or space+left mouse
+      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+        e.preventDefault();
+        isPanningRef.current = true;
+        lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
+        container.style.cursor = 'grabbing';
       }
     };
 
-    scrollEl.addEventListener("wheel", handleWheel, { passive: false, capture: true });
-    scrollEl.addEventListener("scroll", constrainScroll, { passive: true });
+    const handleMouseMove = (e) => {
+      if (!isPanningRef.current) return;
+
+      const dx = e.clientX - lastPanPositionRef.current.x;
+      const dy = e.clientY - lastPanPositionRef.current.y;
+
+      translateRef.current.x += dx;
+      translateRef.current.y += dy;
+
+      // Clamp horizontal pan to timeline bounds
+      const scale = scaleRef.current;
+      const scaledTimelineWidth = timelineWidth * scale;
+      const viewportWidth = container.clientWidth;
+      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+      translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+
+      lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
+      applyTransform();
+
+      // Update slider when panning horizontally
+      if (!isPlaying && maxPan > 0) {
+        const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+        setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isPanningRef.current) {
+        isPanningRef.current = false;
+        container.style.cursor = '';
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      window.removeEventListener("resize", updateBackgroundForDPI);
-      scrollEl.removeEventListener("wheel", handleWheel, { capture: true });
-      scrollEl.removeEventListener("scroll", constrainScroll);
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [onZoomChange]);
+  }, [onZoomChange, timelineWidth, isPlaying]);
 
-  // auto-scroll to selected item
+  // Pan to selected item
   useEffect(() => {
     if (!selectedId) return;
 
-    const scrollEl = scrollRef.current;
+    const container = containerRef.current;
     const timelineEl = timelineRef.current;
-    if (!scrollEl || !timelineEl) return;
+    if (!container || !timelineEl) return;
 
     const dom = timelineEl.querySelector(`[data-id="${selectedId}"]`);
     if (!dom) return;
 
+    // Get element position in timeline coordinates
     const rect = dom.getBoundingClientRect();
-    const targetX = rect.left + rect.width / 2;
+    const containerRect = container.getBoundingClientRect();
 
-    const scrollRect = scrollEl.getBoundingClientRect();
-    const viewportCenterX = scrollRect.left + scrollRect.width / 2;
+    // Calculate target position (center the element)
+    const elementCenterX = rect.left + rect.width / 2 - containerRect.left;
+    const elementCenterY = rect.top + rect.height / 2 - containerRect.top;
 
-    const scale = scaleRef.current || 1;
-    const deltaX = (targetX - viewportCenterX) / scale;
+    const viewportCenterX = containerRect.width / 2;
+    const viewportCenterY = containerRect.height / 2;
 
-    scrollEl.scrollTo({
-      left: scrollEl.scrollLeft + deltaX,
-      behavior: "smooth",
-    });
+    // Adjust translate to center the element
+    translateRef.current.x += (viewportCenterX - elementCenterX);
+    translateRef.current.y += (viewportCenterY - elementCenterY);
+
+    applyTransform();
   }, [selectedId]);
 
   // Close context menu on click outside
@@ -338,25 +400,19 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   const handleDownloadPNG = async () => {
     const timelineEl = timelineRef.current;
-    const scrollEl = scrollRef.current;
-    if (!timelineEl || !scrollEl) return;
+    if (!timelineEl) return;
 
     try {
       // Dynamically import html2canvas
       const html2canvas = (await import('html2canvas')).default;
 
-      // Store the current transform and scroll position
+      // Store the current transform
       const currentTransform = timelineEl.style.transform;
       const currentTransformOrigin = timelineEl.style.transformOrigin;
-      const currentScrollLeft = scrollEl.scrollLeft;
-      const currentScrollTop = scrollEl.scrollTop;
 
       // Temporarily remove transform
       timelineEl.style.transform = 'none';
       timelineEl.style.transformOrigin = '';
-
-      // Calculate the actual content height
-      const contentHeight = calculatedHeight;
 
       const canvas = await html2canvas(timelineEl, {
         backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim(),
@@ -366,11 +422,9 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         windowHeight: calculatedHeight + 100,
       });
 
-      // Restore the transform and scroll position
+      // Restore the transform
       timelineEl.style.transform = currentTransform;
       timelineEl.style.transformOrigin = currentTransformOrigin;
-      scrollEl.scrollLeft = currentScrollLeft;
-      scrollEl.scrollTop = currentScrollTop;
 
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
@@ -391,18 +445,19 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     const value = parseFloat(e.target.value);
     setSliderValue(value);
 
-    const scrollEl = scrollRef.current;
-    const timelineEl = timelineRef.current;
-    if (!scrollEl || !timelineEl) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const currentScale = scaleRef.current;
-    const actualWidth = timelineEl.scrollWidth * currentScale;
+    const scaledTimelineWidth = timelineWidth * currentScale;
+    const viewportWidth = container.clientWidth;
 
-    // Calculate scroll position based on the full range
-    const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
-    const scrollPosition = (value / 100) * maxScroll;
+    // Calculate how far we can pan 
+    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    const panPosition = -(value / 100) * maxPan;
 
-    scrollEl.scrollLeft = scrollPosition;
+    translateRef.current.x = panPosition;
+    applyTransform();
   };
 
   const handlePlayPause = () => {
@@ -440,52 +495,44 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     };
   }, [isPlaying]);
 
-  // Update scroll position when slider value changes during animation
+  // Update pan position when slider value changes during animation
   useEffect(() => {
     if (!isPlaying) return;
 
-    const scrollEl = scrollRef.current;
-    const timelineEl = timelineRef.current;
-    if (!scrollEl || !timelineEl) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const currentScale = scaleRef.current;
-    const actualWidth = timelineEl.scrollWidth * currentScale;
-    const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
-    const scrollPosition = (sliderValue / 100) * maxScroll;
+    const scaledTimelineWidth = timelineWidth * currentScale;
+    const viewportWidth = container.clientWidth;
+    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    const panPosition = -(sliderValue / 100) * maxPan;
 
-    scrollEl.scrollLeft = scrollPosition;
-  }, [sliderValue, isPlaying]);
+    translateRef.current.x = panPosition;
+    applyTransform();
+  }, [sliderValue, isPlaying, timelineWidth]);
 
-  // Update slider when user scrolls manually or when zoom changes
+  // Update slider based on current pan position
   useEffect(() => {
-    const scrollEl = scrollRef.current;
-    const timelineEl = timelineRef.current;
-    if (!scrollEl || !timelineEl) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const updateSlider = () => {
-      // Don't update if playing to avoid conflicts
-      if (isPlaying) return;
+    if (isPlaying) return; // Don't update if playing to avoid conflicts
 
-      // Calculate max scroll based on scaled dimensions
-      const scale = scaleRef.current;
-      const actualWidth = timelineEl.scrollWidth * scale;
-      const maxScroll = Math.max(0, actualWidth - scrollEl.clientWidth);
+    const scale = scaleRef.current;
+    const scaledTimelineWidth = timelineWidth * scale;
+    const viewportWidth = container.clientWidth;
+    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
 
-      if (maxScroll <= 0) {
-        setSliderValue(0);
-        return;
-      }
-      const scrollPercentage = (scrollEl.scrollLeft / maxScroll) * 100;
-      setSliderValue(scrollPercentage);
-    };
+    if (maxPan <= 0) {
+      setSliderValue(0);
+      return;
+    }
 
-    scrollEl.addEventListener('scroll', updateSlider);
-
-    // Update slider immediately when this effect runs (including after zoom changes)
-    updateSlider();
-
-    return () => scrollEl.removeEventListener('scroll', updateSlider);
-  }, [currentScale, isPlaying]);
+    // Calculate current pan percentage (translateRef.x is negative when panned right)
+    const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+    setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+  }, [currentScale, isPlaying, timelineWidth]);
 
   // Trigger PNG download when requested from outside (e.g., Sidebar)
   useEffect(() => {
@@ -496,7 +543,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   return (
     <div
-      ref={scrollRef}
+      ref={containerRef}
       className="timeline-scroll"
       onClick={() => onSelect?.(null)} // clear selection on background click
       onContextMenu={handleContextMenu}
@@ -829,16 +876,16 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
             className="slider-viewport-indicator"
             style={{
               left: (() => {
-                if (!scrollRef.current || !timelineRef.current) return '50%';
-                const totalScrollableWidth = timelineRef.current.scrollWidth * scaleRef.current;
-                const viewportWidthPercent = Math.min(100, (scrollRef.current.clientWidth / totalScrollableWidth) * 100);
+                if (!containerRef.current || !timelineRef.current) return '50%';
+                const timelineWidth = timelineRef.current.offsetWidth * scaleRef.current;
+                const viewportWidthPercent = Math.min(100, (containerRef.current.clientWidth / timelineWidth) * 100);
                 const halfWidth = viewportWidthPercent / 2;
                 // Map sliderValue (0-100) to the safe range (halfWidth to 100-halfWidth)
                 const safeRange = 100 - viewportWidthPercent;
                 const mappedPosition = halfWidth + (sliderValue / 100) * safeRange;
                 return `${mappedPosition}%`;
               })(),
-              width: `${Math.min(100, scrollRef.current && timelineRef.current ? (scrollRef.current.clientWidth / (timelineRef.current.scrollWidth * scaleRef.current)) * 100 : 10)}%`
+              width: `${Math.min(100, containerRef.current && timelineRef.current ? (containerRef.current.clientWidth / (timelineRef.current.offsetWidth * scaleRef.current)) * 100 : 10)}%`
             }}
           />
         </div>
