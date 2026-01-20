@@ -1,21 +1,33 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { parseTimelineInput } from "../utils/dateUtils";
 import "../styles/07-modals-menus.css";
 
-export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateTimeline }) {
+export default function SettingsModal({
+  isOpen,
+  onClose,
+  timelineData,
+  onUpdateTimeline,
+  themeKey,
+  defaultThemeKey,
+  themes,
+  onThemeChange,
+}) {
   const DETAIL_MIN = 0.2;
   const DETAIL_MID = 1;
   const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(0);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [detailLevel, setDetailLevel] = useState(1);
   const [detailSlider, setDetailSlider] = useState(50);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [layout, setLayout] = useState("Horizontal");
-  const [negID, setNegID] = useState("BCE");
-  const [posID, setPosID] = useState("CE");
+  const [theme, setTheme] = useState(defaultThemeKey || "");
+  const [useMonths, setUseMonths] = useState(false);
+  const [negID, setNegID] = useState("");
+  const [posID, setPosID] = useState("");
   const [showCenterTimeline, setShowCenterTimeline] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const saveTimeoutRef = useRef(null);
@@ -61,14 +73,16 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
   useEffect(() => {
     if (timelineData?.file) {
       setTitle(timelineData.file.title || "");
-      setStart(timelineData.file.start || 0);
-      setEnd(timelineData.file.end || 0);
+      setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
+      setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
       const nextDetailLevel = Number(timelineData.file.detailLevel || 1);
       const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
       setDetailLevel(clampedDetail);
       setDetailSlider(detailToSlider(clampedDetail));
-      setNegID(timelineData.file.negID || "BCE");
-      setPosID(timelineData.file.posID || "CE");
+      setTheme(timelineData.file.theme || defaultThemeKey || "");
+      setUseMonths(Boolean(timelineData.file.useMonths));
+      setNegID(timelineData.file.negID || "");
+      setPosID(timelineData.file.posID || "");
       setIsInitialized(true);
     }
   }, [timelineData]);
@@ -84,14 +98,20 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
 
     // Set new timeout to save after 300ms of no changes
     saveTimeoutRef.current = setTimeout(() => {
+      const parsedStart = parseTimelineInput(start);
+      const parsedEnd = parseTimelineInput(end);
       if (onUpdateTimeline) {
         onUpdateTimeline({
           title,
-          start: Number(start),
-          end: Number(end),
+          start: parsedStart.value,
+          end: parsedEnd.value,
           detailLevel: Number(detailLevel),
           negID,
           posID,
+          theme,
+          startLabel: parsedStart.label,
+          endLabel: parsedEnd.label,
+          useMonths,
         });
       }
     }, 300);
@@ -102,7 +122,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [title, start, end, detailLevel, negID, posID]);
+  }, [title, start, end, detailLevel, negID, posID, theme, useMonths]);
 
   if (!isOpen) return null;
 
@@ -145,7 +165,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
 
           <div className="settings-row">
             <div className="settings-row-left">
-              <div className="settings-row-label">Layout</div>
+              <div className="settings-row-label">Timeline Layout</div>
               <div className="settings-row-description">More layouts will be available soon!</div>
             </div>
             <div className="settings-row-right">
@@ -161,8 +181,32 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
 
           <div className="settings-row">
             <div className="settings-row-left">
-              <div className="settings-row-label">Detail Level</div>
-              <div className="settings-row-description">Multiplier for zoom level. 1 is default, 0.2 is most zoomed out, 5 is most zoomed in.</div>
+              <div className="settings-row-label">Theme</div>
+              <div className="settings-row-description">Choose a color theme for the app.</div>
+            </div>
+            <div className="settings-row-right">
+              <select
+                className="settings-select"
+                value={theme || themeKey || ""}
+                onChange={(e) => {
+                  setTheme(e.target.value);
+                  onThemeChange?.(e.target.value);
+                }}
+              >
+                <option value="default">Default (App Theme)</option>
+                {Object.entries(themes || {}).map(([key, theme]) => (
+                  <option key={key} value={key}>
+                    {theme?.name || key}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Timeline Length</div>
+              <div className="settings-row-description">Higher values can fit more events with less overlap.</div>
             </div>
             <div className="settings-row-right">
               <div className="settings-slider-wrap">
@@ -203,6 +247,23 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
             </div>
           </div>
 
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Show Months on Ticks</div>
+              <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
+            </div>
+            <div className="settings-row-right">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={useMonths}
+                  onChange={(e) => setUseMonths(e.target.checked)}
+                />
+                <span className="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
           <div className="settings-row no-border-bottom">
             <div className="settings-row-left">
               <div className="settings-row-label">Start Point</div>
@@ -210,7 +271,8 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
             </div>
             <div className="settings-row-right">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
@@ -225,7 +287,8 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
             </div>
             <div className="settings-row-right">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
@@ -236,7 +299,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
           <div className="settings-row no-border-bottom">
             <div className="settings-row-left">
               <div className="settings-row-label">Negative Era</div>
-              <div className="settings-row-description">Default: B.C.E</div>
+              <div className="settings-row-description">Optional label for negative years.</div>
             </div>
             <div className="settings-row-right">
               <input
@@ -251,7 +314,7 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Positive Era</div>
-              <div className="settings-row-description">Default: C.E.</div>
+              <div className="settings-row-description">Optional label for positive years.</div>
             </div>
             <div className="settings-row-right">
               <input

@@ -4,15 +4,20 @@ const fs = require('fs').promises;
 const themeConfig = require('../src/config/theme.json');
 
 let mainWindow;
+const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 
 function createWindow() {
   // Get the active theme
-  const activeTheme = themeConfig.themes[themeConfig.activeTheme];
+  const themes = themeConfig.themes || {};
+  const activeTheme =
+    themes[themeConfig.activeTheme] || themes[Object.keys(themes)[0]];
+  const backgroundColor =
+    activeTheme?.colors?.['secondary-bg'] || '#ffffff';
 
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: activeTheme.colors['secondary-bg'],
+    backgroundColor,
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -247,5 +252,31 @@ ipcMain.handle('delete-timeline', async (event, filename) => {
       success: false,
       error: error.message,
     };
+  }
+});
+
+// App settings (stored in user data)
+ipcMain.handle('get-app-settings', async () => {
+  try {
+    const filePath = appSettingsPath();
+    const content = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {};
+    }
+    console.error('Error loading app settings:', error);
+    return {};
+  }
+});
+
+ipcMain.handle('set-app-settings', async (event, settings) => {
+  try {
+    const filePath = appSettingsPath();
+    await fs.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf8');
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving app settings:', error);
+    return { success: false, error: error.message };
   }
 });

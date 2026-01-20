@@ -1,14 +1,21 @@
 import { useState, useEffect, useRef } from "react";
-import { File, FilePlus, Copy, Trash2 } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/09-homepage.css";
 import "../styles/07-modals-menus.css";
 
-export default function HomePage({ onSelectTimeline, onCreateTimeline }) {
+export default function HomePage({
+  onSelectTimeline,
+  onCreateTimeline,
+  appThemeKey,
+  themes,
+  onAppThemeChange,
+}) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+  const [view, setView] = useState("home");
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -150,11 +157,61 @@ export default function HomePage({ onSelectTimeline, onCreateTimeline }) {
     );
   }
 
+  if (view === "settings") {
+    return (
+      <div className="homepage">
+        <div className="homepage-container homepage-settings">
+          <div className="homepage-settings-header">
+            <button
+              className="homepage-settings-back"
+              onClick={() => setView("home")}
+              aria-label="Back to home"
+            >
+              <ArrowLeft size={18} strokeWidth={2} />
+              Back
+            </button>
+            <h1 className="homepage-title">App Settings</h1>
+          </div>
+
+          <div className="homepage-settings-content">
+            <div className="settings-row">
+              <div className="settings-row-left">
+                <div className="settings-row-label">Theme</div>
+                <div className="settings-row-description">Used on the homepage and when no timeline is open.</div>
+              </div>
+              <div className="settings-row-right">
+                <select
+                  className="settings-select"
+                  value={appThemeKey || ""}
+                  onChange={(e) => onAppThemeChange?.(e.target.value)}
+                >
+                  {Object.entries(themes || {}).map(([key, theme]) => (
+                    <option key={key} value={key}>
+                      {theme?.name || key}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="homepage">
       <div className="homepage-container">
-        <h1 className="homepage-title">timelines</h1>
-        <p className="homepage-subtitle">Select a timeline to open</p>
+        <div className="homepage-header">
+          <div>
+            <h1 className="homepage-title">timelines</h1>
+            <p className="homepage-subtitle">Select a timeline to open</p>
+          </div>
+          <button className="homepage-settings-button" onClick={() => setView("settings")}>
+            <Settings size={16} />
+            App Settings
+          </button>
+        </div>
 
         <div className="timeline-grid">
           <button className="timeline-card timeline-card-new" onClick={handleNewTimeline}>

@@ -156,9 +156,41 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   // ticks
   const ticks = [];
-  const startTick = Math.floor(minYear / step) * step;
-  for (let y = startTick; y <= maxYear; y += step) {
-    ticks.push(y);
+  const monthMode = file?.useMonths === true && minYear >= 0 && maxYear <= 9999 && step < 1;
+  const monthLabels = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  if (monthMode) {
+    const startYear = Math.floor(minYear);
+    const endYear = Math.floor(maxYear);
+    const startMonthIndex = Math.max(
+      0,
+      Math.min(11, Math.floor((minYear - startYear) * 12))
+    );
+    const endMonthIndex = Math.max(
+      0,
+      Math.min(11, Math.floor((maxYear - endYear) * 12))
+    );
+    const startAbsMonth = startYear * 12 + startMonthIndex;
+    const endAbsMonth = endYear * 12 + endMonthIndex;
+
+    for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
+      const y = Math.floor(m / 12);
+      const monthIndex = m % 12;
+      ticks.push({
+        value: Number((y + monthIndex / 12).toFixed(6)),
+        label: `${monthLabels[monthIndex]} ${y}`,
+      });
+    }
+  } else {
+    const startTick = Math.floor(minYear / step) * step;
+    for (let y = startTick; y <= maxYear; y += step) {
+      ticks.push({
+        value: Number(y.toFixed(6)),
+      });
+    }
   }
 
   // Notify parent of height changes
@@ -738,7 +770,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
               >
                 <span className="span-title">{span.title}</span>
                 <span className="span-years">
-                  {formatYear(span.start, file.negID, file.posID)} – {formatYear(span.end, file.negID, file.posID)}
+                  {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true)}
                 </span>
               </div>
             );
@@ -831,23 +863,23 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                 }}
               >
                 <div className="event-title">{event.title}</div>
-                <div className="event-date">{formatYear(event.date, file.negID, file.posID)}</div>
+                <div className="event-date">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true)}</div>
               </div>
             );
           })}
         </div>
 
-        {ticks.map((year) => (
+        {ticks.map((tick) => (
           <div
-            key={year}
+            key={tick.value}
             className="tick"
             style={{
-              left: `${yearToPx(year)}px`,
+              left: `${yearToPx(tick.value)}px`,
               top: `${BASE_LINE_Y - 5}px`,
             }}
           >
             <div className="tick-line" />
-            <div className="tick-label">{formatYear(year, file.negID, file.posID)}</div>
+            <div className="tick-label">{tick.label ?? formatYear(tick.value, file.negID, file.posID, false)}</div>
           </div>
         ))}
       </div>

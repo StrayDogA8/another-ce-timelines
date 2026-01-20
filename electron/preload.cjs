@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('electron', {
   exportTimeline: (data, suggestedName) => ipcRenderer.invoke('export-timeline', { data, suggestedName }),
   importTimeline: () => ipcRenderer.invoke('import-timeline'),
   deleteTimeline: (filename) => ipcRenderer.invoke('delete-timeline', filename),
+  getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
+  setAppSettings: (settings) => ipcRenderer.invoke('set-app-settings', settings),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),

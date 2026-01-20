@@ -1,11 +1,29 @@
-export function formatYear(year, negID = "BCE", posID = "CE") {
+export function formatYear(year, negID, posID, useMonths = false) {
   if (year < 0) {
-    return `${Math.abs(year)} ${negID}`;
-  } else if (year > 0) {
-    return `${year} ${posID}`;
-  } else {
-    return "0";
+    return negID ? `${Math.abs(year)} ${negID}` : `${year}`;
   }
+  if (year > 0) {
+    const yearInt = Math.floor(year);
+    const fraction = year - yearInt;
+    const hasFraction = Math.abs(fraction) > 1e-9;
+    const hasShortYear = yearInt <= 9999;
+
+    if (useMonths && hasShortYear) {
+      const months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ];
+      const monthIndex = hasFraction
+        ? Math.min(11, Math.max(0, Math.floor((fraction + 1e-9) * 12)))
+        : 0;
+      const label = `${months[monthIndex]} ${yearInt}`;
+      return posID ? `${label} ${posID}` : label;
+    }
+
+    const label = `${hasFraction ? year : yearInt}`;
+    return posID ? `${label} ${posID}` : label;
+  }
+  return "0";
 }
 
  // Scrollbar Width = (viewport width / (range * detail * scale)) * 100

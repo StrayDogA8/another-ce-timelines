@@ -203,12 +203,12 @@
 }
 
 .settings-input-small {
-  width: 140px;
+  width: 110px;
   text-align: right;
 }
 
 .settings-select {
-  width: 100%;
+  width: 225px;
   padding: 10px 14px;
   font-size: 14px;
   font-family: inherit;
@@ -231,7 +231,7 @@
 }
 
 .settings-slider {
-  width: 100%;
+  width: 220px;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;

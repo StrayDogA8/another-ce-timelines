@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { parseTimelineInput } from "../utils/dateUtils";
 import "../styles/07-modals-menus.css";
 
 export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
@@ -7,14 +8,14 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const DETAIL_MID = 1;
   const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(2024);
+  const [start, setStart] = useState("0");
+  const [end, setEnd] = useState("2024");
   const [detailLevel, setDetailLevel] = useState(1);
   const [detailSlider, setDetailSlider] = useState(50);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
-  const [negID, setNegID] = useState("BCE");
-  const [posID, setPosID] = useState("CE");
+  const [negID, setNegID] = useState("");
+  const [posID, setPosID] = useState("");
   const detailSliderRef = useRef(null);
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -68,25 +69,30 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       return;
     }
 
+    const parsedStart = parseTimelineInput(start);
+    const parsedEnd = parseTimelineInput(end);
+
     onCreate({
       title: title.trim(),
-      start: Number(start),
-      end: Number(end),
+      start: parsedStart.value,
+      end: parsedEnd.value,
       detailLevel: Number(detailLevel),
       negID,
       posID,
+      startLabel: parsedStart.label,
+      endLabel: parsedEnd.label,
     });
   };
 
   const handleCancel = () => {
     // Reset form
     setTitle("");
-    setStart(0);
-    setEnd(2024);
+    setStart("0");
+    setEnd("2024");
     setDetailLevel(1);
     setDetailSlider(50);
-    setNegID("BCE");
-    setPosID("CE");
+    setNegID("");
+    setPosID("");
     onClose();
   };
 
@@ -173,7 +179,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
             </div>
             <div className="settings-row-right">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
@@ -188,7 +195,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
             </div>
             <div className="settings-row-right">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
@@ -199,7 +207,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
           <div className="settings-row no-border-bottom">
             <div className="settings-row-left">
               <div className="settings-row-label">Negative Era</div>
-              <div className="settings-row-description">Default: B.C.E</div>
+              <div className="settings-row-description">Optional label for negative years.</div>
             </div>
             <div className="settings-row-right">
               <input
@@ -214,7 +222,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Positive Era</div>
-              <div className="settings-row-description">Default: C.E.</div>
+              <div className="settings-row-description">Optional label for positive years.</div>
             </div>
             <div className="settings-row-right">
               <input

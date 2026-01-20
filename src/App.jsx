@@ -9,6 +9,10 @@ import HomePage from "./components/HomePage";
 import { saveTimelineToFile } from "./utils/electronApi";
 import { updateElementWithNewId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
+import themeConfig from "./config/theme.json";
+import { applyTheme, getInitialThemeKey } from "./utils/theme";
+import { getAppSettings, saveAppSettings } from "./utils/appSettings";
+import { parseTimelineInput } from "./utils/dateUtils";
 import "./index.css";
 
 function App() {
@@ -28,6 +32,9 @@ function App() {
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
+  const defaultThemeKey = getInitialThemeKey(themeConfig);
+  const [themeKey, setThemeKey] = useState(defaultThemeKey);
+  const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
@@ -105,7 +112,15 @@ function App() {
     const originalId = updatedElement.id;
 
     setTimelineData((prevData) => {
-      const updatedData = updateElementWithNewId(prevData, updatedElement, originalId);
+      const nextElement = { ...updatedElement };
+      if (!nextElement.dateLabel) delete nextElement.dateLabel;
+      if (!nextElement.startLabel) delete nextElement.startLabel;
+      if (!nextElement.endLabel) delete nextElement.endLabel;
+      delete nextElement.dateInput;
+      delete nextElement.startInput;
+      delete nextElement.endInput;
+
+      const updatedData = updateElementWithNewId(prevData, nextElement, originalId);
 
       const newId = updatedData.elements.find(el =>
         el.title === updatedElement.title && el.type === updatedElement.type
@@ -255,19 +270,42 @@ function App() {
     setSelectedId(null);
   };
 
-  const handleUpdateTimeline = ({ title, start, end, detailLevel, negID, posID }) => {
+  const handleUpdateTimeline = ({
+    title,
+    start,
+    end,
+    detailLevel,
+    negID,
+    posID,
+    theme,
+    startLabel,
+    endLabel,
+    useMonths,
+  }) => {
+    const parsedStart = parseTimelineInput(start);
+    const parsedEnd = parseTimelineInput(end);
     setTimelineData((prevData) => {
+      const nextFile = {
+        ...prevData.file,
+        title,
+        start: parsedStart.value ?? prevData.file.start,
+        end: parsedEnd.value ?? prevData.file.end,
+        detailLevel,
+        negID,
+        posID,
+        theme,
+        startLabel,
+        endLabel,
+        useMonths,
+      };
+
+      if (!startLabel) delete nextFile.startLabel;
+      if (!endLabel) delete nextFile.endLabel;
+      if (useMonths === undefined) delete nextFile.useMonths;
+
       const updatedData = {
         ...prevData,
-        file: {
-          ...prevData.file,
-          title,
-          start,
-          end,
-          detailLevel,
-          negID,
-          posID,
-        },
+        file: nextFile,
       };
 
       
@@ -356,9 +394,15 @@ function App() {
         detailLevel: timelineConfig.detailLevel,
         negID: timelineConfig.negID,
         posID: timelineConfig.posID,
+        theme: timelineConfig.theme || defaultThemeKey,
+        startLabel: timelineConfig.startLabel,
+        endLabel: timelineConfig.endLabel,
       },
       elements: []
     };
+
+    if (!timelineConfig.startLabel) delete newTimeline.file.startLabel;
+    if (!timelineConfig.endLabel) delete newTimeline.file.endLabel;
 
     // Save to file system
     try {
@@ -406,6 +450,56 @@ function App() {
 
   const isElectron = window.electron !== undefined;
 
+  const resolveThemeKey = (value, fallback = defaultThemeKey) => {
+    if (!value) return fallback;
+    const lower = String(value).toLowerCase();
+    if (lower === "default") return fallback;
+    const match = Object.keys(themeConfig.themes || {}).find(
+      (key) => key.toLowerCase() === lower
+    );
+    return match || fallback;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAppSettings = async () => {
+      const settings = await getAppSettings();
+      if (!isMounted) return;
+      const nextTheme = resolveThemeKey(settings?.theme);
+      setAppThemeKey(nextTheme);
+    };
+
+    loadAppSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!timelineData) {
+      setThemeKey(appThemeKey);
+    }
+  }, [appThemeKey, timelineData]);
+
+  useEffect(() => {
+    applyTheme(themeConfig, themeKey);
+  }, [themeKey]);
+
+  useEffect(() => {
+    if (timelineData?.file) {
+      setThemeKey(resolveThemeKey(timelineData.file.theme, appThemeKey));
+      return;
+    }
+    setThemeKey(appThemeKey);
+  }, [timelineData?.file, appThemeKey]);
+
+  const handleAppThemeChange = async (nextThemeKey) => {
+    const resolved = resolveThemeKey(nextThemeKey);
+    setAppThemeKey(resolved);
+    await saveAppSettings({ theme: resolved });
+  };
+
   // Show HomePage if no timeline is loaded
   if (!timelineData) {
     return (
@@ -415,6 +509,9 @@ function App() {
           <HomePage
             onSelectTimeline={handleLoadTimeline}
             onCreateTimeline={handleCreateTimeline}
+            appThemeKey={appThemeKey}
+            themes={themeConfig.themes}
+            onAppThemeChange={handleAppThemeChange}
           />
         </div>
       </>
@@ -480,6 +577,10 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         timelineData={timelineData}
         onUpdateTimeline={handleUpdateTimeline}
+        themeKey={themeKey}
+        defaultThemeKey={defaultThemeKey}
+        themes={themeConfig.themes}
+        onThemeChange={setThemeKey}
       />
 
       {selectedId && (

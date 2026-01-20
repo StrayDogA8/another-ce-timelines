@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft } from "lucide-react";
+import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
 export default function Sidebar({
@@ -46,7 +47,7 @@ export default function Sidebar({
 
   const fmtYear = (y) => {
     if (!file) return String(y);
-    return y < 0 ? `${Math.abs(y)} ${file.negID}` : `${y} ${file.posID}`;
+    return formatYear(y, file.negID, file.posID, file.useMonths === true);
   };
 
   const eraRows = useMemo(
@@ -66,6 +67,18 @@ export default function Sidebar({
     () => [...events].sort((a, b) => a.date - b.date),
     [events]
   );
+
+  const formatRangeOld = (start, end, startLabel, endLabel) => {
+    const left = startLabel ?? fmtYear(start);
+    const right = endLabel ?? fmtYear(end);
+    return `${left} â€“ ${right}`;
+  };
+
+  const formatRange = (start, end, startLabel, endLabel) => {
+    const left = startLabel ?? fmtYear(start);
+    const right = endLabel ?? fmtYear(end);
+    return `${left} - ${right}`;
+  };
 
   const allExpanded = openEras && openSpans && openEvents;
   const allCollapsed = !openEras && !openSpans && !openEvents;
@@ -416,7 +429,7 @@ export default function Sidebar({
                   <Row
                     key={e.id}
                     item={e}
-                    rightText={`${fmtYear(e.start)} – ${fmtYear(e.end)}`}
+                    rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
                     level={0}
                   />
                 ))}
@@ -442,7 +455,7 @@ export default function Sidebar({
                   <Row
                     key={s.id}
                     item={s}
-                    rightText={`${fmtYear(s.start)} – ${fmtYear(s.end)}`}
+                    rightText={formatRange(s.start, s.end, s.startLabel, s.endLabel)}
                     level={0}
                   />
                 ))}
@@ -468,7 +481,7 @@ export default function Sidebar({
                   <Row
                     key={ev.id}
                     item={ev}
-                    rightText={fmtYear(ev.date)}
+                    rightText={ev.dateLabel ?? fmtYear(ev.date)}
                     level={0}
                   />
                 ))}

@@ -1,8 +1,8 @@
 {
-  "activeTheme": "warm",
+  "activeTheme": "light",
   "themes": {
-    "warm": {
-      "name": "Warm",
+    "light": {
+      "name": "Light",
       "colors": {
         "dark-bg": "#6C5F55",
         "element-bg": "#A6977E",
@@ -23,6 +23,78 @@
         "hover-bg": "#EDE6DA",
         "border-color": "#D4CAB8",
         "secondary-text": "#807C76"
+      }
+    },
+    "dark": {
+      "name": "Dark",
+      "colors": {
+        "dark-bg": "#C8CDD2",
+        "element-bg": "#828283",
+        "active-bg": "#C9C9C9",
+        "secondary-bg": "#050505",
+        "tertiary-bg": "#1C1F23",
+        "primary-bg": "#030303",
+        "gray-1": "#B7BCC1",
+        "gray-2": "#8E9398",
+        "gray-3": "#4A4E54",
+        "gray-4": "#1E2125",
+        "gray-5": "#0B0C0E",
+        "info-bg": "#5282DB",
+        "info-blue": "#405D9E",
+        "link-blue": "#789ABD",
+        "off-white": "#F2F3F4",
+        "light-bg": "#2A2D31",
+        "hover-bg": "#24272B",
+        "border-color": "#3B3F45",
+        "secondary-text": "#B0B5BA"
+      }
+    },
+    "white": {
+      "name": "White",
+      "colors": {
+        "dark-bg": "#1A1A1A",
+        "element-bg": "#919191",
+        "active-bg": "#D1D1D1",
+        "secondary-bg": "#F0F0F0",
+        "tertiary-bg": "#F5F5F5",
+        "primary-bg": "#FAFAFA",
+        "gray-1": "#797979",
+        "gray-2": "#797979",
+        "gray-3": "#292929",
+        "gray-4": "#141414",
+        "gray-5": "#111111",
+        "info-bg": "#8AC7FF",
+        "info-blue": "#5FA7E8",
+        "link-blue": "#2D6EA3",
+        "off-white": "#F7FAFC",
+        "light-bg": "#F0F4F7",
+        "hover-bg": "#EBEBEB",
+        "border-color": "#D4D4D4",
+        "secondary-text": "#7E7E7E"
+      }
+    },
+    "cool": {
+      "name": "Cool",
+      "colors": {
+        "dark-bg": "#3E4A59",
+        "element-bg": "#5C7A8A",
+        "active-bg": "#B7C6D1",
+        "secondary-bg": "#E2E8EE",
+        "tertiary-bg": "#F0F4F7",
+        "primary-bg": "#F7FAFC",
+        "gray-1": "#7A8590",
+        "gray-2": "#67727E",
+        "gray-3": "#1E2226",
+        "gray-4": "#101214",
+        "gray-5": "#0E0F11",
+        "info-bg": "#8AC7FF",
+        "info-blue": "#5FA7E8",
+        "link-blue": "#2D6EA3",
+        "off-white": "#F7FAFC",
+        "light-bg": "#F0F4F7",
+        "hover-bg": "#E2E8EE",
+        "border-color": "#B7C6D1",
+        "secondary-text": "#67727E"
       }
     }
   }

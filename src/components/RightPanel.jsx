@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Trash2, Copy, Check, Edit2, ChevronDown, ChevronRight } from "lucide-react";
+import { parseTimelineInput } from "../utils/dateUtils";
 
 export default function RightPanel({ onSelect, selectedElement, onUpdate, onDelete, timelineData }) {
   const [formData, setFormData] = useState(null);
@@ -13,7 +14,12 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
 
   useEffect(() => {
     if (selectedElement) {
-      setFormData({ ...selectedElement });
+      setFormData({
+        ...selectedElement,
+        dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
+        startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
+        endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
+      });
       setValidationErrors([]);
       setIsEditMode(false);
     }
@@ -31,7 +37,7 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (field === "date" || field === "parents") {
+    if (field === "dateInput" || field === "parents") {
       setValidationErrors([]);
     }
   };
@@ -41,7 +47,12 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
 
     if (formData.type === "event" && formData.parents && formData.parents.length > 0) {
       const spans = timelineData.elements.filter(el => el.type === "span");
-      const eventDate = formData.date;
+      const eventDate = parseTimelineInput(formData.dateInput).value;
+
+      if (eventDate === null) {
+        errors.push("Event date must be a number or MM/DD/YYYY.");
+        return errors;
+      }
 
       formData.parents.forEach(parentId => {
         const parentSpan = spans.find(span => span.id === parentId);
@@ -59,8 +70,23 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
     return errors;
   };
 
+  const stripInputs = (data) => {
+    const { dateInput, startInput, endInput, ...rest } = data;
+    return rest;
+  };
+
   const handleSave = () => {
     const errors = validateEventParents();
+    const parsedDate = parseTimelineInput(formData.dateInput);
+    const parsedStart = parseTimelineInput(formData.startInput);
+    const parsedEnd = parseTimelineInput(formData.endInput);
+
+    if (formData.type === "event" && parsedDate.value === null) {
+      errors.push("Event date must be a number or MM/DD/YYYY.");
+    }
+    if (formData.type !== "event" && (parsedStart.value === null || parsedEnd.value === null)) {
+      errors.push("Start and end must be numbers or MM/DD/YYYY.");
+    }
 
     if (errors.length > 0) {
       setValidationErrors(errors);
@@ -69,13 +95,40 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
 
     setValidationErrors([]);
     if (onUpdate) {
-      onUpdate(formData);
+      const nextData = stripInputs({ ...formData });
+      if (formData.type === "event") {
+        nextData.date = parsedDate.value;
+        if (parsedDate.label) {
+          nextData.dateLabel = parsedDate.label;
+        } else {
+          delete nextData.dateLabel;
+        }
+      } else {
+        nextData.start = parsedStart.value;
+        nextData.end = parsedEnd.value;
+        if (parsedStart.label) {
+          nextData.startLabel = parsedStart.label;
+        } else {
+          delete nextData.startLabel;
+        }
+        if (parsedEnd.label) {
+          nextData.endLabel = parsedEnd.label;
+        } else {
+          delete nextData.endLabel;
+        }
+      }
+      onUpdate(nextData);
     }
     setIsEditMode(false);
   };
 
   const handleCancel = () => {
-    setFormData({ ...selectedElement });
+    setFormData({
+      ...selectedElement,
+      dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
+      startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
+      endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
+    });
     setValidationErrors([]);
     setIsEditMode(false);
   };
@@ -161,22 +214,22 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
 
             {/* Date/Start/End based on type */}
             {formData.type === "event" ? (
-              <div className="view-group">
-                <label>Date</label>
-                <div className="view-separator" />
-                <p>{formData.date}</p>
-              </div>
+                <div className="view-group">
+                  <label>Date</label>
+                  <div className="view-separator" />
+                  <p>{formData.dateLabel ?? formData.date}</p>
+                </div>
             ) : (
               <>
                 <div className="view-group">
                   <label>Start Year</label>
                   <div className="view-separator" />
-                  <p>{formData.start}</p>
+                  <p>{formData.startLabel ?? formData.start}</p>
                 </div>
                 <div className="view-group">
                   <label>End Year</label>
                   <div className="view-separator" />
-                  <p>{formData.end}</p>
+                  <p>{formData.endLabel ?? formData.end}</p>
                 </div>
               </>
             )}
@@ -207,7 +260,7 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
                         style={{ backgroundColor: color }}
                         onClick={() => {
                           handleChange("color", color);
-                          onUpdate({ ...formData, color });
+                          onUpdate({ ...stripInputs({ ...formData, color }) });
                         }}
                       />
                     ))}
@@ -217,7 +270,7 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
                         value={formData.color}
                         onChange={(e) => {
                           handleChange("color", e.target.value);
-                          onUpdate({ ...formData, color: e.target.value });
+                          onUpdate({ ...stripInputs({ ...formData, color: e.target.value }) });
                         }}
                         style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
                       />
@@ -376,11 +429,11 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
                 <label htmlFor="date">Date</label>
                 <input
                   id="date"
-                  type="number"
-                  value={formData.date}
+                  type="text"
+                  inputMode="numeric"
+                  value={formData.dateInput ?? ""}
                   onChange={(e) => {
-                    const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                    handleChange("date", isNaN(value) ? 0 : value);
+                    handleChange("dateInput", e.target.value);
                   }}
                 />
               </div>
@@ -388,27 +441,27 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
               <>
                 <div className="form-group">
                   <label htmlFor="start">Start Year</label>
-                  <input
-                    id="start"
-                    type="number"
-                    value={formData.start}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                      handleChange("start", isNaN(value) ? 0 : value);
-                    }}
-                  />
+                <input
+                  id="start"
+                  type="text"
+                  inputMode="numeric"
+                  value={formData.startInput ?? ""}
+                  onChange={(e) => {
+                    handleChange("startInput", e.target.value);
+                  }}
+                />
                 </div>
                 <div className="form-group">
                   <label htmlFor="end">End Year</label>
-                  <input
-                    id="end"
-                    type="number"
-                    value={formData.end}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                      handleChange("end", isNaN(value) ? 0 : value);
-                    }}
-                  />
+                <input
+                  id="end"
+                  type="text"
+                  inputMode="numeric"
+                  value={formData.endInput ?? ""}
+                  onChange={(e) => {
+                    handleChange("endInput", e.target.value);
+                  }}
+                />
                 </div>
               </>
             )}

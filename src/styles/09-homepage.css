@@ -14,6 +14,14 @@
   padding: 60px 40px;
 }
 
+.homepage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
 .homepage-title {
   font-size: 48px;
   font-weight: 700;
@@ -26,6 +34,68 @@
   font-weight: 500;
   color: var(--gray-2);
   margin: 0 0 40px 0;
+}
+
+.homepage-settings-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.homepage-settings-button:hover {
+  border-color: var(--element-bg);
+  background: var(--active-bg);
+}
+
+.homepage-settings-button:active {
+  transform: translateY(1px);
+}
+
+.homepage-settings {
+  max-width: 720px;
+}
+
+.homepage-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.homepage-settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.homepage-settings-back:hover {
+  border-color: var(--element-bg);
+  background: var(--active-bg);
+}
+
+.homepage-settings-content {
+  border: 2px solid var(--active-bg);
+  border-radius: 14px;
+  background: var(--secondary-bg);
+  overflow: hidden;
 }
 
 .timeline-grid {
