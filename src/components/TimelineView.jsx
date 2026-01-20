@@ -49,10 +49,12 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const detailMultiplier = file?.detailLevel ?? 1;
   const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
 
-  const step = pickStep(range);
-  const timelineWidth = range * PX_PER_YEAR;
+  const zoomInScale = Math.max(currentScale, 1);
+  const step = pickStep(range / (detailMultiplier * zoomInScale * 2));
+  const TIMELINE_PADDING = 200; // px padding on each end
+  const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
 
-  const yearToPx = (year) => (year - minYear) * PX_PER_YEAR;
+  const yearToPx = (year) => (year - minYear) * PX_PER_YEAR + TIMELINE_PADDING;
 
   // spans
   const SPAN_HEIGHT = 23;
@@ -361,8 +363,15 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     const viewportCenterY = containerRect.height / 2;
 
     // Calculate target translate values
-    const targetX = translateRef.current.x + (viewportCenterX - elementTargetX);
+    let targetX = translateRef.current.x + (viewportCenterX - elementTargetX);
     const targetY = translateRef.current.y + (viewportCenterY - elementTargetY);
+
+    // Clamp target position to scroll bounds
+    const scale = scaleRef.current;
+    const scaledTimelineWidth = timelineWidth * scale;
+    const viewportWidth = container.clientWidth;
+    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    targetX = Math.min(0, Math.max(-maxPan, targetX));
 
     // Animate to target position
     const startX = translateRef.current.x;
@@ -419,15 +428,16 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   }, [contextMenu]);
 
   const handleContextMenu = (e) => {
-    // Check if the click target is an element (event, span, or era)
     const target = e.target;
-    const isElement = target.closest('.event, .span-item, .era-item');
-
-    if (isElement) {
-      return; // Don't show context menu on elements
-    }
+    const elementNode = target.closest('.event, .span-item, .era-item');
+    const elementId = elementNode?.getAttribute('data-id');
 
     e.preventDefault();
+
+    if (elementId) {
+      onSelect?.(elementId);
+    }
+
     setContextMenu({
       x: e.clientX,
       y: e.clientY,

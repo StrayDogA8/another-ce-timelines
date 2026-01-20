@@ -3,23 +3,70 @@ import { useState, useEffect, useRef } from "react";
 import "../styles/07-modals-menus.css";
 
 export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateTimeline }) {
+  const DETAIL_MIN = 0.2;
+  const DETAIL_MID = 1;
+  const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
   const [detailLevel, setDetailLevel] = useState(1);
+  const [detailSlider, setDetailSlider] = useState(50);
+  const [showDetailTooltip, setShowDetailTooltip] = useState(false);
+  const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [layout, setLayout] = useState("Horizontal");
   const [negID, setNegID] = useState("BCE");
   const [posID, setPosID] = useState("CE");
   const [showCenterTimeline, setShowCenterTimeline] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const saveTimeoutRef = useRef(null);
+  const detailSliderRef = useRef(null);
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  const detailToSlider = (value) => {
+    const clamped = clamp(value, DETAIL_MIN, DETAIL_MAX);
+    if (clamped <= DETAIL_MID) {
+      const ratio = (clamped - DETAIL_MIN) / (DETAIL_MID - DETAIL_MIN);
+      return ratio * 50;
+    }
+    const ratio = (clamped - DETAIL_MID) / (DETAIL_MAX - DETAIL_MID);
+    return 50 + ratio * 50;
+  };
+
+  const sliderToDetail = (position) => {
+    const pos = clamp(position, 0, 100);
+    if (pos <= 50) {
+      const ratio = pos / 50;
+      return DETAIL_MIN + ratio * (DETAIL_MID - DETAIL_MIN);
+    }
+    const ratio = (pos - 50) / 50;
+    return DETAIL_MID + ratio * (DETAIL_MAX - DETAIL_MID);
+  };
+
+  useEffect(() => {
+    const updateTooltip = () => {
+      const sliderEl = detailSliderRef.current;
+      if (!sliderEl) return;
+      const sliderWidth = sliderEl.getBoundingClientRect().width;
+      const thumbSize = 20;
+      const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
+      setDetailTooltipLeft(left);
+    };
+
+    updateTooltip();
+    window.addEventListener("resize", updateTooltip);
+    return () => window.removeEventListener("resize", updateTooltip);
+  }, [detailSlider]);
 
   useEffect(() => {
     if (timelineData?.file) {
       setTitle(timelineData.file.title || "");
       setStart(timelineData.file.start || 0);
       setEnd(timelineData.file.end || 0);
-      setDetailLevel(timelineData.file.detailLevel || 1);
+      const nextDetailLevel = Number(timelineData.file.detailLevel || 1);
+      const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
+      setDetailLevel(clampedDetail);
+      setDetailSlider(detailToSlider(clampedDetail));
       setNegID(timelineData.file.negID || "BCE");
       setPosID(timelineData.file.posID || "CE");
       setIsInitialized(true);
@@ -118,17 +165,41 @@ export default function SettingsModal({ isOpen, onClose, timelineData, onUpdateT
               <div className="settings-row-description">Multiplier for zoom level. 1 is default, 0.2 is most zoomed out, 5 is most zoomed in.</div>
             </div>
             <div className="settings-row-right">
-              <input
-                type="range"
-                min="0.2"
-                max="5"
-                step="0.1"
-                className="settings-slider"
-                value={detailLevel}
-                onChange={(e) => setDetailLevel(e.target.value)}
-                title={`Detail Level: ${detailLevel}x`}
-              />
-              <span className="settings-value">{Number(detailLevel).toFixed(1)}x</span>
+              <div className="settings-slider-wrap">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="settings-slider"
+                  value={detailSlider}
+                  ref={detailSliderRef}
+                  onChange={(e) => {
+                    const nextPosition = Number(e.target.value);
+                    const rawDetail = sliderToDetail(nextPosition);
+                    const snappedDetail = Number((Math.round(rawDetail * 10) / 10).toFixed(1));
+                    setDetailLevel(snappedDetail);
+                    setDetailSlider(detailToSlider(snappedDetail));
+                  }}
+                  onMouseEnter={() => setShowDetailTooltip(true)}
+                  onMouseLeave={() => setShowDetailTooltip(false)}
+                  onMouseDown={() => setShowDetailTooltip(true)}
+                  onMouseUp={() => setShowDetailTooltip(false)}
+                />
+                {showDetailTooltip && (
+                  <div
+                    className="settings-slider-tooltip"
+                    style={{ left: detailTooltipLeft }}
+                  >
+                    {detailLevel}x
+                  </div>
+                )}
+                <div className="settings-slider-labels">
+                  <span className="settings-slider-label settings-slider-label-min">{DETAIL_MIN}</span>
+                  <span className="settings-slider-label settings-slider-label-mid">{DETAIL_MID}</span>
+                  <span className="settings-slider-label settings-slider-label-max">{DETAIL_MAX}</span>
+                </div>
+              </div>
             </div>
           </div>
 

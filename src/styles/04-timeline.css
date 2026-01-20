@@ -207,7 +207,7 @@
 .timeline-slider {
   position: absolute;
   width: 100%;
-  height: 4px;
+  height: 20px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;

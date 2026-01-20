@@ -1,14 +1,58 @@
 import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import "../styles/07-modals-menus.css";
 
 export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
+  const DETAIL_MIN = 0.2;
+  const DETAIL_MID = 1;
+  const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(2024);
-  const [detailLevel, setDetailLevel] = useState(5);
+  const [detailLevel, setDetailLevel] = useState(1);
+  const [detailSlider, setDetailSlider] = useState(50);
+  const [showDetailTooltip, setShowDetailTooltip] = useState(false);
+  const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [negID, setNegID] = useState("BCE");
   const [posID, setPosID] = useState("CE");
+  const detailSliderRef = useRef(null);
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  const detailToSlider = (value) => {
+    const clamped = clamp(value, DETAIL_MIN, DETAIL_MAX);
+    if (clamped <= DETAIL_MID) {
+      const ratio = (clamped - DETAIL_MIN) / (DETAIL_MID - DETAIL_MIN);
+      return ratio * 50;
+    }
+    const ratio = (clamped - DETAIL_MID) / (DETAIL_MAX - DETAIL_MID);
+    return 50 + ratio * 50;
+  };
+
+  const sliderToDetail = (position) => {
+    const pos = clamp(position, 0, 100);
+    if (pos <= 50) {
+      const ratio = pos / 50;
+      return DETAIL_MIN + ratio * (DETAIL_MID - DETAIL_MIN);
+    }
+    const ratio = (pos - 50) / 50;
+    return DETAIL_MID + ratio * (DETAIL_MAX - DETAIL_MID);
+  };
+
+  useEffect(() => {
+    const updateTooltip = () => {
+      const sliderEl = detailSliderRef.current;
+      if (!sliderEl) return;
+      const sliderWidth = sliderEl.getBoundingClientRect().width;
+      const thumbSize = 20;
+      const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
+      setDetailTooltipLeft(left);
+    };
+
+    updateTooltip();
+    window.addEventListener("resize", updateTooltip);
+    return () => window.removeEventListener("resize", updateTooltip);
+  }, [detailSlider]);
 
   if (!isOpen) return null;
 
@@ -39,7 +83,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     setTitle("");
     setStart(0);
     setEnd(2024);
-    setDetailLevel(5);
+    setDetailLevel(1);
+    setDetailSlider(50);
     setNegID("BCE");
     setPosID("CE");
     onClose();
@@ -83,15 +128,41 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
               <div className="settings-row-description">Higher values let you add more events between years.</div>
             </div>
             <div className="settings-row-right">
-              <input
-                type="range"
-                min="1"
-                max="20"
-                className="settings-slider"
-                value={detailLevel}
-                onChange={(e) => setDetailLevel(e.target.value)}
-                title={`Detail Level: ${detailLevel}`}
-              />
+              <div className="settings-slider-wrap">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="settings-slider"
+                  value={detailSlider}
+                  ref={detailSliderRef}
+                  onChange={(e) => {
+                    const nextPosition = Number(e.target.value);
+                    const rawDetail = sliderToDetail(nextPosition);
+                    const snappedDetail = Number((Math.round(rawDetail * 10) / 10).toFixed(1));
+                    setDetailLevel(snappedDetail);
+                    setDetailSlider(detailToSlider(snappedDetail));
+                  }}
+                  onMouseEnter={() => setShowDetailTooltip(true)}
+                  onMouseLeave={() => setShowDetailTooltip(false)}
+                  onMouseDown={() => setShowDetailTooltip(true)}
+                  onMouseUp={() => setShowDetailTooltip(false)}
+                />
+                {showDetailTooltip && (
+                  <div
+                    className="settings-slider-tooltip"
+                    style={{ left: detailTooltipLeft }}
+                  >
+                    {detailLevel}x
+                  </div>
+                )}
+                <div className="settings-slider-labels">
+                  <span className="settings-slider-label settings-slider-label-min">{DETAIL_MIN}</span>
+                  <span className="settings-slider-label settings-slider-label-mid">{DETAIL_MID}</span>
+                  <span className="settings-slider-label settings-slider-label-max">{DETAIL_MAX}</span>
+                </div>
+              </div>
             </div>
           </div>
 
