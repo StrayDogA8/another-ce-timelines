@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -403,6 +403,14 @@ export default function Sidebar({
               ) : (
                 <ListChevronsUpDown size={17} strokeWidth={2} />
               )}
+            </button>
+            <button
+              className="sidebar-add-button"
+              type="button"
+              aria-label="Filter list"
+              title="Filter list"
+            >
+              <ListFilter size={17} strokeWidth={2} />
             </button>
           </div>
         </div>

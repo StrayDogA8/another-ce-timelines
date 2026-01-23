@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { parseTimelineInput } from "../utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import "../styles/07-modals-menus.css";
 
 export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
@@ -71,11 +71,13 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
 
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
+    const startValue = parsedStart.value;
+    const endValue = parsedEnd.value;
 
     onCreate({
       title: title.trim(),
-      start: parsedStart.value,
-      end: parsedEnd.value,
+      start: startValue,
+      end: endValue,
       detailLevel: Number(detailLevel),
       negID,
       posID,

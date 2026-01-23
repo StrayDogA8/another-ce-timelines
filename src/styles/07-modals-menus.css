@@ -37,10 +37,22 @@
   background: color-mix(in srgb, var(--active-bg), black 8%);
 }
 
+.context-menu-item-danger {
+  color: #b42318;
+}
+
+.context-menu-item-danger svg {
+  color: #b42318;
+}
+
 .context-menu-item svg {
   color: var(--dark-bg);
   flex-shrink: 0;
   padding-right: 0px;
+}
+
+.context-menu-item.context-menu-item-danger svg {
+  color: #b42318;
 }
 
 .context-menu-separator {

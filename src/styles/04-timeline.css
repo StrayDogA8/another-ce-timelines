@@ -129,7 +129,7 @@
 .eras-layer { position: absolute; inset: 0; }
 .era-item {
   position: absolute;
-  height: 20px;
+  height: 26px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -259,4 +259,46 @@
 
 .timeline-slider:hover ~ .slider-viewport-indicator {
   background: var(--dark-bg);
+}
+
+.timeline-canvas-bar {
+  position: fixed;
+  top: 45px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--active-bg);
+  z-index: 120;
+}
+
+.timeline-canvas-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dark-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timeline-canvas-button:hover {
+  background: var(--active-bg);
+  border-color: var(--element-bg);
+}
+
+.timeline-canvas-button:active {
+  transform: translateY(1px);
+}
+
+.timeline-canvas-divider {
+  height: 1px;
+  background: var(--active-bg);
+  margin: 2px 4px;
 }

@@ -38,11 +38,17 @@ export const parseTimelineInput = (value) => {
     const maxDay = daysInMonth(year, month);
     if (day < 1 || day > maxDay) return { value: null, label: null };
 
-    const doy = dayOfYear(year, month, day);
-    const yearDays = daysInMonth(year, 2) === 29 ? 366 : 365;
-    return { value: year + (doy - 1) / yearDays, label: raw };
+    const monthBase = (month - 1) / 12;
+    const monthDays = daysInMonth(year, month);
+    const dayOffset = (day - 1) / (monthDays * 12);
+    return { value: year + monthBase + dayOffset, label: raw };
   }
 
   const num = Number(raw);
   return Number.isFinite(num) ? { value: num, label: null } : { value: null, label: null };
+};
+
+export const snapToMonthGrid = (value) => {
+  if (!Number.isFinite(value)) return value;
+  return Math.round(value * 12) / 12;
 };

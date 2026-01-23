@@ -26,6 +26,32 @@ export function formatYear(year, negID, posID, useMonths = false) {
   return "0";
 }
 
+const clampChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
+
+const mixColor = (base, target, amount) => clampChannel(base + (target - base) * amount);
+
+const toHex = (value) => value.toString(16).padStart(2, "0");
+
+export function getReadableTextColor(background) {
+  if (!background || typeof background !== "string") return "#1A1A1A";
+  const hex = background.replace("#", "").trim();
+  if (hex.length !== 6) return "#1A1A1A";
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if ([r, g, b].some((v) => Number.isNaN(v))) return "#1A1A1A";
+
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const amount = luminance < 0.7 ? 0.7 : 0.45;
+  const target = luminance < 0.7 ? 255 : 0;
+
+  const outR = mixColor(r, target, amount);
+  const outG = mixColor(g, target, amount);
+  const outB = mixColor(b, target, amount);
+
+  return `#${toHex(outR)}${toHex(outG)}${toHex(outB)}`;
+}
+
  // Scrollbar Width = (viewport width / (range * detail * scale)) * 100
  // (1200 / (range × detail × 0.5)) × 100 = 20 (Solving for detail: detail = 12000 / range)
 

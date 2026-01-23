@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -7,12 +7,32 @@ import {
   layoutEvents,
   formatYear,
   calculateDetailLevel,
+  getReadableTextColor,
 } from "../utils/timelineUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause } from "lucide-react";
+import { snapToMonthGrid } from "../utils/dateUtils";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause, Plus, Minus, MoveVertical, Copy, Trash2, Edit2 } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
-function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeightChange, onAddEvent, onAddSpan, onAddEra, onOpenSettings, downloadPngTrigger }) {
+function TimelineView({
+  selectedId,
+  onSelect,
+  timelineData,
+  onZoomChange,
+  onHeightChange,
+  onAddEvent,
+  onAddSpan,
+  onAddEra,
+  onOpenSettings,
+  onDelete,
+  onDuplicateElement,
+  onEditElement,
+  downloadPngTrigger,
+  rightPanelWidth = 0,
+  isRightPanelOpen = false,
+  leftPanelWidth = 0,
+  isLeftPanelOpen = false,
+}) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
@@ -24,174 +44,243 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
   const [currentScale, setCurrentScale] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const animationFrameRef = useRef(null);
+  const lastPlayTimeRef = useRef(null);
+  const sliderInputRef = useRef(false);
+  const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
+  const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
 
-  const file = timelineData.file;
-  const events = timelineData.elements.filter(e => e.type === "event");
-  const spans = timelineData.elements.filter(e => e.type === "span");
-  const eras = timelineData.elements.filter(e => e.type === "era");
-
-  const allYears = [
-    ...events.map((e) => e.date),
-    ...spans.flatMap((s) => [s.start, s.end]),
-    ...eras.flatMap((e) => [e.start, e.end]),
-  ];
-
-  const rawMin = Math.min(...allYears);
-  const rawMax = Math.max(...allYears);
-
-  const minYear = file?.start ?? rawMin;
-  const maxYear = file?.end ?? rawMax;
-  const range = maxYear - minYear;
-
-  // Calculate detail level automatically based on range
-  // The detailLevel setting will be used as a multiplier later
-  const baseDetailLevel = calculateDetailLevel(range);
-  const detailMultiplier = file?.detailLevel ?? 1;
-  const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
-
-  const zoomInScale = Math.max(currentScale, 1);
-  const step = pickStep(range / (detailMultiplier * zoomInScale * 2));
-  const TIMELINE_PADDING = 200; // px padding on each end
-  const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
-
-  const yearToPx = (year) => (year - minYear) * PX_PER_YEAR + TIMELINE_PADDING;
-
-  // spans
-  const SPAN_HEIGHT = 23;
-  const SPAN_OFFSET = 14;
-  const SPAN_GAP = 6;
-  const SPAN_VERTICAL_GAP = 0;
-
-  const spanChildPlacement = buildSpanChildPlacement(spans);
-
-  // First pass: calculate with temporary BASE_LINE_Y to determine content extent
-  const TEMP_BASE_LINE_Y = 500;
-
-  const { spanLaneEnds } = layoutSpans({
-    spans,
-    yearToPx,
-    BASE_LINE_Y: TEMP_BASE_LINE_Y,
-    SPAN_HEIGHT,
-    SPAN_OFFSET,
-    SPAN_GAP,
-    SPAN_VERTICAL_GAP,
-    spanChildPlacement,
-    PX_PER_YEAR,
-  });
-
-  const spanBandHeight = calcSpanBandHeight(
-    spanLaneEnds.length,
-    SPAN_OFFSET,
-    SPAN_HEIGHT,
-    SPAN_VERTICAL_GAP
-  );
-
-  // events
-  const EVENT_WIDTH = 160;
-  const EVENT_GAP = 6;
-  const LANE_SPACING = 37;
-  const BOX_OFFSET = 50;
-
-  const tempEvents = layoutEvents({
+  const {
+    file,
     events,
-    yearToPx,
-    BASE_LINE_Y: TEMP_BASE_LINE_Y,
-    spanBandHeight,
-    EVENT_WIDTH,
-    EVENT_GAP,
-    LANE_SPACING,
-    BOX_OFFSET,
-  });
-
-  // eras
-  const ERA_OFFSET = 30;
-
-  // Calculate dynamic timeline height based on temporary layout
-  const maxEventTop = tempEvents.length > 0 ? Math.min(...tempEvents.map(e => e.top)) : TEMP_BASE_LINE_Y;
-  const tempEraTop = TEMP_BASE_LINE_Y + ERA_OFFSET;
-  const maxEraTop = eras.length > 0 ? tempEraTop : TEMP_BASE_LINE_Y;
-
-  const topExtent = Math.min(maxEventTop, maxEraTop);
-  const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
-  const belowBaseline = ERA_OFFSET + 30; // Era height + some padding
-
-  const calculatedHeight = aboveBaseline + belowBaseline;
-
-  const BASE_LINE_Y = calculatedHeight;
-
-  const { finalSpans } = layoutSpans({
-    spans,
-    yearToPx,
-    BASE_LINE_Y,
-    SPAN_HEIGHT,
-    SPAN_OFFSET,
-    SPAN_GAP,
-    SPAN_VERTICAL_GAP,
+    adjustedEvents,
+    adjustedSpans,
+    adjustedEras,
     spanChildPlacement,
-    PX_PER_YEAR,
-  });
-
-  const finalEvents = layoutEvents({
-    events,
-    yearToPx,
-    BASE_LINE_Y,
     spanBandHeight,
-    EVENT_WIDTH,
-    EVENT_GAP,
-    LANE_SPACING,
-    BOX_OFFSET,
-  });
+    finalSpans,
+    finalEvents,
+    finalEras,
+    minYear,
+    maxYear,
+    range,
+    PX_PER_YEAR,
+    step,
+    timelineWidth,
+    yearToPx,
+    calculatedHeight,
+    BASE_LINE_Y,
+    ticks,
+  } = useMemo(() => {
+    const file = timelineData.file;
+    const events = timelineData.elements.filter(e => e.type === "event");
+    const spans = timelineData.elements.filter(e => e.type === "span");
+    const eras = timelineData.elements.filter(e => e.type === "era");
+    const useMonths = file?.useMonths === true;
+    const adjustDate = (value) => (useMonths ? snapToMonthGrid(value) : value);
 
-  const finalEras = eras.map((era) => {
-    const left = yearToPx(era.start);
-    const width = (era.end - era.start) * PX_PER_YEAR;
-    const top = BASE_LINE_Y + ERA_OFFSET;
-    return {
+    const adjustedEvents = events.map((event) => ({
+      ...event,
+      date: adjustDate(event.date),
+    }));
+    const adjustedSpans = spans.map((span) => ({
+      ...span,
+      start: adjustDate(span.start),
+      end: adjustDate(span.end),
+    }));
+    const adjustedEras = eras.map((era) => ({
       ...era,
-      left,
-      width,
-      top,
+      start: adjustDate(era.start),
+      end: adjustDate(era.end),
+    }));
+
+    const allYears = [
+      ...adjustedEvents.map((e) => e.date),
+      ...adjustedSpans.flatMap((s) => [s.start, s.end]),
+      ...adjustedEras.flatMap((e) => [e.start, e.end]),
+    ];
+
+    const rawMin = Math.min(...allYears);
+    const rawMax = Math.max(...allYears);
+
+    const minYear = file?.start ?? rawMin;
+    const maxYear = file?.end ?? rawMax;
+    const range = maxYear - minYear;
+
+    // Calculate detail level automatically based on range
+    // The detailLevel setting will be used as a multiplier later
+    const baseDetailLevel = calculateDetailLevel(range);
+    const detailMultiplier = file?.detailLevel ?? 1;
+    const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
+
+    const zoomInScale = Math.max(currentScale, 1);
+    const step = pickStep(range / (detailMultiplier * zoomInScale * 2));
+    const TIMELINE_PADDING = 200; // px padding on each end
+    const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
+
+    const yearToPx = (year) => (year - minYear) * PX_PER_YEAR + TIMELINE_PADDING;
+
+    // spans
+    const SPAN_HEIGHT = 23;
+    const SPAN_OFFSET = 14;
+    const SPAN_GAP = 6;
+    const SPAN_VERTICAL_GAP = 0;
+
+    const spanChildPlacement = buildSpanChildPlacement(adjustedSpans);
+
+    // First pass: calculate with temporary BASE_LINE_Y to determine content extent
+    const TEMP_BASE_LINE_Y = 500;
+
+    const { spanLaneEnds } = layoutSpans({
+      spans: adjustedSpans,
+      yearToPx,
+      BASE_LINE_Y: TEMP_BASE_LINE_Y,
+      SPAN_HEIGHT,
+      SPAN_OFFSET,
+      SPAN_GAP,
+      SPAN_VERTICAL_GAP,
+      spanChildPlacement,
+      PX_PER_YEAR,
+    });
+
+    const spanBandHeight = calcSpanBandHeight(
+      spanLaneEnds.length,
+      SPAN_OFFSET,
+      SPAN_HEIGHT,
+      SPAN_VERTICAL_GAP
+    );
+
+    // events
+    const EVENT_WIDTH = 160;
+    const EVENT_GAP = 6;
+    const LANE_SPACING = 37;
+    const BOX_OFFSET = 50;
+
+    const tempEvents = layoutEvents({
+      events,
+      yearToPx,
+      BASE_LINE_Y: TEMP_BASE_LINE_Y,
+      spanBandHeight,
+      EVENT_WIDTH,
+      EVENT_GAP,
+      LANE_SPACING,
+      BOX_OFFSET,
+    });
+
+    // eras
+    const ERA_OFFSET = 34;
+
+    // Calculate dynamic timeline height based on temporary layout
+    const maxEventTop = tempEvents.length > 0 ? Math.min(...tempEvents.map(e => e.top)) : TEMP_BASE_LINE_Y;
+    const tempEraTop = TEMP_BASE_LINE_Y + ERA_OFFSET;
+    const maxEraTop = eras.length > 0 ? tempEraTop : TEMP_BASE_LINE_Y;
+
+    const topExtent = Math.min(maxEventTop, maxEraTop);
+    const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
+    const belowBaseline = ERA_OFFSET + 30; // Era height + some padding
+
+    const calculatedHeight = aboveBaseline + belowBaseline;
+
+    const BASE_LINE_Y = calculatedHeight;
+
+    const { finalSpans } = layoutSpans({
+      spans: adjustedSpans,
+      yearToPx,
+      BASE_LINE_Y,
+      SPAN_HEIGHT,
+      SPAN_OFFSET,
+      SPAN_GAP,
+      SPAN_VERTICAL_GAP,
+      spanChildPlacement,
+      PX_PER_YEAR,
+    });
+
+    const finalEvents = layoutEvents({
+      events: adjustedEvents,
+      yearToPx,
+      BASE_LINE_Y,
+      spanBandHeight,
+      EVENT_WIDTH,
+      EVENT_GAP,
+      LANE_SPACING,
+      BOX_OFFSET,
+    });
+
+    const finalEras = adjustedEras.map((era) => {
+      const left = yearToPx(era.start);
+      const width = (era.end - era.start) * PX_PER_YEAR;
+      const top = BASE_LINE_Y + ERA_OFFSET;
+      return {
+        ...era,
+        left,
+        width,
+        top,
+      };
+    });
+
+    // ticks
+    const ticks = [];
+    const monthMode = useMonths && minYear >= 0 && maxYear <= 9999 && step < 1;
+    const monthLabels = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
+
+    if (monthMode) {
+      const startYear = Math.floor(minYear);
+      const endYear = Math.floor(maxYear);
+      const startMonthIndex = Math.max(
+        0,
+        Math.min(11, Math.floor((minYear - startYear) * 12))
+      );
+      const endMonthIndex = Math.max(
+        0,
+        Math.min(11, Math.floor((maxYear - endYear) * 12))
+      );
+      const startAbsMonth = startYear * 12 + startMonthIndex;
+      const endAbsMonth = endYear * 12 + endMonthIndex;
+
+      for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
+        const y = Math.floor(m / 12);
+        const monthIndex = m % 12;
+        ticks.push({
+          value: Number((y + monthIndex / 12).toFixed(6)),
+          label: `${monthLabels[monthIndex]} ${y}`,
+        });
+      }
+    } else {
+      const startTick = Math.floor(minYear / step) * step;
+      for (let y = startTick; y <= maxYear; y += step) {
+        ticks.push({
+          value: Number(y.toFixed(6)),
+        });
+      }
+    }
+
+    return {
+      file,
+      events,
+      adjustedEvents,
+      adjustedSpans,
+      adjustedEras,
+      spanChildPlacement,
+      spanBandHeight,
+      finalSpans,
+      finalEvents,
+      finalEras,
+      minYear,
+      maxYear,
+      range,
+      PX_PER_YEAR,
+      step,
+      timelineWidth,
+      yearToPx,
+      calculatedHeight,
+      BASE_LINE_Y,
+      ticks,
     };
-  });
+  }, [timelineData, currentScale]);
 
-  // ticks
-  const ticks = [];
-  const monthMode = file?.useMonths === true && minYear >= 0 && maxYear <= 9999 && step < 1;
-  const monthLabels = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-
-  if (monthMode) {
-    const startYear = Math.floor(minYear);
-    const endYear = Math.floor(maxYear);
-    const startMonthIndex = Math.max(
-      0,
-      Math.min(11, Math.floor((minYear - startYear) * 12))
-    );
-    const endMonthIndex = Math.max(
-      0,
-      Math.min(11, Math.floor((maxYear - endYear) * 12))
-    );
-    const startAbsMonth = startYear * 12 + startMonthIndex;
-    const endAbsMonth = endYear * 12 + endMonthIndex;
-
-    for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
-      const y = Math.floor(m / 12);
-      const monthIndex = m % 12;
-      ticks.push({
-        value: Number((y + monthIndex / 12).toFixed(6)),
-        label: `${monthLabels[monthIndex]} ${y}`,
-      });
-    }
-  } else {
-    const startTick = Math.floor(minYear / step) * step;
-    for (let y = startTick; y <= maxYear; y += step) {
-      ticks.push({
-        value: Number(y.toFixed(6)),
-      });
-    }
-  }
+  const eventLineStyle = file?.eventLineStyle || "solid";
 
   // Notify parent of height changes
   useEffect(() => {
@@ -209,6 +298,57 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     const scale = scaleRef.current;
     timelineEl.style.transformOrigin = "0 0";
     timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+
+  const centerVertical = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    translateRef.current.y = container.clientHeight * 0.25;
+    applyTransform();
+  };
+
+  const zoomToPoint = (zoomFactor, mouseX, mouseY) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const oldScale = scaleRef.current;
+    const rect = container.getBoundingClientRect();
+    const localX = mouseX - rect.left;
+    const localY = mouseY - rect.top;
+
+    const canvasX = (localX - translateRef.current.x) / oldScale;
+    const canvasY = (localY - translateRef.current.y) / oldScale;
+
+    const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.5), 5);
+    scaleRef.current = newScale;
+
+    translateRef.current.x = localX - canvasX * newScale;
+    translateRef.current.y = localY - canvasY * newScale;
+
+    const scaledTimelineWidth = timelineWidth * newScale;
+    const viewportWidth = container.clientWidth;
+    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+
+    applyTransform();
+    setCurrentScale(newScale);
+    if (onZoomChange) {
+      onZoomChange(newScale);
+    }
+  };
+
+  const handleZoomIn = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    zoomToPoint(1.1, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  };
+
+  const handleZoomOut = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    zoomToPoint(0.9, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
 
   // DPI + zoom/pan effect
@@ -229,7 +369,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     }
 
     // Zoom to cursor with transforms
-    const handleWheel = (e) => {
+      const handleWheel = (e) => {
       if (!(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
 
@@ -268,38 +408,9 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
       e.preventDefault();
       e.stopPropagation();
 
-      const oldScale = scaleRef.current;
-      const rect = container.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      // Point in canvas coordinates before zoom
-      const canvasX = (mouseX - translateRef.current.x) / oldScale;
-      const canvasY = (mouseY - translateRef.current.y) / oldScale;
-
-      // Calculate new scale
       const delta = e.deltaY;
       const zoomFactor = delta < 0 ? 1.1 : 0.9;
-      const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.5), 5);
-
-      scaleRef.current = newScale;
-
-      // Adjust translate so canvas point stays under mouse
-      translateRef.current.x = mouseX - canvasX * newScale;
-      translateRef.current.y = mouseY - canvasY * newScale;
-
-      // Clamp horizontal pan to timeline bounds after zoom
-      const scaledTimelineWidth = timelineWidth * newScale;
-      const viewportWidth = container.clientWidth;
-      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-      translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
-
-      applyTransform();
-      setCurrentScale(newScale);
-
-      if (onZoomChange) {
-        onZoomChange(newScale);
-      }
+      zoomToPoint(zoomFactor, e.clientX, e.clientY);
     };
 
     // Pan with mouse drag
@@ -463,16 +574,16 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
     const target = e.target;
     const elementNode = target.closest('.event, .span-item, .era-item');
     const elementId = elementNode?.getAttribute('data-id');
+    const element = elementId
+      ? timelineData.elements.find((el) => el.id === elementId)
+      : null;
 
     e.preventDefault();
-
-    if (elementId) {
-      onSelect?.(elementId);
-    }
 
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
+      element,
     });
   };
 
@@ -539,6 +650,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   const handleSliderChange = (e) => {
     const value = parseFloat(e.target.value);
+    sliderInputRef.current = true;
     setSliderValue(value);
 
     const container = containerRef.current;
@@ -567,18 +679,47 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      lastPlayTimeRef.current = null;
       return;
     }
 
-    const animate = () => {
-      setSliderValue((prevValue) => {
-        const newValue = prevValue + 0.02; // Speed of animation
-        if (newValue >= 100) {
-          setIsPlaying(false);
-          return 100;
-        }
-        return newValue;
-      });
+    const animate = (time) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const scale = scaleRef.current;
+      const scaledTimelineWidth = timelineWidth * scale;
+      const viewportWidth = container.clientWidth;
+      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+
+      if (maxPan <= 0) {
+        setIsPlaying(false);
+        return;
+      }
+
+      if (lastPlayTimeRef.current === null) {
+        lastPlayTimeRef.current = time;
+      }
+
+      const deltaMs = time - lastPlayTimeRef.current;
+      lastPlayTimeRef.current = time;
+
+      const speedPxPerSec = 220;
+      const deltaPx = (speedPxPerSec * deltaMs) / 1000;
+
+      let nextX = translateRef.current.x - deltaPx;
+      nextX = Math.min(0, Math.max(-maxPan, nextX));
+      translateRef.current.x = nextX;
+      applyTransform();
+
+      const panPercentage = Math.abs(nextX / maxPan) * 100;
+      setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+
+      if (nextX <= -maxPan + 0.5) {
+        setIsPlaying(false);
+        return;
+      }
+
       animationFrameRef.current = requestAnimationFrame(animate);
     };
 
@@ -593,7 +734,9 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
   // Update pan position when slider value changes during animation
   useEffect(() => {
-    if (!isPlaying) return;
+    if (isPlaying) return;
+    if (!sliderInputRef.current) return;
+    sliderInputRef.current = false;
 
     const container = containerRef.current;
     if (!container) return;
@@ -654,6 +797,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         <div className="eras-layer">
           {finalEras.map((era) => {
             const isSelected = selectedId === era.id;
+            const eraTextColor = getReadableTextColor(era.color || "var(--tertiary-bg)");
             return (
               <div
                 key={era.id}
@@ -663,10 +807,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                   left: `${era.left}px`,
                   width: `${era.width}px`,
                   top: `${era.top}px`,
-                  background: `linear-gradient(
-                    rgba(255,255,255,0.6),
-                    rgba(255,255,255,0.6)
-                  ), ${era.color || "var(--tertiary-bg)"}`,
+                  background: `${era.color || "var(--tertiary-bg)"}`,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -676,7 +817,8 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                 <span
                   className="era-title"
                   style={{
-                    color: era.color ? era.color : "var(--dark-bg)",
+                    color: eraTextColor,
+                    opacity: 1,
                   }}
                 >
                   {era.title}
@@ -751,6 +893,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         <div className="spans-layer">
           {finalSpans.map((span) => {
             const isSelected = selectedId === span.id;
+            const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
 
             return (
               <div
@@ -768,8 +911,8 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                   onSelect?.(span.id);
                 }}
               >
-                <span className="span-title">{span.title}</span>
-                <span className="span-years">
+                <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
+                <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
                   {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true)}
                 </span>
               </div>
@@ -780,6 +923,8 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         {/* Event lines layer - behind spans and events */}
         <div className="event-lines-layer">
           {finalEvents.map((event) => {
+            if (eventLineStyle === "none") return null;
+
             const parentId = event.parents?.[0];
             const parentSpan = parentId
               ? finalSpans.find((span) => span.id === parentId)
@@ -793,6 +938,9 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
 
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
+            const lineColor = parentColor || 'var(--element-bg)';
+            const isDashed = eventLineStyle === "dashed";
+            const isDotted = eventLineStyle === "dotted";
 
             return (
               <div
@@ -812,9 +960,14 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                     left: '50%',
                     top: '0',
                     transform: 'translateX(-50%)',
-                    width: '2px',
+                    width: isDashed || isDotted ? '0' : '2px',
                     height: `${lineHeight}px`,
-                    background: parentColor || 'var(--element-bg)',
+                    background: isDashed || isDotted ? 'transparent' : lineColor,
+                    borderLeft: isDashed
+                      ? `2px dashed ${lineColor}`
+                      : isDotted
+                        ? `2px dotted ${lineColor}`
+                        : 'none',
                   }}
                 />
                 <div
@@ -826,7 +979,7 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
                     transform: 'translate(-50%, -50%)',
                     width: '8px',
                     height: '8px',
-                    background: parentColor || 'var(--element-bg)',
+                    background: lineColor,
                   }}
                 />
               </div>
@@ -884,7 +1037,44 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         ))}
       </div>
 
-      {contextMenu && (
+      {contextMenu && contextMenu.element && (
+        <div
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onEditElement?.(contextMenu.element.id))}
+          >
+            <Edit2 size={16} />
+            <span>Edit {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
+          </button>
+          {contextMenu.element.type !== "era" && (
+            <button
+              className="context-menu-item"
+              onClick={() => handleMenuAction(() => onDuplicateElement?.(contextMenu.element.id))}
+            >
+              <Copy size={16} />
+              <span>Duplicate {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
+            </button>
+          )}
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item context-menu-item-danger"
+            onClick={() => handleMenuAction(() => onDelete?.(contextMenu.element.id))}
+          >
+            <Trash2 size={16} />
+            <span>Delete {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
+          </button>
+        </div>
+      )}
+
+      {contextMenu && !contextMenu.element && (
         <div
           className="timeline-context-menu"
           style={{
@@ -945,7 +1135,50 @@ function TimelineView({ selectedId, onSelect, timelineData, onZoomChange, onHeig
         </div>
       )}
 
-      <div className="timeline-slider-container">
+      <div className="timeline-canvas-bar" style={{ right: `${zoomButtonOffset}px` }}>
+        <button
+          type="button"
+          className="timeline-canvas-button"
+          onClick={handleZoomIn}
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <Plus size={16} />
+        </button>
+        <button
+          type="button"
+          className="timeline-canvas-button"
+          onClick={centerVertical}
+          aria-label="Center vertically"
+          title="Center vertically"
+        >
+          <MoveVertical size={16} />
+        </button>
+        <button
+          type="button"
+          className="timeline-canvas-button"
+          onClick={handleZoomOut}
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <Minus size={16} />
+        </button>
+        <div className="timeline-canvas-divider" />
+        <button
+          type="button"
+          className="timeline-canvas-button"
+          onClick={onOpenSettings}
+          aria-label="Timeline settings"
+          title="Timeline settings"
+        >
+          <Settings size={16} />
+        </button>
+      </div>
+
+      <div
+        className="timeline-slider-container"
+        style={{ left: `calc(50% + ${sliderOffset / 2}px)` }}
+      >
         <button
           className="slider-play-button"
           onClick={handlePlayPause}

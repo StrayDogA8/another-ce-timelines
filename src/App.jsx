@@ -12,7 +12,7 @@ import { generateIdFromTitle } from "./utils/idUtils";
 import themeConfig from "./config/theme.json";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
-import { parseTimelineInput } from "./utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
 import "./index.css";
 
 function App() {
@@ -32,6 +32,7 @@ function App() {
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
+  const [editRequestId, setEditRequestId] = useState(null);
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
   const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
@@ -106,6 +107,11 @@ function App() {
 
   const handleSelect = (id) => {
     setSelectedId(id);
+  };
+
+  const handleEditElement = (id) => {
+    setSelectedId(id);
+    setEditRequestId(id);
   };
 
   const handleUpdate = async (updatedElement) => {
@@ -227,6 +233,48 @@ function App() {
     setSelectedId(newEra.id);
   };
 
+  const makeUniqueId = (baseId, elements) => {
+    let nextId = baseId;
+    let counter = 2;
+    while (elements.some((el) => el.id === nextId)) {
+      nextId = `${baseId}-${counter}`;
+      counter += 1;
+    }
+    return nextId;
+  };
+
+  const handleDuplicateElement = (elementId) => {
+    setTimelineData((prevData) => {
+      const original = prevData.elements.find((el) => el.id === elementId);
+      if (!original) return prevData;
+
+      const nextTitle = `${original.title} Copy`;
+      const baseId = generateIdFromTitle(nextTitle, original.type);
+      const nextId = makeUniqueId(baseId, prevData.elements);
+
+      const baseCopy = {
+        ...original,
+        id: nextId,
+        title: nextTitle,
+      };
+
+      if (original.type === "span") {
+        baseCopy.branches = [];
+        baseCopy.forks = [];
+      }
+
+      const updatedData = {
+        ...prevData,
+        elements: [...prevData.elements, baseCopy],
+      };
+
+      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+
+      return updatedData;
+    });
+  };
+
   const handleDelete = (elementId) => {
     setTimelineData((prevData) => {
       const filteredElements = prevData.elements.filter(el => el.id !== elementId);
@@ -281,15 +329,20 @@ function App() {
     startLabel,
     endLabel,
     useMonths,
+    eventLineStyle,
+    layout,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
     setTimelineData((prevData) => {
+      const applyMonthSnap = useMonths === true;
+      const startValue = parsedStart.value ?? prevData.file.start;
+      const endValue = parsedEnd.value ?? prevData.file.end;
       const nextFile = {
         ...prevData.file,
         title,
-        start: parsedStart.value ?? prevData.file.start,
-        end: parsedEnd.value ?? prevData.file.end,
+        start: applyMonthSnap ? snapToMonthGrid(startValue) : startValue,
+        end: applyMonthSnap ? snapToMonthGrid(endValue) : endValue,
         detailLevel,
         negID,
         posID,
@@ -297,11 +350,15 @@ function App() {
         startLabel,
         endLabel,
         useMonths,
+        eventLineStyle,
+        layout,
       };
 
       if (!startLabel) delete nextFile.startLabel;
       if (!endLabel) delete nextFile.endLabel;
       if (useMonths === undefined) delete nextFile.useMonths;
+      if (!eventLineStyle) delete nextFile.eventLineStyle;
+      if (!layout) delete nextFile.layout;
 
       const updatedData = {
         ...prevData,
@@ -397,6 +454,8 @@ function App() {
         theme: timelineConfig.theme || defaultThemeKey,
         startLabel: timelineConfig.startLabel,
         endLabel: timelineConfig.endLabel,
+        eventLineStyle: timelineConfig.eventLineStyle || "solid",
+        layout: timelineConfig.layout || "Horizontal",
       },
       elements: []
     };
@@ -568,7 +627,14 @@ function App() {
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onDelete={handleDelete}
+          onDuplicateElement={handleDuplicateElement}
+          onEditElement={handleEditElement}
           downloadPngTrigger={downloadPngTrigger}
+          rightPanelWidth={rightWidth}
+          isRightPanelOpen={Boolean(selectedId)}
+          leftPanelWidth={currentLeftWidth}
+          isLeftPanelOpen={!isLeftCollapsed}
         />
       </main>
 
@@ -605,6 +671,8 @@ function App() {
               onUpdate={handleUpdate}
               onDelete={handleDelete}
               timelineData={timelineData}
+              editRequestId={editRequestId}
+              onEditRequestHandled={() => setEditRequestId(null)}
             />
           </aside>
         </>

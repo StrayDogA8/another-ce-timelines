@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import { X, Trash2, Copy, Check, Edit2, ChevronDown, ChevronRight } from "lucide-react";
-import { parseTimelineInput } from "../utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 
-export default function RightPanel({ onSelect, selectedElement, onUpdate, onDelete, timelineData }) {
+export default function RightPanel({
+  onSelect,
+  selectedElement,
+  onUpdate,
+  onDelete,
+  timelineData,
+  editRequestId,
+  onEditRequestHandled,
+}) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -24,6 +32,13 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
       setIsEditMode(false);
     }
   }, [selectedElement]);
+
+  useEffect(() => {
+    if (!selectedElement || !editRequestId) return;
+    if (selectedElement.id !== editRequestId) return;
+    setIsEditMode(true);
+    onEditRequestHandled?.();
+  }, [selectedElement, editRequestId, onEditRequestHandled]);
 
   if (!selectedElement || !formData) {
     return (
@@ -80,12 +95,25 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
     const parsedDate = parseTimelineInput(formData.dateInput);
     const parsedStart = parseTimelineInput(formData.startInput);
     const parsedEnd = parseTimelineInput(formData.endInput);
+    const useMonths = timelineData?.file?.useMonths === true;
+    const timelineStart = timelineData?.file?.start;
+    const timelineEnd = timelineData?.file?.end;
 
     if (formData.type === "event" && parsedDate.value === null) {
       errors.push("Event date must be a number or MM/DD/YYYY.");
     }
     if (formData.type !== "event" && (parsedStart.value === null || parsedEnd.value === null)) {
       errors.push("Start and end must be numbers or MM/DD/YYYY.");
+    }
+    if (formData.type === "event" && parsedDate.value !== null) {
+      if (parsedDate.value < timelineStart || parsedDate.value > timelineEnd) {
+        errors.push("Event date must be within the timeline bounds.");
+      }
+    }
+    if (formData.type !== "event" && parsedStart.value !== null && parsedEnd.value !== null) {
+      if (parsedStart.value < timelineStart || parsedEnd.value > timelineEnd) {
+        errors.push("Span/Era range must be within the timeline bounds.");
+      }
     }
 
     if (errors.length > 0) {
@@ -97,15 +125,15 @@ export default function RightPanel({ onSelect, selectedElement, onUpdate, onDele
     if (onUpdate) {
       const nextData = stripInputs({ ...formData });
       if (formData.type === "event") {
-        nextData.date = parsedDate.value;
+        nextData.date = useMonths ? snapToMonthGrid(parsedDate.value) : parsedDate.value;
         if (parsedDate.label) {
           nextData.dateLabel = parsedDate.label;
         } else {
           delete nextData.dateLabel;
         }
       } else {
-        nextData.start = parsedStart.value;
-        nextData.end = parsedEnd.value;
+        nextData.start = useMonths ? snapToMonthGrid(parsedStart.value) : parsedStart.value;
+        nextData.end = useMonths ? snapToMonthGrid(parsedEnd.value) : parsedEnd.value;
         if (parsedStart.label) {
           nextData.startLabel = parsedStart.label;
         } else {
