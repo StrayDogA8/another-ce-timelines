@@ -11,4 +11,4 @@ A free app that allows users to create and share customized timelines for use in
 
 ![Design Doc](docs/design-doc.png)
 
-**Target release: Early 2026.**
+**Target release: Q2 2026.**
