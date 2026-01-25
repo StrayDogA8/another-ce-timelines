@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Trash2, Copy, Check, Edit2, ChevronDown, ChevronRight } from "lucide-react";
+import { Copy, Check, Edit2, ChevronDown, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 
 export default function RightPanel({
@@ -10,6 +10,8 @@ export default function RightPanel({
   timelineData,
   editRequestId,
   onEditRequestHandled,
+  isMaximized,
+  onToggleMaximize,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -161,9 +163,6 @@ export default function RightPanel({
     setIsEditMode(false);
   };
 
-  const handleClose = () => {
-    onSelect(null);
-  };
 
   const handleTagsChange = (value) => {
     const tags = value.split(",").map(t => t.trim()).filter(Boolean);
@@ -179,14 +178,6 @@ export default function RightPanel({
     }
   };
 
-  const handleDelete = () => {
-    const confirmMessage = `Are you sure you want to delete this ${formData.type}?\n\nTitle: ${formData.title}\nID: ${formData.id}\n\nThis action cannot be undone.`;
-
-    if (window.confirm(confirmMessage)) {
-      onDelete(formData.id);
-    }
-  };
-
   const handleCopyId = async () => {
     try {
       await navigator.clipboard.writeText(formData.id);
@@ -198,7 +189,7 @@ export default function RightPanel({
   };
 
   return (
-    <div className="right-panel">
+    <div className={`right-panel ${isMaximized ? "is-maximized" : ""}`}>
       <div className="right-panel-header">
         <div>
           <h2>{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</h2>
@@ -216,7 +207,7 @@ export default function RightPanel({
               <button
                 className="copy-id-button"
                 onClick={() => setIsEditMode(true)}
-                title="Edit"
+                title="Edit details"
                 type="button"
               >
                 <Edit2 size={14} />
@@ -224,8 +215,12 @@ export default function RightPanel({
             )}
           </div>
         </div>
-        <button className="close-button" onClick={handleClose} title="Close panel">
-          <X size={20} />
+        <button
+          className="close-button"
+          onClick={onToggleMaximize}
+          title={isMaximized ? "Restore panel" : "Maximize panel"}
+        >
+          {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
       </div>
 
@@ -428,7 +423,11 @@ export default function RightPanel({
           </div>
         ) : (
           /* Edit Mode */
-          <form className="edit-form" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+          <form
+            id="right-panel-edit-form"
+            className="edit-form"
+            onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+          >
             {/* Validation Errors */}
             {validationErrors.length > 0 && (
               <div className="validation-errors">
@@ -571,40 +570,28 @@ export default function RightPanel({
                 onChange={(e) => handleChange("description", e.target.value)}
                 placeholder="Enter a description..."
                 rows={4}
-                style={{
-                  padding: '6px 8px',
-                  border: '1px solid var(--active-bg)',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  backgroundColor: 'white',
-                  color: 'var(--dark-bg)',
-                  width: '100%',
-                  resize: 'vertical'
-                }}
+                className="form-textarea"
               />
             </div>
-
-            {/* Action buttons */}
-            <div className="form-actions">
-              <button type="submit" className="btn-primary">
-                Save Changes
-              </button>
-              <button type="button" className="btn-secondary" onClick={handleCancel}>
-                Cancel
+            <div className="form-group">
+              <button type="button" className="btn-secondary btn-note">
+                Add Note
               </button>
             </div>
 
-            {/* Delete button */}
-            <div className="form-delete-section">
-              <button type="button" className="btn-delete" onClick={handleDelete}>
-                <Trash2 size={16} />
-                Delete {formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}
-              </button>
-            </div>
           </form>
         )}
       </div>
+      {isEditMode && (
+        <div className="right-panel-footer">
+          <button type="submit" className="btn-primary" form="right-panel-edit-form">
+            Save Changes
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleCancel}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

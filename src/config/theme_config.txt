@@ -1,0 +1,20 @@
+
+        "dark-bg": Primary Text, Timeline Line       
+        "element-bg": Section Labels, Secondary Text
+        "active-bg": Borders, 
+        "secondary-bg": Default Event BG, Sidebar / Right Panel BG, Settings BG
+        "tertiary-bg": "#F3EDE3",
+        "primary-bg": Timeline View BG
+        "gray-1": Event Year
+        "gray-2": "#807C76",
+        "gray-3": "#211F1E",
+        "gray-4": "#141414",
+        "gray-5": "#151515",
+        "info-bg": "#87C6FA",
+        "info-blue": "#87C6FA",
+        "link-blue": "#417FB2",
+        "off-white": "#FFFAF4",
+        "light-bg": "#F3EDE3",
+        "hover-bg": "#EDE6DA",
+        "border-color": "#D4CAB8",
+        "secondary-text": "#807C76"

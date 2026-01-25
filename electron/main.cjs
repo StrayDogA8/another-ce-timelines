@@ -37,6 +37,18 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    if (!params.isEditable) return;
+    const menu = Menu.buildFromTemplate([
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { type: 'separator' },
+      { role: 'selectAll' },
+    ]);
+    menu.popup({ window: mainWindow });
+  });
 }
 
 // Initialize user data directory and copy example timelines on first run

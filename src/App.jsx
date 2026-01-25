@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
@@ -25,6 +25,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isRightMaximized, setIsRightMaximized] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -36,6 +37,11 @@ function App() {
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
   const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
+  const [activeTags, setActiveTags] = useState([]);
+  const [filterScope, setFilterScope] = useState({
+    events: true,
+    spans: true,
+  });
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
@@ -107,6 +113,32 @@ function App() {
 
   const handleSelect = (id) => {
     setSelectedId(id);
+  };
+
+  useEffect(() => {
+    if (!selectedId && isRightMaximized) {
+      setIsRightMaximized(false);
+    }
+  }, [selectedId, isRightMaximized]);
+
+  const handleToggleTag = (tag) => {
+    setActiveTags((prev) => {
+      if (prev.includes(tag)) {
+        return prev.filter((value) => value !== tag);
+      }
+      return [...prev, tag];
+    });
+  };
+
+  const handleToggleFilterScope = (key) => {
+    setFilterScope((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleClearTags = () => {
+    setActiveTags([]);
   };
 
   const handleEditElement = (id) => {
@@ -559,6 +591,38 @@ function App() {
     await saveAppSettings({ theme: resolved });
   };
 
+  const filteredElements = useMemo(() => {
+    if (!timelineData) return [];
+    if (activeTags.length === 0) return timelineData.elements;
+    const tagSet = new Set(activeTags);
+    return timelineData.elements.filter((element) => {
+      if (element.type !== "event" && element.type !== "span") {
+        return true;
+      }
+      if (element.type === "event" && !filterScope.events) {
+        return true;
+      }
+      if (element.type === "span" && !filterScope.spans) {
+        return true;
+      }
+      const tags = Array.isArray(element.tags) ? element.tags : [];
+      return tags.some((tag) => tagSet.has(tag));
+    });
+  }, [timelineData, activeTags, filterScope]);
+
+  const filteredTimelineData = useMemo(() => ({
+    ...timelineData,
+    elements: filteredElements,
+  }), [timelineData, filteredElements]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const isVisible = filteredElements.some((el) => el.id === selectedId);
+    if (!isVisible) {
+      setSelectedId(null);
+    }
+  }, [filteredElements, selectedId]);
+
   // Show HomePage if no timeline is loaded
   if (!timelineData) {
     return (
@@ -592,7 +656,13 @@ function App() {
           onToggle={() => setIsLeftCollapsed((v) => !v)}
           selectedId={selectedId}
           onSelect={handleSelect}
-          timelineData={timelineData}
+          timelineData={filteredTimelineData}
+          allElements={timelineData.elements}
+          activeTags={activeTags}
+          onToggleTag={handleToggleTag}
+          filterScope={filterScope}
+          onToggleFilterScope={handleToggleFilterScope}
+          onClearTags={handleClearTags}
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
@@ -618,11 +688,14 @@ function App() {
         />
       )}
 
-      <main className="app-content">
+      <main
+        className="app-content"
+        style={{ display: isRightMaximized ? "none" : "block" }}
+      >
         <TimelineView
           selectedId={selectedId}
           onSelect={handleSelect}
-          timelineData={timelineData}
+          timelineData={filteredTimelineData}
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
@@ -651,19 +724,25 @@ function App() {
 
       {selectedId && (
         <>
-          <div
-            className="right-resizer overlay-resizer"
-            style={{ right: `${Math.max(rightWidth, MIN_WIDTH) - 3}px` }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              isDraggingRight.current = true;
-              document.body.classList.add("dragging");
-            }}
-          />
+          {!isRightMaximized && (
+            <div
+              className="right-resizer overlay-resizer"
+              style={{ right: `${Math.max(rightWidth, MIN_WIDTH) - 3}px` }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                isDraggingRight.current = true;
+                document.body.classList.add("dragging");
+              }}
+            />
+          )}
 
           <aside
             className="app-right overlay-right"
-            style={{ width: rightWidth }}
+            style={{
+              width: isRightMaximized
+                ? `calc(100% - ${currentLeftWidth}px)`
+                : rightWidth
+            }}
           >
             <RightPanel
               onSelect={handleSelect}
@@ -673,6 +752,8 @@ function App() {
               timelineData={timelineData}
               editRequestId={editRequestId}
               onEditRequestHandled={() => setEditRequestId(null)}
+              isMaximized={isRightMaximized}
+              onToggleMaximize={() => setIsRightMaximized((prev) => !prev)}
             />
           </aside>
         </>

@@ -16,6 +16,12 @@
   background-color: var(--secondary-bg);
 }
 
+.right-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .right-panel-header h2 {
   margin: 0;
   font-size: 12px;
@@ -86,6 +92,37 @@
   padding: 14px;
 }
 
+.right-panel-footer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 12px 14px;
+  border-top: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+}
+
+.right-panel-footer .btn-primary,
+.right-panel-footer .btn-secondary {
+  flex: 1;
+}
+
+.right-panel.is-maximized .right-panel-footer {
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.right-panel.is-maximized .right-panel-footer .btn-primary,
+.right-panel.is-maximized .right-panel-footer .btn-secondary {
+  flex: 0 0 auto;
+}
+
+.right-panel.is-maximized .right-panel-content {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
 .edit-form {
   display: flex;
   flex-direction: column;
@@ -133,6 +170,21 @@
   background-color: white;
   transition: border-color 0.15s ease;
   color: var(--dark-bg);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--active-bg);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background-color: white;
+  color: var(--dark-bg);
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
 }
 
 .form-group input[type="text"]:focus,
@@ -218,6 +270,11 @@
   background-color: color-mix(in srgb, var(--active-bg), black 5%);
 }
 
+.btn-note {
+  width: 100%;
+  text-align: center;
+}
+
 .form-delete-section {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
@@ -257,6 +314,36 @@
   gap: 0.5rem;
 }
 
+.view-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
+}
+
+.view-edit-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--dark-bg);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.view-edit-button:hover {
+  background-color: var(--active-bg);
+}
+
+.view-delete-button {
+  color: #b42318;
+}
+
+.view-delete-button:hover {
+  background-color: color-mix(in srgb, #b42318, transparent 85%);
+}
 .view-group {
   display: grid;
   grid-template-columns: auto 1fr auto;

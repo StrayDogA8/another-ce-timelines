@@ -4,7 +4,7 @@
     "light": {
       "name": "Light",
       "colors": {
-        "dark-bg": "#6C5F55",
+        "dark-bg": "#6C5F55", 
         "element-bg": "#A6977E",
         "active-bg": "#D4CAB8",
         "secondary-bg": "#EDE6DA",

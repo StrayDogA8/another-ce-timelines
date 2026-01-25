@@ -9,6 +9,12 @@ export default function Sidebar({
   selectedId,
   onSelect,
   timelineData,
+  allElements,
+  activeTags = [],
+  onToggleTag,
+  filterScope,
+  onToggleFilterScope,
+  onClearTags,
   onAddEvent,
   onAddSpan,
   onAddEra,
@@ -30,12 +36,15 @@ export default function Sidebar({
   const [openEvents, setOpenEvents] = useState(true);
   const [timelineMenu, setTimelineMenu] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
+  const [filterMenu, setFilterMenu] = useState(null);
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [submenuPosition, setSubmenuPosition] = useState(null);
   const menuRef = useRef(null);
   const submenuRef = useRef(null);
   const openTimelineRef = useRef(null);
   const submenuCloseTimer = useRef(null);
+  const filterMenuRef = useRef(null);
+  const filterButtonRef = useRef(null);
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -67,6 +76,19 @@ export default function Sidebar({
     () => [...events].sort((a, b) => a.date - b.date),
     [events]
   );
+
+  const allTags = useMemo(() => {
+    const tags = new Set();
+    (allElements || []).forEach((element) => {
+      if (element.type !== "event" && element.type !== "span") return;
+      if (Array.isArray(element.tags)) {
+        element.tags.forEach((tag) => {
+          if (tag) tags.add(tag);
+        });
+      }
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [allElements]);
 
   const formatRangeOld = (start, end, startLabel, endLabel) => {
     const left = startLabel ?? fmtYear(start);
@@ -109,6 +131,19 @@ export default function Sidebar({
   const handleMenuAction = (action) => {
     setTimelineMenu(null);
     if (action) action();
+  };
+
+  const handleToggleFilterMenu = (e) => {
+    e.stopPropagation();
+    if (filterMenu) {
+      setFilterMenu(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFilterMenu({
+      x: rect.left,
+      y: rect.bottom + 6,
+    });
   };
 
   // Fetch timeline files on mount
@@ -172,6 +207,23 @@ export default function Sidebar({
       }
     };
   }, [timelineMenu, openSubmenu]);
+
+  useEffect(() => {
+    if (!filterMenu) return;
+
+    const handleClickOutside = (e) => {
+      const clickedInsideMenu = filterMenuRef.current?.contains(e.target);
+      const clickedFilterButton = filterButtonRef.current?.contains(e.target);
+      if (!clickedInsideMenu && !clickedFilterButton) {
+        setFilterMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [filterMenu]);
 
   const handleOpenSubmenu = (e, submenuType) => {
     e.stopPropagation();
@@ -409,6 +461,8 @@ export default function Sidebar({
               type="button"
               aria-label="Filter list"
               title="Filter list"
+              onClick={handleToggleFilterMenu}
+              ref={filterButtonRef}
             >
               <ListFilter size={17} strokeWidth={2} />
             </button>
@@ -496,6 +550,62 @@ export default function Sidebar({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {filterMenu && (
+        <div
+          ref={filterMenuRef}
+          className="timeline-context-menu sidebar-filter-menu"
+          style={{
+            position: 'fixed',
+            left: `${filterMenu.x}px`,
+            top: `${filterMenu.y}px`,
+          }}
+        >
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.events ?? true}
+              onChange={() => onToggleFilterScope?.("events")}
+            />
+            <span>Apply to events</span>
+          </label>
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.spans ?? true}
+              onChange={() => onToggleFilterScope?.("spans")}
+            />
+            <span>Apply to spans</span>
+          </label>
+          <div className="filter-menu-divider" />
+          <div className="filter-menu-dropdown">
+            {allTags.length === 0 && (
+              <div className="filter-menu-empty">No tags found</div>
+            )}
+            {allTags.map((tag) => {
+              const isChecked = activeTags.includes(tag);
+              return (
+                <label key={tag} className="context-menu-item filter-menu-item">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => onToggleTag?.(tag)}
+                  />
+                  <span className="filter-menu-label">{tag}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="filter-menu-divider" />
+          <button
+            className="context-menu-item"
+            type="button"
+            onClick={() => onClearTags?.()}
+          >
+            Clear
+          </button>
         </div>
       )}
 
