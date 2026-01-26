@@ -39,6 +39,19 @@
   border-left: 1px solid var(--active-bg);
 }
 
+.overlay-right::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overlay-right::-webkit-scrollbar-thumb {
+  background-color: var(--active-bg);
+  border-radius: 3px;
+}
+
+.overlay-right::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .overlay-resizer {
   position: absolute;
   top: 0;

@@ -88,3 +88,45 @@ export async function importTimeline() {
     return { success: false, error: error.message };
   }
 }
+
+export async function createNote({ timelineId, title, elementId }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.createNote({ timelineId, title, elementId });
+  } catch (error) {
+    console.error('Error creating note:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function readNote({ timelineId, filename }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.readNote({ timelineId, filename });
+  } catch (error) {
+    console.error('Error reading note:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function writeNote({ timelineId, filename, content }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.writeNote({ timelineId, filename, content });
+  } catch (error) {
+    console.error('Error writing note:', error);
+    return { success: false, error: error.message };
+  }
+}

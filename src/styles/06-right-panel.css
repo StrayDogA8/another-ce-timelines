@@ -92,6 +92,19 @@
   padding: 14px;
 }
 
+.right-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.right-panel-content::-webkit-scrollbar-thumb {
+  background-color: var(--active-bg);
+  border-radius: 3px;
+}
+
+.right-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .right-panel-footer {
   display: flex;
   gap: 0.5rem;
@@ -158,6 +171,43 @@
   color: var(--element-bg);
   text-transform: uppercase;
   letter-spacing: 0.01em;
+}
+
+.edit-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.edit-row label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--element-bg);
+  text-transform: lowercase;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.edit-separator {
+  border-bottom: 1px solid var(--active-bg);
+  padding-bottom: 5px;
+  position: relative;
+}
+
+.edit-input {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dark-bg);
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--dark-bg);
+  text-align: right;
+  grid-column: 3;
+  outline: none;
+  min-width: 120px;
 }
 
 .form-group input[type="text"],
@@ -273,6 +323,122 @@
 .btn-note {
   width: 100%;
   text-align: center;
+}
+
+.note-editor {
+  margin-top: 8px;
+}
+
+.note-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--active-bg);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--secondary-bg);
+}
+
+.note-toolbar button {
+  border: none;
+  background: transparent;
+  color: var(--dark-bg);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.note-toolbar button:hover {
+  background: var(--active-bg);
+}
+
+.note-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--active-bg);
+  margin: 0 2px;
+}
+
+.note-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--active-bg);
+  border-radius: 0 0 6px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background-color: white;
+  color: var(--dark-bg);
+  resize: vertical;
+}
+
+.note-render {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--dark-bg);
+  line-height: 1.5;
+}
+
+.note-divider {
+  height: 1px;
+  background: var(--active-bg);
+  margin-top: 8px;
+}
+
+.note-render h1,
+.note-render h2,
+.note-render h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 700;
+}
+
+.note-render h1 {
+  font-size: 16px;
+}
+
+.note-render h2 {
+  font-size: 14px;
+}
+
+.note-render h3 {
+  font-size: 13px;
+}
+
+.note-render p {
+  margin: 0 0 0.5rem;
+}
+
+.note-render ul,
+.note-render ol {
+  margin: 0 0 0.5rem 1.25rem;
+  padding: 0;
+}
+
+.note-render code {
+  font-family: monospace;
+  background: var(--active-bg);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.note-render a {
+  color: var(--link-blue);
+  text-decoration: underline;
+}
+
+.note-render mark {
+  background: color-mix(in srgb, #f6d66a, white 35%);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.note-render u {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .form-delete-section {

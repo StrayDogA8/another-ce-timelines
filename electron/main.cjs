@@ -5,6 +5,17 @@ const themeConfig = require('../src/config/theme.json');
 
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
+const timelinesDir = () => path.join(app.getPath('userData'), 'timelines');
+
+const safeName = (value) => String(value || '')
+  .trim()
+  .replace(/[^\w.-]+/g, '-')
+  .replace(/-+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase();
+
+const getNotesDir = (timelineId) =>
+  path.join(timelinesDir(), `${timelineId}.assets`, 'notes');
 
 function createWindow() {
   // Get the active theme
@@ -121,7 +132,7 @@ ipcMain.on('close-window', () => {
 // IPC Handlers for file operations
 ipcMain.handle('save-timeline', async (event, { data, filename }) => {
   try {
-    const dataDir = path.join(app.getPath('userData'), 'timelines');
+    const dataDir = timelinesDir();
 
     // Ensure directory exists
     await fs.mkdir(dataDir, { recursive: true });
@@ -147,7 +158,7 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
 
 ipcMain.handle('list-timelines', async () => {
   try {
-    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const userDataDir = timelinesDir();
     const files = await fs.readdir(userDataDir);
     const timelineFiles = files.filter(f => f.endsWith('.timeline'));
 
@@ -174,7 +185,7 @@ ipcMain.handle('list-timelines', async () => {
 
 ipcMain.handle('load-timeline', async (event, filename) => {
   try {
-    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const userDataDir = timelinesDir();
     const filePath = path.join(userDataDir, `${filename}.timeline`);
 
     const content = await fs.readFile(filePath, 'utf8');
@@ -249,7 +260,7 @@ ipcMain.handle('import-timeline', async () => {
 
 ipcMain.handle('delete-timeline', async (event, filename) => {
   try {
-    const userDataDir = path.join(app.getPath('userData'), 'timelines');
+    const userDataDir = timelinesDir();
     const filePath = path.join(userDataDir, `${filename}.timeline`);
 
     await fs.unlink(filePath);
@@ -264,6 +275,70 @@ ipcMain.handle('delete-timeline', async (event, filename) => {
       success: false,
       error: error.message,
     };
+  }
+});
+
+ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) => {
+  try {
+    if (!timelineId) {
+      return { success: false, error: 'Missing timelineId' };
+    }
+
+    const notesDir = getNotesDir(timelineId);
+    await fs.mkdir(notesDir, { recursive: true });
+
+    const base = safeName(title) || safeName(elementId) || 'note';
+    let filename = `${base}.md`;
+    let counter = 1;
+
+    while (true) {
+      try {
+        await fs.access(path.join(notesDir, filename));
+        counter += 1;
+        filename = `${base}-${counter}.md`;
+      } catch (err) {
+        break;
+      }
+    }
+
+    const filePath = path.join(notesDir, filename);
+    const heading = title ? `# ${title}\n\n` : '';
+    await fs.writeFile(filePath, heading, 'utf8');
+
+    return { success: true, filename };
+  } catch (error) {
+    console.error('Error creating note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
+  try {
+    if (!timelineId || !filename) {
+      return { success: false, error: 'Missing timelineId or filename' };
+    }
+    const filePath = path.join(getNotesDir(timelineId), filename);
+    const content = await fs.readFile(filePath, 'utf8');
+    return { success: true, content };
+  } catch (error) {
+    console.error('Error reading note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('write-note', async (event, { timelineId, filename, content }) => {
+  try {
+    if (!timelineId || !filename) {
+      return { success: false, error: 'Missing timelineId or filename' };
+    }
+    const notesDir = getNotesDir(timelineId);
+    await fs.mkdir(notesDir, { recursive: true });
+    const filePath = path.join(notesDir, filename);
+    await fs.writeFile(filePath, content ?? '', 'utf8');
+    return { success: true };
+  } catch (error) {
+    console.error('Error writing note:', error);
+    return { success: false, error: error.message };
   }
 });
 

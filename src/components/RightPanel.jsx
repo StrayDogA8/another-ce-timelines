@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, Edit2, ChevronDown, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
+import { Copy, Check, Edit2, ChevronDown, ChevronRight, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { marked } from "marked";
+import { createNote, readNote, writeNote } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
@@ -20,7 +22,8 @@ export default function RightPanel({
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [isBranchesOpen, setIsBranchesOpen] = useState(false);
   const [isForksOpen, setIsForksOpen] = useState(false);
-  const [isDescriptionOpen, setIsDescriptionOpen] = useState(true);
+  const [noteContent, setNoteContent] = useState("");
+  const [isNoteLoading, setIsNoteLoading] = useState(false);
 
   useEffect(() => {
     if (selectedElement) {
@@ -34,6 +37,33 @@ export default function RightPanel({
       setIsEditMode(false);
     }
   }, [selectedElement]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadNote = async () => {
+      if (!selectedElement?.noteFile) {
+        setNoteContent("");
+        return;
+      }
+      const timelineId = timelineData?.file?.id?.replace('-timeline', '');
+      if (!timelineId) return;
+      setIsNoteLoading(true);
+      const result = await readNote({ timelineId, filename: selectedElement.noteFile });
+      if (!isMounted) return;
+      setIsNoteLoading(false);
+      if (result?.success) {
+        setNoteContent(result.content ?? "");
+      } else {
+        setNoteContent("");
+      }
+    };
+
+    loadNote();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedElement, timelineData]);
+
 
   useEffect(() => {
     if (!selectedElement || !editRequestId) return;
@@ -186,6 +216,101 @@ export default function RightPanel({
     } catch (err) {
       console.error('Failed to copy ID:', err);
     }
+  };
+
+  const handleAddNote = async () => {
+    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
+    if (!timelineId) return;
+    const result = await createNote({
+      timelineId,
+      title: formData.title,
+      elementId: formData.id,
+    });
+    if (!result?.success) {
+      console.error('Failed to create note:', result?.error);
+      return;
+    }
+    const next = { ...formData, noteFile: result.filename };
+    setFormData(next);
+    onUpdate?.(next);
+    setNoteContent(result?.content ?? `# ${formData.title}\n\n`);
+  };
+
+  const handleNoteSave = async () => {
+    if (!formData?.noteFile) return;
+    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
+    if (!timelineId) return;
+    await writeNote({
+      timelineId,
+      filename: formData.noteFile,
+      content: noteContent,
+    });
+  };
+
+  const renderNoteMarkdown = (content, isLoading) => {
+    const raw = isLoading ? "_Loading note..._" : content || "";
+    const withUnderline = raw.replace(/__(.+?)__/g, "<u>$1</u>");
+    const withHighlight = withUnderline.replace(/==(.+?)==/g, "<mark>$1</mark>");
+    return marked.parse(withHighlight);
+  };
+
+  const wrapSelection = (prefix, suffix = prefix) => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const before = noteContent.slice(0, start);
+    const selected = noteContent.slice(start, end);
+    const after = noteContent.slice(end);
+    const next = `${before}${prefix}${selected || ''}${suffix}${after}`;
+    setNoteContent(next);
+
+    const cursorStart = start + prefix.length;
+    const cursorEnd = cursorStart + (selected || '').length;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorStart, cursorEnd);
+    });
+  };
+
+  const insertHeading = (level) => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const lineStart = noteContent.lastIndexOf('\n', start - 1) + 1;
+    const lineEnd = noteContent.indexOf('\n', end);
+    const actualLineEnd = lineEnd === -1 ? noteContent.length : lineEnd;
+    const line = noteContent.slice(lineStart, actualLineEnd);
+    const cleaned = line.replace(/^#{1,6}\s+/, '');
+    const prefix = `${'#'.repeat(level)} `;
+    const nextLine = `${prefix}${cleaned}`;
+    const next = `${noteContent.slice(0, lineStart)}${nextLine}${noteContent.slice(actualLineEnd)}`;
+    setNoteContent(next);
+    const cursor = lineStart + prefix.length + (start - lineStart);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const insertLink = () => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const before = noteContent.slice(0, start);
+    const selected = noteContent.slice(start, end) || 'link text';
+    const after = noteContent.slice(end);
+    const token = `[${selected}](https://)`;
+    const next = `${before}${token}${after}`;
+    setNoteContent(next);
+    const urlStart = before.length + token.indexOf('https://');
+    const urlEnd = urlStart + 'https://'.length;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(urlStart, urlEnd);
+    });
   };
 
   return (
@@ -400,24 +525,15 @@ export default function RightPanel({
               </>
             )}
 
-            {/* Description (all types) */}
-            {formData.description && (
+            {formData.noteFile && (
               <>
-                <div className="color-group-solo">
-                  <button
-                    type="button"
-                    className="color-toggle"
-                    onClick={() => setIsDescriptionOpen(!isDescriptionOpen)}
-                  >
-                    {isDescriptionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <label>Description</label>
-                  </button>
-                </div>
-                {isDescriptionOpen && (
-                  <div className="description-content">
-                    {formData.description}
-                  </div>
-                )}
+                <div className="note-divider" />
+                <div
+                  className="note-render"
+                  dangerouslySetInnerHTML={{
+                    __html: renderNoteMarkdown(noteContent, isNoteLoading),
+                  }}
+                />
               </>
             )}
           </div>
@@ -441,54 +557,70 @@ export default function RightPanel({
 
             {/* Title */}
             <div className="form-group">
-              <label htmlFor="title">Title</label>
-              <input
-                id="title"
-                type="text"
-                value={formData.title}
-                onChange={(e) => handleChange("title", e.target.value)}
-              />
+              <div className="edit-row">
+                <label htmlFor="title">Title</label>
+                <div className="edit-separator" />
+                <input
+                  id="title"
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => handleChange("title", e.target.value)}
+                  className="edit-input"
+                />
+              </div>
             </div>
 
             {/* Date/Start/End based on type */}
             {formData.type === "event" ? (
               <div className="form-group">
-                <label htmlFor="date">Date</label>
-                <input
-                  id="date"
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.dateInput ?? ""}
-                  onChange={(e) => {
-                    handleChange("dateInput", e.target.value);
-                  }}
-                />
+                <div className="edit-row">
+                  <label htmlFor="date">Date</label>
+                  <div className="edit-separator" />
+                  <input
+                    id="date"
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.dateInput ?? ""}
+                    onChange={(e) => {
+                      handleChange("dateInput", e.target.value);
+                    }}
+                    className="edit-input"
+                  />
+                </div>
               </div>
             ) : (
               <>
                 <div className="form-group">
-                  <label htmlFor="start">Start Year</label>
-                <input
-                  id="start"
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.startInput ?? ""}
-                  onChange={(e) => {
-                    handleChange("startInput", e.target.value);
-                  }}
-                />
+                  <div className="edit-row">
+                    <label htmlFor="start">Start Year</label>
+                    <div className="edit-separator" />
+                    <input
+                      id="start"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.startInput ?? ""}
+                      onChange={(e) => {
+                        handleChange("startInput", e.target.value);
+                      }}
+                      className="edit-input"
+                    />
+                  </div>
                 </div>
                 <div className="form-group">
-                  <label htmlFor="end">End Year</label>
-                <input
-                  id="end"
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.endInput ?? ""}
-                  onChange={(e) => {
-                    handleChange("endInput", e.target.value);
-                  }}
-                />
+                  <div className="edit-row">
+                    <label htmlFor="end">End Year</label>
+                    <div className="edit-separator" />
+                    <input
+                      id="end"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.endInput ?? ""}
+                      onChange={(e) => {
+                        handleChange("endInput", e.target.value);
+                      }}
+                      className="edit-input"
+                    />
+                  </div>
                 </div>
               </>
             )}
@@ -519,64 +651,108 @@ export default function RightPanel({
             {/* Parent (events only) */}
             {formData.type === "event" && (
               <div className="form-group">
-                <label htmlFor="parents">Parent (span ID)</label>
-                <input
-                  id="parents"
-                  type="text"
-                  value={formData.parents?.[0] || ""}
-                  onChange={(e) => {
-                    const value = e.target.value.trim();
-                    handleChange("parents", value ? [value] : []);
-                  }}
-                  placeholder="span-id"
-                />
+                <div className="edit-row">
+                  <label htmlFor="parents">Parent</label>
+                  <div className="edit-separator" />
+                  <input
+                    id="parents"
+                    type="text"
+                    value={formData.parents?.[0] || ""}
+                    onChange={(e) => {
+                      const value = e.target.value.trim();
+                      handleChange("parents", value ? [value] : []);
+                    }}
+                    placeholder="span-id"
+                    className="edit-input"
+                  />
+                </div>
               </div>
             )}
 
             {/* Branches (spans only) */}
             {formData.type === "span" && (
               <div className="form-group">
-                <label htmlFor="branches">Branches (comma-separated IDs)</label>
-                <input
-                  id="branches"
-                  type="text"
-                  value={formData.branches?.join(", ") || ""}
-                  onChange={(e) => handleArrayChange("branches", e.target.value)}
-                  placeholder="span-id-1, span-id-2"
-                />
+                <div className="edit-row">
+                  <label htmlFor="branches">Branches</label>
+                  <div className="edit-separator" />
+                  <input
+                    id="branches"
+                    type="text"
+                    value={formData.branches?.join(", ") || ""}
+                    onChange={(e) => handleArrayChange("branches", e.target.value)}
+                    placeholder="span-id-1, span-id-2"
+                    className="edit-input"
+                  />
+                </div>
               </div>
             )}
 
             {/* Forks (spans only) */}
             {formData.type === "span" && (
               <div className="form-group">
-                <label htmlFor="forks">Forks (comma-separated IDs)</label>
-                <input
-                  id="forks"
-                  type="text"
-                  value={formData.forks?.join(", ") || ""}
-                  onChange={(e) => handleArrayChange("forks", e.target.value)}
-                  placeholder="span-id-1, span-id-2"
-                />
+                <div className="edit-row">
+                  <label htmlFor="forks">Forks</label>
+                  <div className="edit-separator" />
+                  <input
+                    id="forks"
+                    type="text"
+                    value={formData.forks?.join(", ") || ""}
+                    onChange={(e) => handleArrayChange("forks", e.target.value)}
+                    placeholder="span-id-1, span-id-2"
+                    className="edit-input"
+                  />
+                </div>
               </div>
             )}
 
-            {/* Description (all types) */}
             <div className="form-group">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                value={formData.description || ""}
-                onChange={(e) => handleChange("description", e.target.value)}
-                placeholder="Enter a description..."
-                rows={4}
-                className="form-textarea"
-              />
-            </div>
-            <div className="form-group">
-              <button type="button" className="btn-secondary btn-note">
-                Add Note
-              </button>
+              {!formData.noteFile ? (
+                <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
+                  Add Note
+                </button>
+              ) : (
+                <div className="note-editor">
+                  <div className="note-toolbar">
+                    <button type="button" onClick={() => insertHeading(1)} title="Heading 1">
+                      <Heading1 size={14} />
+                    </button>
+                    <button type="button" onClick={() => insertHeading(2)} title="Heading 2">
+                      <Heading2 size={14} />
+                    </button>
+                    <button type="button" onClick={() => insertHeading(3)} title="Heading 3">
+                      <Heading3 size={14} />
+                    </button>
+                    <div className="note-toolbar-divider" />
+                    <button type="button" onClick={() => wrapSelection('**')} title="Bold">
+                      <Bold size={14} />
+                    </button>
+                    <button type="button" onClick={() => wrapSelection('*')} title="Italic">
+                      <Italic size={14} />
+                    </button>
+                    <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough">
+                      <Strikethrough size={14} />
+                    </button>
+                    <button type="button" onClick={() => wrapSelection('__')} title="Underline">
+                      <Underline size={14} />
+                    </button>
+                    <button type="button" onClick={() => wrapSelection('==')} title="Highlight">
+                      <Highlighter size={14} />
+                    </button>
+                    <div className="note-toolbar-divider" />
+                    <button type="button" onClick={insertLink} title="Link">
+                      <Link2 size={14} />
+                    </button>
+                  </div>
+                  <textarea
+                    className="note-textarea"
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    onBlur={handleNoteSave}
+                    placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
+                    rows={8}
+                  />
+                </div>
+              )}
             </div>
 
           </form>

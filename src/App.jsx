@@ -17,7 +17,7 @@ import "./index.css";
 
 function App() {
   const MIN_WIDTH = 220;
-  const MAX_WIDTH = 455;
+  const MAX_WIDTH = 600;
   const COLLAPSED_WIDTH = 44;
   const DEFAULT_LEFT_WIDTH = 350;
   const DEFAULT_RIGHT_WIDTH = 385;
