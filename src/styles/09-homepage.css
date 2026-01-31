@@ -98,6 +98,63 @@
   overflow: hidden;
 }
 
+.settings-folder {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.settings-folder .settings-input-small {
+  width: 240px;
+}
+
+.settings-path-pill {
+  width: 200px;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: var(--gray-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.settings-path-icon {
+  flex: 0 0 auto;
+  color: var(--gray-2);
+}
+
+.settings-path-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-folder-button {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings-folder-button:hover {
+  background: var(--active-bg);
+}
+
 .timeline-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

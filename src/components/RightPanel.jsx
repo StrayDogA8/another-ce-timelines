@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Copy, Check, Edit2, ChevronDown, ChevronRight, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Copy, Check, Edit2, Eye, ChevronDown, ChevronRight, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { marked } from "marked";
 import { createNote, readNote, writeNote } from "../utils/electronApi";
@@ -24,9 +24,11 @@ export default function RightPanel({
   const [isForksOpen, setIsForksOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
+  const prevSelectedIdRef = useRef(null);
 
   useEffect(() => {
     if (selectedElement) {
+      const prevId = prevSelectedIdRef.current;
       setFormData({
         ...selectedElement,
         dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
@@ -34,7 +36,10 @@ export default function RightPanel({
         endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
       });
       setValidationErrors([]);
-      setIsEditMode(false);
+      if (prevId !== selectedElement.id) {
+        setIsEditMode(false);
+      }
+      prevSelectedIdRef.current = selectedElement.id;
     }
   }, [selectedElement]);
 
@@ -89,19 +94,19 @@ export default function RightPanel({
     }
   };
 
-  const validateEventParents = () => {
+  const validateEventParents = (draft) => {
     const errors = [];
 
-    if (formData.type === "event" && formData.parents && formData.parents.length > 0) {
+    if (draft.type === "event" && draft.parents && draft.parents.length > 0) {
       const spans = timelineData.elements.filter(el => el.type === "span");
-      const eventDate = parseTimelineInput(formData.dateInput).value;
+      const eventDate = parseTimelineInput(draft.dateInput).value;
 
       if (eventDate === null) {
         errors.push("Event date must be a number or MM/DD/YYYY.");
         return errors;
       }
 
-      formData.parents.forEach(parentId => {
+      draft.parents.forEach(parentId => {
         const parentSpan = spans.find(span => span.id === parentId);
 
         if (!parentSpan) {
@@ -122,75 +127,83 @@ export default function RightPanel({
     return rest;
   };
 
-  const handleSave = () => {
-    const errors = validateEventParents();
-    const parsedDate = parseTimelineInput(formData.dateInput);
-    const parsedStart = parseTimelineInput(formData.startInput);
-    const parsedEnd = parseTimelineInput(formData.endInput);
+  const buildValidatedUpdate = (draft) => {
+    const errors = validateEventParents(draft);
+    const parsedDate = parseTimelineInput(draft.dateInput);
+    const parsedStart = parseTimelineInput(draft.startInput);
+    const parsedEnd = parseTimelineInput(draft.endInput);
     const useMonths = timelineData?.file?.useMonths === true;
     const timelineStart = timelineData?.file?.start;
     const timelineEnd = timelineData?.file?.end;
 
-    if (formData.type === "event" && parsedDate.value === null) {
+    if (draft.type === "event" && parsedDate.value === null) {
       errors.push("Event date must be a number or MM/DD/YYYY.");
     }
-    if (formData.type !== "event" && (parsedStart.value === null || parsedEnd.value === null)) {
+    if (draft.type !== "event" && (parsedStart.value === null || parsedEnd.value === null)) {
       errors.push("Start and end must be numbers or MM/DD/YYYY.");
     }
-    if (formData.type === "event" && parsedDate.value !== null) {
+    if (draft.type === "event" && parsedDate.value !== null) {
       if (parsedDate.value < timelineStart || parsedDate.value > timelineEnd) {
         errors.push("Event date must be within the timeline bounds.");
       }
     }
-    if (formData.type !== "event" && parsedStart.value !== null && parsedEnd.value !== null) {
+    if (draft.type !== "event" && parsedStart.value !== null && parsedEnd.value !== null) {
       if (parsedStart.value < timelineStart || parsedEnd.value > timelineEnd) {
         errors.push("Span/Era range must be within the timeline bounds.");
       }
     }
 
     if (errors.length > 0) {
+      return { errors, nextData: null };
+    }
+
+    const nextData = stripInputs({ ...draft });
+    if (draft.type === "event") {
+      nextData.date =
+        useMonths && parsedDate.precision !== "day"
+          ? snapToMonthGrid(parsedDate.value)
+          : parsedDate.value;
+      if (parsedDate.label) {
+        nextData.dateLabel = parsedDate.label;
+      } else {
+        delete nextData.dateLabel;
+      }
+    } else {
+      nextData.start =
+        useMonths && parsedStart.precision !== "day"
+          ? snapToMonthGrid(parsedStart.value)
+          : parsedStart.value;
+      nextData.end =
+        useMonths && parsedEnd.precision !== "day"
+          ? snapToMonthGrid(parsedEnd.value)
+          : parsedEnd.value;
+      if (parsedStart.label) {
+        nextData.startLabel = parsedStart.label;
+      } else {
+        delete nextData.startLabel;
+      }
+      if (parsedEnd.label) {
+        nextData.endLabel = parsedEnd.label;
+      } else {
+        delete nextData.endLabel;
+      }
+    }
+
+    return { errors, nextData };
+  };
+
+  const commitDraft = (draft) => {
+    const { errors, nextData } = buildValidatedUpdate(draft);
+    if (errors.length > 0) {
       setValidationErrors(errors);
-      return;
+      return false;
     }
 
     setValidationErrors([]);
     if (onUpdate) {
-      const nextData = stripInputs({ ...formData });
-      if (formData.type === "event") {
-        nextData.date = useMonths ? snapToMonthGrid(parsedDate.value) : parsedDate.value;
-        if (parsedDate.label) {
-          nextData.dateLabel = parsedDate.label;
-        } else {
-          delete nextData.dateLabel;
-        }
-      } else {
-        nextData.start = useMonths ? snapToMonthGrid(parsedStart.value) : parsedStart.value;
-        nextData.end = useMonths ? snapToMonthGrid(parsedEnd.value) : parsedEnd.value;
-        if (parsedStart.label) {
-          nextData.startLabel = parsedStart.label;
-        } else {
-          delete nextData.startLabel;
-        }
-        if (parsedEnd.label) {
-          nextData.endLabel = parsedEnd.label;
-        } else {
-          delete nextData.endLabel;
-        }
-      }
       onUpdate(nextData);
     }
-    setIsEditMode(false);
-  };
-
-  const handleCancel = () => {
-    setFormData({
-      ...selectedElement,
-      dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
-      startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
-      endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
-    });
-    setValidationErrors([]);
-    setIsEditMode(false);
+    return true;
   };
 
 
@@ -328,16 +341,14 @@ export default function RightPanel({
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
-            {!isEditMode && (
-              <button
-                className="copy-id-button"
-                onClick={() => setIsEditMode(true)}
-                title="Edit details"
-                type="button"
-              >
-                <Edit2 size={14} />
-              </button>
-            )}
+            <button
+              className="copy-id-button"
+              onClick={() => setIsEditMode((prev) => !prev)}
+              title={isEditMode ? "View details" : "Edit details"}
+              type="button"
+            >
+              {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
+            </button>
           </div>
         </div>
         <button
@@ -542,7 +553,7 @@ export default function RightPanel({
           <form
             id="right-panel-edit-form"
             className="edit-form"
-            onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+            onSubmit={(e) => e.preventDefault()}
           >
             {/* Validation Errors */}
             {validationErrors.length > 0 && (
@@ -565,6 +576,7 @@ export default function RightPanel({
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleChange("title", e.target.value)}
+                  onBlur={(e) => commitDraft({ ...formData, title: e.target.value })}
                   className="edit-input"
                 />
               </div>
@@ -584,6 +596,7 @@ export default function RightPanel({
                     onChange={(e) => {
                       handleChange("dateInput", e.target.value);
                     }}
+                    onBlur={(e) => commitDraft({ ...formData, dateInput: e.target.value })}
                     className="edit-input"
                   />
                 </div>
@@ -594,32 +607,34 @@ export default function RightPanel({
                   <div className="edit-row">
                     <label htmlFor="start">Start Year</label>
                     <div className="edit-separator" />
-                    <input
-                      id="start"
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.startInput ?? ""}
-                      onChange={(e) => {
-                        handleChange("startInput", e.target.value);
-                      }}
-                      className="edit-input"
-                    />
+                  <input
+                    id="start"
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.startInput ?? ""}
+                    onChange={(e) => {
+                      handleChange("startInput", e.target.value);
+                    }}
+                    onBlur={(e) => commitDraft({ ...formData, startInput: e.target.value })}
+                    className="edit-input"
+                  />
                   </div>
                 </div>
                 <div className="form-group">
                   <div className="edit-row">
                     <label htmlFor="end">End Year</label>
                     <div className="edit-separator" />
-                    <input
-                      id="end"
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.endInput ?? ""}
-                      onChange={(e) => {
-                        handleChange("endInput", e.target.value);
-                      }}
-                      className="edit-input"
-                    />
+                  <input
+                    id="end"
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.endInput ?? ""}
+                    onChange={(e) => {
+                      handleChange("endInput", e.target.value);
+                    }}
+                    onBlur={(e) => commitDraft({ ...formData, endInput: e.target.value })}
+                    className="edit-input"
+                  />
                   </div>
                 </div>
               </>
@@ -663,10 +678,59 @@ export default function RightPanel({
                       handleChange("parents", value ? [value] : []);
                     }}
                     placeholder="span-id"
+                    onBlur={(e) => {
+                      const value = e.target.value.trim();
+                      commitDraft({ ...formData, parents: value ? [value] : [] });
+                    }}
                     className="edit-input"
                   />
                 </div>
               </div>
+            )}
+
+            {formData.type === "event" && (
+              <>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="eventLineStyle">Line Style</label>
+                    <div className="edit-separator" />
+                    <div className="edit-select-wrap">
+                      <select
+                        id="eventLineStyle"
+                        className="edit-select"
+                        value={formData.eventLineStyle || "solid"}
+                        onChange={(e) => handleChange("eventLineStyle", e.target.value)}
+                        onBlur={(e) => commitDraft({ ...formData, eventLineStyle: e.target.value })}
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="eventBorderStyle">Border Style</label>
+                    <div className="edit-separator" />
+                    <div className="edit-select-wrap">
+                      <select
+                        id="eventBorderStyle"
+                        className="edit-select"
+                        value={formData.eventBorderStyle || "solid"}
+                        onChange={(e) => handleChange("eventBorderStyle", e.target.value)}
+                        onBlur={(e) => commitDraft({ ...formData, eventBorderStyle: e.target.value })}
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Branches (spans only) */}
@@ -681,6 +745,10 @@ export default function RightPanel({
                     value={formData.branches?.join(", ") || ""}
                     onChange={(e) => handleArrayChange("branches", e.target.value)}
                     placeholder="span-id-1, span-id-2"
+                    onBlur={(e) => {
+                      const arr = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
+                      commitDraft({ ...formData, branches: arr });
+                    }}
                     className="edit-input"
                   />
                 </div>
@@ -699,6 +767,10 @@ export default function RightPanel({
                     value={formData.forks?.join(", ") || ""}
                     onChange={(e) => handleArrayChange("forks", e.target.value)}
                     placeholder="span-id-1, span-id-2"
+                    onBlur={(e) => {
+                      const arr = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
+                      commitDraft({ ...formData, forks: arr });
+                    }}
                     className="edit-input"
                   />
                 </div>
@@ -758,16 +830,6 @@ export default function RightPanel({
           </form>
         )}
       </div>
-      {isEditMode && (
-        <div className="right-panel-footer">
-          <button type="submit" className="btn-primary" form="right-panel-edit-form">
-            Save Changes
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleCancel}>
-            Cancel
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import SettingsModal from "./components/SettingsModal";
 import NewTimelineModal from "./components/NewTimelineModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
-import { saveTimelineToFile } from "./utils/electronApi";
+import { saveTimelineToFile, chooseTimelinesDir, chooseNotesDir } from "./utils/electronApi";
 import { updateElementWithNewId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
 import themeConfig from "./config/theme.json";
@@ -37,6 +37,8 @@ function App() {
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
   const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
+  const [timelineStorageDir, setTimelineStorageDir] = useState("");
+  const [notesStorageDir, setNotesStorageDir] = useState("");
   const [activeTags, setActiveTags] = useState([]);
   const [filterScope, setFilterScope] = useState({
     events: true,
@@ -189,6 +191,8 @@ function App() {
       title: "New Event",
       date: timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2),
       parents: [],
+      eventLineStyle: "solid",
+      eventBorderStyle: "solid",
       color: "#EDE6DA",
     };
 
@@ -361,7 +365,6 @@ function App() {
     startLabel,
     endLabel,
     useMonths,
-    eventLineStyle,
     layout,
   }) => {
     const parsedStart = parseTimelineInput(start);
@@ -373,8 +376,14 @@ function App() {
       const nextFile = {
         ...prevData.file,
         title,
-        start: applyMonthSnap ? snapToMonthGrid(startValue) : startValue,
-        end: applyMonthSnap ? snapToMonthGrid(endValue) : endValue,
+        start:
+          applyMonthSnap && parsedStart.precision !== "day"
+            ? snapToMonthGrid(startValue)
+            : startValue,
+        end:
+          applyMonthSnap && parsedEnd.precision !== "day"
+            ? snapToMonthGrid(endValue)
+            : endValue,
         detailLevel,
         negID,
         posID,
@@ -382,14 +391,12 @@ function App() {
         startLabel,
         endLabel,
         useMonths,
-        eventLineStyle,
         layout,
       };
 
       if (!startLabel) delete nextFile.startLabel;
       if (!endLabel) delete nextFile.endLabel;
       if (useMonths === undefined) delete nextFile.useMonths;
-      if (!eventLineStyle) delete nextFile.eventLineStyle;
       if (!layout) delete nextFile.layout;
 
       const updatedData = {
@@ -486,7 +493,6 @@ function App() {
         theme: timelineConfig.theme || defaultThemeKey,
         startLabel: timelineConfig.startLabel,
         endLabel: timelineConfig.endLabel,
-        eventLineStyle: timelineConfig.eventLineStyle || "solid",
         layout: timelineConfig.layout || "Horizontal",
       },
       elements: []
@@ -559,6 +565,10 @@ function App() {
       if (!isMounted) return;
       const nextTheme = resolveThemeKey(settings?.theme);
       setAppThemeKey(nextTheme);
+      const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
+      const storedNotesDir = settings?.notesStorageDir ?? "";
+      setTimelineStorageDir(storedTimelineDir);
+      setNotesStorageDir(storedNotesDir);
     };
 
     loadAppSettings();
@@ -588,7 +598,43 @@ function App() {
   const handleAppThemeChange = async (nextThemeKey) => {
     const resolved = resolveThemeKey(nextThemeKey);
     setAppThemeKey(resolved);
-    await saveAppSettings({ theme: resolved });
+    await saveAppSettings({
+      theme: resolved,
+      timelineStorageDir,
+      notesStorageDir,
+    });
+  };
+
+  const handleTimelineStorageDirChange = async (nextDir) => {
+    setTimelineStorageDir(nextDir || "");
+    await saveAppSettings({
+      theme: appThemeKey,
+      timelineStorageDir: nextDir || "",
+      notesStorageDir,
+    });
+  };
+
+  const handleNotesStorageDirChange = async (nextDir) => {
+    setNotesStorageDir(nextDir || "");
+    await saveAppSettings({
+      theme: appThemeKey,
+      timelineStorageDir,
+      notesStorageDir: nextDir || "",
+    });
+  };
+
+  const handlePickTimelinesDir = async () => {
+    const result = await chooseTimelinesDir();
+    if (result?.success && result.path) {
+      await handleTimelineStorageDirChange(result.path);
+    }
+  };
+
+  const handlePickNotesDir = async () => {
+    const result = await chooseNotesDir();
+    if (result?.success && result.path) {
+      await handleNotesStorageDirChange(result.path);
+    }
   };
 
   const filteredElements = useMemo(() => {
@@ -635,6 +681,12 @@ function App() {
             appThemeKey={appThemeKey}
             themes={themeConfig.themes}
             onAppThemeChange={handleAppThemeChange}
+            timelineStorageDir={timelineStorageDir}
+            notesStorageDir={notesStorageDir}
+            onTimelineStorageDirChange={handleTimelineStorageDirChange}
+            onNotesStorageDirChange={handleNotesStorageDirChange}
+            onPickTimelinesDir={handlePickTimelinesDir}
+            onPickNotesDir={handlePickNotesDir}
           />
         </div>
       </>

@@ -5,7 +5,7 @@ const themeConfig = require('../src/config/theme.json');
 
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
-const timelinesDir = () => path.join(app.getPath('userData'), 'timelines');
+const defaultTimelinesDir = () => path.join(app.getPath('userData'), 'timelines');
 
 const safeName = (value) => String(value || '')
   .trim()
@@ -14,8 +14,39 @@ const safeName = (value) => String(value || '')
   .replace(/^-+|-+$/g, '')
   .toLowerCase();
 
-const getNotesDir = (timelineId) =>
-  path.join(timelinesDir(), `${timelineId}.assets`, 'notes');
+const readAppSettings = async () => {
+  try {
+    const content = await fs.readFile(appSettingsPath(), 'utf8');
+    return JSON.parse(content);
+  } catch (error) {
+    return {};
+  }
+};
+
+const getTimelinesDir = async () => {
+  const settings = await readAppSettings();
+  const customDir = settings?.timelineStorageDir ?? settings?.storageDir;
+  if (customDir && typeof customDir === 'string') {
+    const trimmed = customDir.trim();
+    if (trimmed) return trimmed;
+  }
+  return defaultTimelinesDir();
+};
+
+const getNotesBaseDir = async () => {
+  const settings = await readAppSettings();
+  const customDir = settings?.notesStorageDir;
+  if (customDir && typeof customDir === 'string') {
+    const trimmed = customDir.trim();
+    if (trimmed) return trimmed;
+  }
+  return getTimelinesDir();
+};
+
+const getNotesDir = async (timelineId) => {
+  const baseDir = await getNotesBaseDir();
+  return path.join(baseDir, `${timelineId}.assets`, 'notes');
+};
 
 function createWindow() {
   // Get the active theme
@@ -64,7 +95,7 @@ function createWindow() {
 
 // Initialize user data directory and copy example timelines on first run
 async function initializeUserData() {
-  const userDataDir = path.join(app.getPath('userData'), 'timelines');
+  const userDataDir = await getTimelinesDir();
 
   try {
     await fs.mkdir(userDataDir, { recursive: true });
@@ -132,7 +163,7 @@ ipcMain.on('close-window', () => {
 // IPC Handlers for file operations
 ipcMain.handle('save-timeline', async (event, { data, filename }) => {
   try {
-    const dataDir = timelinesDir();
+    const dataDir = await getTimelinesDir();
 
     // Ensure directory exists
     await fs.mkdir(dataDir, { recursive: true });
@@ -158,7 +189,7 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
 
 ipcMain.handle('list-timelines', async () => {
   try {
-    const userDataDir = timelinesDir();
+    const userDataDir = await getTimelinesDir();
     const files = await fs.readdir(userDataDir);
     const timelineFiles = files.filter(f => f.endsWith('.timeline'));
 
@@ -185,7 +216,7 @@ ipcMain.handle('list-timelines', async () => {
 
 ipcMain.handle('load-timeline', async (event, filename) => {
   try {
-    const userDataDir = timelinesDir();
+    const userDataDir = await getTimelinesDir();
     const filePath = path.join(userDataDir, `${filename}.timeline`);
 
     const content = await fs.readFile(filePath, 'utf8');
@@ -260,7 +291,7 @@ ipcMain.handle('import-timeline', async () => {
 
 ipcMain.handle('delete-timeline', async (event, filename) => {
   try {
-    const userDataDir = timelinesDir();
+    const userDataDir = await getTimelinesDir();
     const filePath = path.join(userDataDir, `${filename}.timeline`);
 
     await fs.unlink(filePath);
@@ -284,7 +315,7 @@ ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) =>
       return { success: false, error: 'Missing timelineId' };
     }
 
-    const notesDir = getNotesDir(timelineId);
+    const notesDir = await getNotesDir(timelineId);
     await fs.mkdir(notesDir, { recursive: true });
 
     const base = safeName(title) || safeName(elementId) || 'note';
@@ -317,7 +348,7 @@ ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const filePath = path.join(getNotesDir(timelineId), filename);
+    const filePath = path.join(await getNotesDir(timelineId), filename);
     const content = await fs.readFile(filePath, 'utf8');
     return { success: true, content };
   } catch (error) {
@@ -331,7 +362,7 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const notesDir = getNotesDir(timelineId);
+    const notesDir = await getNotesDir(timelineId);
     await fs.mkdir(notesDir, { recursive: true });
     const filePath = path.join(notesDir, filename);
     await fs.writeFile(filePath, content ?? '', 'utf8');
@@ -364,6 +395,40 @@ ipcMain.handle('set-app-settings', async (event, settings) => {
     return { success: true };
   } catch (error) {
     console.error('Error saving app settings:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('choose-timelines-dir', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+
+    if (canceled || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, path: filePaths[0] };
+  } catch (error) {
+    console.error('Error choosing timelines directory:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('choose-notes-dir', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+
+    if (canceled || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, path: filePaths[0] };
+  } catch (error) {
+    console.error('Error choosing notes directory:', error);
     return { success: false, error: error.message };
   }
 });

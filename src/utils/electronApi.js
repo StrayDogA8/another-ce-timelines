@@ -130,3 +130,31 @@ export async function writeNote({ timelineId, filename, content }) {
     return { success: false, error: error.message };
   }
 }
+
+export async function chooseTimelinesDir() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.chooseTimelinesDir();
+  } catch (error) {
+    console.error('Error choosing timelines directory:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function chooseNotesDir() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.chooseNotesDir();
+  } catch (error) {
+    console.error('Error choosing notes directory:', error);
+    return { success: false, error: error.message };
+  }
+}

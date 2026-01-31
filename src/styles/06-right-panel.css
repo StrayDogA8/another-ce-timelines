@@ -176,7 +176,7 @@
 .edit-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: baseline;
+  align-items: end;
   gap: 0.5rem;
 }
 
@@ -191,7 +191,7 @@
 
 .edit-separator {
   border-bottom: 1px solid var(--active-bg);
-  padding-bottom: 5px;
+  padding-bottom: 0;
   position: relative;
 }
 
@@ -208,6 +208,59 @@
   grid-column: 3;
   outline: none;
   min-width: 120px;
+  transform: translateY(1px);
+}
+
+.edit-select {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dark-bg);
+  padding: 6px 24px 6px 10px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--active-bg);
+  border-radius: 8px;
+  text-align: left;
+  outline: none;
+  min-width: 130px;
+  appearance: none;
+  transform: translateY(1px);
+  background-image: none;
+  cursor: pointer;
+}
+
+.edit-select-wrap {
+  position: relative;
+  grid-column: 3;
+  align-self: end;
+}
+
+.edit-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--gray-2);
+  transform: translateY(-30%);
+  pointer-events: none;
+}
+
+.edit-select:focus {
+  border-color: var(--element-bg);
+  box-shadow: none;
+}
+
+.edit-select:hover {
+  border-color: var(--element-bg);
+}
+
+.edit-select option {
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
 }
 
 .form-group input[type="text"],

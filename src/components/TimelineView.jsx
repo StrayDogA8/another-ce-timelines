@@ -9,7 +9,7 @@ import {
   calculateDetailLevel,
   getReadableTextColor,
 } from "../utils/timelineUtils";
-import { snapToMonthGrid } from "../utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause, Plus, Minus, MoveVertical, Copy, Trash2, Edit2 } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -76,21 +76,44 @@ function TimelineView({
     const spans = timelineData.elements.filter(e => e.type === "span");
     const eras = timelineData.elements.filter(e => e.type === "era");
     const useMonths = file?.useMonths === true;
-    const adjustDate = (value) => (useMonths ? snapToMonthGrid(value) : value);
+    const hasDayPrecision = (label) => {
+      if (!label || typeof label !== "string") return false;
+      const parts = label.split("/").map((part) => part.trim()).filter(Boolean);
+      return parts.length === 3;
+    };
+    const adjustDate = (value, label) => {
+      if (!useMonths) return value;
+      if (!Number.isFinite(value)) return value;
+      if (hasDayPrecision(label)) return value;
+      const scaled = value * 12;
+      const isOnMonthGrid = Math.abs(scaled - Math.round(scaled)) < 1e-6;
+      if (!isOnMonthGrid) return value;
+      return snapToMonthGrid(value);
+    };
+    const resolveDate = (value, label) => {
+      if (!label || typeof label !== "string") {
+        return adjustDate(value, label);
+      }
+      const parsed = parseTimelineInput(label);
+      if (Number.isFinite(parsed.value)) {
+        return adjustDate(parsed.value, label);
+      }
+      return adjustDate(value, label);
+    };
 
     const adjustedEvents = events.map((event) => ({
       ...event,
-      date: adjustDate(event.date),
+      date: resolveDate(event.date, event.dateLabel),
     }));
     const adjustedSpans = spans.map((span) => ({
       ...span,
-      start: adjustDate(span.start),
-      end: adjustDate(span.end),
+      start: resolveDate(span.start, span.startLabel),
+      end: resolveDate(span.end, span.endLabel),
     }));
     const adjustedEras = eras.map((era) => ({
       ...era,
-      start: adjustDate(era.start),
-      end: adjustDate(era.end),
+      start: resolveDate(era.start, era.startLabel),
+      end: resolveDate(era.end, era.endLabel),
     }));
 
     const allYears = [
@@ -280,7 +303,6 @@ function TimelineView({
     };
   }, [timelineData, currentScale]);
 
-  const eventLineStyle = file?.eventLineStyle || "solid";
 
   // Notify parent of height changes
   useEffect(() => {
@@ -923,6 +945,7 @@ function TimelineView({
         {/* Event lines layer - behind spans and events */}
         <div className="event-lines-layer">
           {finalEvents.map((event) => {
+            const eventLineStyle = event.eventLineStyle || "solid";
             if (eventLineStyle === "none") return null;
 
             const parentId = event.parents?.[0];
@@ -996,6 +1019,12 @@ function TimelineView({
 
             const parentColor = parentSpan?.color;
             const isSelected = selectedId === event.id;
+            const eventBorderStyle = event.eventBorderStyle || "solid";
+            const borderColor = parentColor || "var(--element-bg)";
+            const borderValue =
+              eventBorderStyle === "none"
+                ? "none"
+                : `2px ${eventBorderStyle} ${borderColor}`;
 
             return (
               <div
@@ -1006,9 +1035,7 @@ function TimelineView({
                   left: `${event._x}px`,
                   top: `${event.top}px`,
                   position: "absolute",
-                  border: parentColor
-                    ? `2px solid ${parentColor}`
-                    : "2px solid var(--element-bg)",
+                  border: borderValue,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();

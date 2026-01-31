@@ -26,7 +26,6 @@ export default function SettingsModal({
   const [layout, setLayout] = useState("Horizontal");
   const [theme, setTheme] = useState(defaultThemeKey || "");
   const [useMonths, setUseMonths] = useState(false);
-  const [eventLineStyle, setEventLineStyle] = useState("solid");
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [showCenterTimeline, setShowCenterTimeline] = useState(false);
@@ -83,7 +82,6 @@ export default function SettingsModal({
       setTheme(timelineData.file.theme || defaultThemeKey || "");
       setLayout(timelineData.file.layout || "Horizontal");
       setUseMonths(Boolean(timelineData.file.useMonths));
-      setEventLineStyle(timelineData.file.eventLineStyle || "solid");
       setNegID(timelineData.file.negID || "");
       setPosID(timelineData.file.posID || "");
       setIsInitialized(true);
@@ -103,8 +101,14 @@ export default function SettingsModal({
     saveTimeoutRef.current = setTimeout(() => {
       const parsedStart = parseTimelineInput(start);
       const parsedEnd = parseTimelineInput(end);
-      const startValue = useMonths ? snapToMonthGrid(parsedStart.value) : parsedStart.value;
-      const endValue = useMonths ? snapToMonthGrid(parsedEnd.value) : parsedEnd.value;
+      const startValue =
+        useMonths && parsedStart.precision !== "day"
+          ? snapToMonthGrid(parsedStart.value)
+          : parsedStart.value;
+      const endValue =
+        useMonths && parsedEnd.precision !== "day"
+          ? snapToMonthGrid(parsedEnd.value)
+          : parsedEnd.value;
       if (onUpdateTimeline) {
         onUpdateTimeline({
           title,
@@ -117,7 +121,6 @@ export default function SettingsModal({
           startLabel: parsedStart.label,
           endLabel: parsedEnd.label,
           useMonths,
-          eventLineStyle,
           layout,
         });
       }
@@ -129,7 +132,7 @@ export default function SettingsModal({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [title, start, end, detailLevel, negID, posID, theme, useMonths, eventLineStyle, layout]);
+  }, [title, start, end, detailLevel, negID, posID, theme, useMonths, layout]);
 
   if (!isOpen) return null;
 
@@ -268,25 +271,6 @@ export default function SettingsModal({
                 />
                 <span className="settings-toggle-slider"></span>
               </label>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Event Line Style</div>
-              <div className="settings-row-description">Style for event connectors to the timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={eventLineStyle}
-                onChange={(e) => setEventLineStyle(e.target.value)}
-              >
-                <option value="solid">Solid</option>
-                <option value="dashed">Dashed</option>
-                <option value="dotted">Dotted</option>
-                <option value="none">None</option>
-              </select>
             </div>
           </div>
 

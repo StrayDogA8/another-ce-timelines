@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electron', {
   writeNote: (payload) => ipcRenderer.invoke('write-note', payload),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
   setAppSettings: (settings) => ipcRenderer.invoke('set-app-settings', settings),
+  chooseTimelinesDir: () => ipcRenderer.invoke('choose-timelines-dir'),
+  chooseNotesDir: () => ipcRenderer.invoke('choose-notes-dir'),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),

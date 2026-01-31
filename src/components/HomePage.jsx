@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/09-homepage.css";
 import "../styles/07-modals-menus.css";
@@ -10,6 +10,12 @@ export default function HomePage({
   appThemeKey,
   themes,
   onAppThemeChange,
+  timelineStorageDir,
+  notesStorageDir,
+  onTimelineStorageDirChange,
+  onNotesStorageDirChange,
+  onPickTimelinesDir,
+  onPickNotesDir,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +54,7 @@ export default function HomePage({
     };
 
     loadTimelineList();
-  }, []);
+  }, [timelineStorageDir]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -191,6 +197,72 @@ export default function HomePage({
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-left">
+                <div className="settings-row-label">Timeline Folder</div>
+                <div className="settings-row-description">
+                  Where .timeline files are stored. Leave blank to use the default app folder.
+                  Changing this will hide timelines stored in the previous folder until you switch back.
+                </div>
+              </div>
+              <div className="settings-row-right">
+                <div className="settings-folder">
+                  <div className="settings-path-pill" title={timelineStorageDir || "Default app storage"}>
+                    <Folder className="settings-path-icon" size={14} />
+                    <span className="settings-path-text">
+                      {timelineStorageDir || "Default app storage"}
+                    </span>
+                  </div>
+                  <button
+                    className="settings-folder-button"
+                    type="button"
+                    onClick={() => onPickTimelinesDir?.()}
+                  >
+                    Choose...
+                  </button>
+                  <button
+                    className="settings-folder-button"
+                    type="button"
+                    onClick={() => onTimelineStorageDirChange?.("")}
+                  >
+                    Use Default
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-left">
+                <div className="settings-row-label">Notes Folder</div>
+                <div className="settings-row-description">
+                  Where .md notes are stored. Leave blank to store notes next to timelines.
+                  Changing this will hide notes stored in the previous folder until you switch back.
+                </div>
+              </div>
+              <div className="settings-row-right">
+                <div className="settings-folder">
+                  <div className="settings-path-pill" title={notesStorageDir || "Default app storage"}>
+                    <Folder className="settings-path-icon" size={14} />
+                    <span className="settings-path-text">
+                      {notesStorageDir || "Default app storage"}
+                    </span>
+                  </div>
+                  <button
+                    className="settings-folder-button"
+                    type="button"
+                    onClick={() => onPickNotesDir?.()}
+                  >
+                    Choose...
+                  </button>
+                  <button
+                    className="settings-folder-button"
+                    type="button"
+                    onClick={() => onNotesStorageDirChange?.("")}
+                  >
+                    Use Default
+                  </button>
+                </div>
               </div>
             </div>
           </div>
