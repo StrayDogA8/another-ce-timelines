@@ -420,7 +420,7 @@
   width: 20px;
   left: 4px;
   bottom: 4px;
-  background-color: white;
+  background-color: var(--primary-bg);
   transition: 0.3s;
   border-radius: 50%;
 }

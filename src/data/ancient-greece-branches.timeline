@@ -1,13 +1,14 @@
 {
   "file": {
-    "id": "ancient-greece-timeline",
+    "id": "ancient-greece-branches-timeline",
     "type": "timeline",
-    "title": "Ancient Greece",
+    "title": "Ancient Greece (Branches)",
     "start": -2800,
     "end": -100,
     "detailLevel": 1,
     "negID": "BCE",
-    "posID": "CE"
+    "posID": "CE",
+    "layout": "Horizontal"
   },
   "elements": [
     {

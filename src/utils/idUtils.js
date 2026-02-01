@@ -38,11 +38,6 @@ export function updateElementReferences(timelineData, oldId, newId) {
           branchId === oldId ? newId : branchId
         );
       }
-      if (element.forks) {
-        updated.forks = element.forks.map(forkId =>
-          forkId === oldId ? newId : forkId
-        );
-      }
     }
 
     return updated;

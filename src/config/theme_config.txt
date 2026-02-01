@@ -4,7 +4,7 @@
         "active-bg": Borders, 
         "secondary-bg": Default Event BG, Sidebar / Right Panel BG, Settings BG
         "tertiary-bg": "#F3EDE3",
-        "primary-bg": Timeline View BG
+        "primary-bg": Timeline View BG, Text Input BG
         "gray-1": Event Year
         "gray-2": "#807C76",
         "gray-3": "#211F1E",

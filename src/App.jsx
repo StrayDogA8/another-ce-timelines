@@ -223,7 +223,6 @@ function App() {
       end: midpoint + duration / 2,
       color: "#A6977E",
       branches: [],
-      forks: [],
     };
 
     setTimelineData((prevData) => {
@@ -296,7 +295,6 @@ function App() {
 
       if (original.type === "span") {
         baseCopy.branches = [];
-        baseCopy.forks = [];
       }
 
       const updatedData = {
@@ -327,13 +325,6 @@ function App() {
           return {
             ...el,
             branches: el.branches.filter(id => id !== elementId),
-          };
-        }
-
-        if (el.type === "span" && el.forks?.includes(elementId)) {
-          return {
-            ...el,
-            forks: el.forks.filter(id => id !== elementId),
           };
         }
 
@@ -451,8 +442,31 @@ function App() {
         loadedTimeline = module.default || module;
       }
 
+      const normalizeTimelineData = (data) => {
+        const nextElements = (data.elements || []).map((element) => {
+          if (element.type !== "span") return element;
+          const branches = Array.isArray(element.branches) ? element.branches : [];
+          const forks = Array.isArray(element.forks) ? element.forks : [];
+          if (forks.length === 0) {
+            const { forks: _forks, ...rest } = element;
+            return rest;
+          }
+          const merged = [...branches, ...forks];
+          const unique = Array.from(new Set(merged));
+          const { forks: _forks, ...rest } = element;
+          return {
+            ...rest,
+            branches: unique,
+          };
+        });
+        return {
+          ...data,
+          elements: nextElements,
+        };
+      };
+
       // Update the timeline data
-      setTimelineData(loadedTimeline);
+      setTimelineData(normalizeTimelineData(loadedTimeline));
       setCurrentTimelineId(timelineId);
 
       // Clear selection when loading new timeline

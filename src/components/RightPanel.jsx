@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Copy, Check, Edit2, Eye, ChevronDown, ChevronRight, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
 import { createNote, readNote, writeNote } from "../utils/electronApi";
 
@@ -21,10 +22,18 @@ export default function RightPanel({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [isBranchesOpen, setIsBranchesOpen] = useState(false);
-  const [isForksOpen, setIsForksOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const prevSelectedIdRef = useRef(null);
+  const [branchQuery, setBranchQuery] = useState("");
+  const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
+  const branchMenuTimeoutRef = useRef(null);
+  const [parentQuery, setParentQuery] = useState("");
+  const [isParentMenuOpen, setIsParentMenuOpen] = useState(false);
+  const parentMenuTimeoutRef = useRef(null);
+  const [tagQuery, setTagQuery] = useState("");
+  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+  const tagMenuTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (selectedElement) {
@@ -35,13 +44,28 @@ export default function RightPanel({
         startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
         endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
       });
+      setParentQuery(selectedElement.parents?.[0] || "");
+      setTagQuery("");
       setValidationErrors([]);
       if (prevId !== selectedElement.id) {
         setIsEditMode(false);
+        setBranchQuery("");
+        setIsBranchMenuOpen(false);
+        setIsParentMenuOpen(false);
+        setIsTagMenuOpen(false);
       }
       prevSelectedIdRef.current = selectedElement.id;
     }
   }, [selectedElement]);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setBranchQuery("");
+      setIsBranchMenuOpen(false);
+      setIsParentMenuOpen(false);
+      setIsTagMenuOpen(false);
+    }
+  }, [isEditMode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,16 +100,6 @@ export default function RightPanel({
     setIsEditMode(true);
     onEditRequestHandled?.();
   }, [selectedElement, editRequestId, onEditRequestHandled]);
-
-  if (!selectedElement || !formData) {
-    return (
-      <div className="right-panel">
-        <div className="right-panel-header">
-          <h2>No Selection</h2>
-        </div>
-      </div>
-    );
-  }
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -125,6 +139,161 @@ export default function RightPanel({
   const stripInputs = (data) => {
     const { dateInput, startInput, endInput, ...rest } = data;
     return rest;
+  };
+
+  const getSpanNumericStart = (span) => {
+    const parsed = parseTimelineInput(span.startLabel ?? span.start);
+    return parsed.value ?? span.start;
+  };
+
+  const getSpanNumericEnd = (span) => {
+    const parsed = parseTimelineInput(span.endLabel ?? span.end);
+    return parsed.value ?? span.end;
+  };
+
+  const parentRange = useMemo(() => {
+    if (!formData || formData.type !== "span") return null;
+    const parsedStart = parseTimelineInput(formData.startInput ?? formData.start);
+    const parsedEnd = parseTimelineInput(formData.endInput ?? formData.end);
+    const start = parsedStart.value ?? formData.start;
+    const end = parsedEnd.value ?? formData.end;
+    if (start === undefined || end === undefined || start === null || end === null) {
+      return null;
+    }
+    return { start, end };
+  }, [formData]);
+
+  const parentCandidates = useMemo(() => {
+    if (!timelineData || !formData || formData.type !== "event") return [];
+    return timelineData.elements
+      .filter((el) => el.type === "span")
+      .map((span) => ({
+        ...span,
+        _start: getSpanNumericStart(span),
+        _end: getSpanNumericEnd(span),
+      }))
+      .filter((span) => {
+        if (!Number.isFinite(span._start) || !Number.isFinite(span._end)) return false;
+        if (!formData.dateInput) return true;
+        const parsedEventDate = parseTimelineInput(formData.dateInput).value;
+        if (!Number.isFinite(parsedEventDate)) return true;
+        return parsedEventDate >= span._start && parsedEventDate <= span._end;
+      });
+  }, [timelineData, formData]);
+
+  const parentSuggestions = useMemo(() => {
+    const needle = parentQuery.trim().toLowerCase();
+    if (!needle) return parentCandidates;
+    return parentCandidates.filter((span) =>
+      span.id.toLowerCase().includes(needle) ||
+      (span.title || "").toLowerCase().includes(needle)
+    );
+  }, [parentCandidates, parentQuery]);
+
+  const branchCandidates = useMemo(() => {
+    if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
+    const existing = new Set(formData.branches || []);
+    return timelineData.elements
+      .filter((el) => el.type === "span" && el.id !== formData.id)
+      .map((span) => ({
+        ...span,
+        _start: getSpanNumericStart(span),
+        _end: getSpanNumericEnd(span),
+      }))
+      .filter((span) => Number.isFinite(span._start) && span._start >= parentRange.start && span._start <= parentRange.end)
+      .filter((span) => !existing.has(span.id));
+  }, [timelineData, formData, parentRange]);
+
+  const branchSuggestions = useMemo(() => {
+    if (!branchQuery.trim()) return [];
+    const needle = branchQuery.trim().toLowerCase();
+    return branchCandidates.filter((span) =>
+      span.id.toLowerCase().includes(needle) ||
+      (span.title || "").toLowerCase().includes(needle)
+    );
+  }, [branchCandidates, branchQuery]);
+
+  const tagCandidates = useMemo(() => {
+    if (!timelineData) return [];
+    const tags = new Set();
+    timelineData.elements.forEach((element) => {
+      if (Array.isArray(element.tags)) {
+        element.tags.forEach((tag) => {
+          if (tag) tags.add(tag);
+        });
+      }
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [timelineData]);
+
+  const tagSuggestions = useMemo(() => {
+    const needle = tagQuery.trim().toLowerCase();
+    if (!needle) return tagCandidates;
+    return tagCandidates.filter((tag) => tag.toLowerCase().includes(needle));
+  }, [tagCandidates, tagQuery]);
+
+  const addBranch = (spanId) => {
+    if (!spanId) return;
+    const existing = Array.isArray(formData.branches) ? formData.branches : [];
+    if (existing.includes(spanId)) return;
+    const nextBranches = [...existing, spanId];
+    setFormData((prev) => ({ ...prev, branches: nextBranches }));
+    commitDraft({ ...formData, branches: nextBranches });
+    setBranchQuery("");
+  };
+
+  const removeBranch = (spanId) => {
+    const existing = Array.isArray(formData.branches) ? formData.branches : [];
+    const nextBranches = existing.filter((id) => id !== spanId);
+    setFormData((prev) => ({ ...prev, branches: nextBranches }));
+    commitDraft({ ...formData, branches: nextBranches });
+  };
+
+  const handleBranchBlur = () => {
+    if (branchMenuTimeoutRef.current) {
+      clearTimeout(branchMenuTimeoutRef.current);
+    }
+    branchMenuTimeoutRef.current = setTimeout(() => {
+      setIsBranchMenuOpen(false);
+    }, 120);
+  };
+
+  const handleParentBlur = () => {
+    if (parentMenuTimeoutRef.current) {
+      clearTimeout(parentMenuTimeoutRef.current);
+    }
+    const trimmed = parentQuery.trim();
+    handleChange("parents", trimmed ? [trimmed] : []);
+    commitDraft({ ...formData, parents: trimmed ? [trimmed] : [] });
+    parentMenuTimeoutRef.current = setTimeout(() => {
+      setIsParentMenuOpen(false);
+    }, 120);
+  };
+
+  const handleTagBlur = () => {
+    if (tagMenuTimeoutRef.current) {
+      clearTimeout(tagMenuTimeoutRef.current);
+    }
+    tagMenuTimeoutRef.current = setTimeout(() => {
+      setIsTagMenuOpen(false);
+    }, 120);
+  };
+
+  const addTag = (tag) => {
+    if (!tag) return;
+    const existing = Array.isArray(formData.tags) ? formData.tags : [];
+    if (existing.includes(tag)) return;
+    const nextTags = [...existing, tag];
+    setFormData((prev) => ({ ...prev, tags: nextTags }));
+    commitDraft({ ...formData, tags: nextTags });
+    setTagQuery("");
+  };
+
+  const removeTag = (tag) => {
+    const existing = Array.isArray(formData.tags) ? formData.tags : [];
+    const nextTags = existing.filter((value) => value !== tag);
+    setFormData((prev) => ({ ...prev, tags: nextTags }));
+    commitDraft({ ...formData, tags: nextTags });
   };
 
   const buildValidatedUpdate = (draft) => {
@@ -206,11 +375,6 @@ export default function RightPanel({
     return true;
   };
 
-
-  const handleTagsChange = (value) => {
-    const tags = value.split(",").map(t => t.trim()).filter(Boolean);
-    handleChange("tags", tags);
-  };
 
   const handleArrayChange = (field, value) => {
     const arr = value.split(",").map(t => t.trim()).filter(Boolean);
@@ -326,6 +490,16 @@ export default function RightPanel({
     });
   };
 
+  if (!selectedElement || !formData) {
+    return (
+      <div className="right-panel">
+        <div className="right-panel-header">
+          <h2>No Selection</h2>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`right-panel ${isMaximized ? "is-maximized" : ""}`}>
       <div className="right-panel-header">
@@ -376,69 +550,48 @@ export default function RightPanel({
                 <div className="view-group">
                   <label>Date</label>
                   <div className="view-separator" />
-                  <p>{formData.dateLabel ?? formData.date}</p>
+                  <p>
+                    {formData.dateLabel ??
+                      formatYear(
+                        formData.date,
+                        timelineData?.file?.negID,
+                        timelineData?.file?.posID,
+                        timelineData?.file?.useMonths === true
+                      )}
+                  </p>
                 </div>
             ) : (
               <>
                 <div className="view-group">
                   <label>Start Year</label>
                   <div className="view-separator" />
-                  <p>{formData.startLabel ?? formData.start}</p>
+                  <p>
+                    {formData.startLabel ??
+                      formatYear(
+                        formData.start,
+                        timelineData?.file?.negID,
+                        timelineData?.file?.posID,
+                        timelineData?.file?.useMonths === true
+                      )}
+                  </p>
                 </div>
                 <div className="view-group">
                   <label>End Year</label>
                   <div className="view-separator" />
-                  <p>{formData.endLabel ?? formData.end}</p>
+                  <p>
+                    {formData.endLabel ??
+                      formatYear(
+                        formData.end,
+                        timelineData?.file?.negID,
+                        timelineData?.file?.posID,
+                        timelineData?.file?.useMonths === true
+                      )}
+                  </p>
                 </div>
               </>
             )}
 
             {/* Color (spans and eras only) */}
-            {formData.type !== "event" && (
-              <>
-                <div className="color-group-solo">
-                  <button
-                    type="button"
-                    className="color-toggle"
-                    onClick={() => setIsColorMenuOpen(!isColorMenuOpen)}
-                  >
-                    {isColorMenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <label>Color</label>
-                  </button>
-                </div>
-                {isColorMenuOpen && (
-                  <div className="color-picker-menu">
-                    {[
-                      '#8B7D6B', '#9B6B6B', '#C87D4A', '#D4C25A',
-                      '#6B8B6B', '#6B8B8B', '#6B7B8B'
-                    ].map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className="color-option"
-                        style={{ backgroundColor: color }}
-                        onClick={() => {
-                          handleChange("color", color);
-                          onUpdate({ ...stripInputs({ ...formData, color }) });
-                        }}
-                      />
-                    ))}
-                    <label className="color-option color-picker-option">
-                      <input
-                        type="color"
-                        value={formData.color}
-                        onChange={(e) => {
-                          handleChange("color", e.target.value);
-                          onUpdate({ ...stripInputs({ ...formData, color: e.target.value }) });
-                        }}
-                        style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
-                      />
-                      <div className="color-picker-icon">+</div>
-                    </label>
-                  </div>
-                )}
-              </>
-            )}
 
             {/* Parent (events only) */}
             {formData.type === "event" && (
@@ -458,6 +611,23 @@ export default function RightPanel({
                 )}
               </div>
             )}
+
+            {/* Tags */}
+            <div className="view-group">
+              <label>Tags</label>
+              <div className="view-separator" />
+              {Array.isArray(formData.tags) && formData.tags.length > 0 ? (
+                <div className="tag-chip-list">
+                  {formData.tags.map((tag) => (
+                    <span key={tag} className="tag-chip">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p>None</p>
+              )}
+            </div>
 
             {/* Branches (spans only) */}
             {formData.type === "span" && (
@@ -497,44 +667,6 @@ export default function RightPanel({
               </>
             )}
 
-            {/* Forks (spans only) */}
-            {formData.type === "span" && (
-              <>
-                <div className="color-group-solo">
-                  <button
-                    type="button"
-                    className="color-toggle"
-                    onClick={() => setIsForksOpen(!isForksOpen)}
-                  >
-                    {isForksOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <label>Forks</label>
-                  </button>
-                </div>
-                {isForksOpen && (
-                  <div className="dropdown-content">
-                    {formData.forks && formData.forks.length > 0 ? (
-                      formData.forks.map((forkId, index) => {
-                        const forkElement = timelineData.elements.find(el => el.id === forkId);
-                        return (
-                          <div key={index} className="dropdown-item">
-                            <span className="fork-position">{index === 0 ? 'top' : 'bottom'}</span>
-                            <button
-                              type="button"
-                              className="dropdown-link"
-                              onClick={() => onSelect(forkId)}
-                            >
-                              {forkElement?.title || forkId}
-                            </button>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="dropdown-item">None</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
 
             {formData.noteFile && (
               <>
@@ -643,22 +775,30 @@ export default function RightPanel({
             {/* Color (spans and eras only) */}
             {formData.type !== "event" && (
               <div className="form-group">
-                <label htmlFor="color">Color</label>
-                <div className="color-input-group">
-                  <input
-                    id="color"
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => handleChange("color", e.target.value)}
-                    className="color-picker"
-                  />
-                  <input
-                    type="text"
-                    value={formData.color}
-                    onChange={(e) => handleChange("color", e.target.value)}
-                    className="color-text"
-                    placeholder="#000000"
-                  />
+                <div className="edit-row">
+                  <label htmlFor="color">Color</label>
+                  <div className="edit-separator" />
+                  <div className="edit-color-wrap">
+                    <input
+                      id="color"
+                      type="color"
+                      value={formData.color}
+                      onChange={(e) => {
+                        handleChange("color", e.target.value);
+                        commitDraft({ ...formData, color: e.target.value });
+                      }}
+                      className="edit-color-picker"
+                      aria-label="Pick color"
+                    />
+                    <input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) => handleChange("color", e.target.value)}
+                      onBlur={(e) => commitDraft({ ...formData, color: e.target.value })}
+                      className="edit-color-text"
+                      placeholder="#000000"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -669,24 +809,128 @@ export default function RightPanel({
                 <div className="edit-row">
                   <label htmlFor="parents">Parent</label>
                   <div className="edit-separator" />
-                  <input
-                    id="parents"
-                    type="text"
-                    value={formData.parents?.[0] || ""}
-                    onChange={(e) => {
-                      const value = e.target.value.trim();
-                      handleChange("parents", value ? [value] : []);
-                    }}
-                    placeholder="span-id"
-                    onBlur={(e) => {
-                      const value = e.target.value.trim();
-                      commitDraft({ ...formData, parents: value ? [value] : [] });
-                    }}
-                    className="edit-input"
-                  />
+                  <div className="branch-picker parent-picker">
+                    <input
+                      id="parents"
+                      type="text"
+                      value={parentQuery}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setParentQuery(value);
+                        setIsParentMenuOpen(true);
+                        const trimmed = value.trim();
+                        handleChange("parents", trimmed ? [trimmed] : []);
+                      }}
+                      onFocus={() => setIsParentMenuOpen(true)}
+                      onBlur={handleParentBlur}
+                      placeholder="Search span ID or title..."
+                      className="edit-input branch-input"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const choice = parentSuggestions[0];
+                          if (choice) {
+                            setParentQuery(choice.id);
+                            handleChange("parents", [choice.id]);
+                            commitDraft({ ...formData, parents: [choice.id] });
+                            setIsParentMenuOpen(false);
+                          }
+                        }
+                      }}
+                    />
+                    {isParentMenuOpen && (
+                      <div className="branch-suggestions">
+                        {parentSuggestions.length > 0 ? (
+                          parentSuggestions.map((span) => (
+                            <button
+                              key={span.id}
+                              type="button"
+                              className="branch-suggestion-item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setParentQuery(span.id);
+                                handleChange("parents", [span.id]);
+                                commitDraft({ ...formData, parents: [span.id] });
+                                setIsParentMenuOpen(false);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">{span.title || span.id}</span>
+                              <span className="branch-suggestion-id">{span.id}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="branch-suggestion-empty">No matching spans</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
+
+            {/* Tags */}
+            <div className="form-group">
+              <div className="edit-row">
+                <label htmlFor="tags">Tags</label>
+                <div className="edit-separator" />
+                <div className="branch-picker tag-picker">
+                  <input
+                    id="tags"
+                    type="text"
+                    value={tagQuery}
+                    onChange={(e) => {
+                      setTagQuery(e.target.value);
+                      setIsTagMenuOpen(true);
+                    }}
+                    onFocus={() => setIsTagMenuOpen(true)}
+                    onBlur={handleTagBlur}
+                    placeholder="Add a tag..."
+                    className="edit-input branch-input"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = tagQuery.trim();
+                        if (trimmed) addTag(trimmed);
+                      }
+                    }}
+                  />
+                  {isTagMenuOpen && tagSuggestions.length > 0 && (
+                    <div className="branch-suggestions">
+                      {tagSuggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className="branch-suggestion-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            addTag(tag);
+                          }}
+                        >
+                          <span className="branch-suggestion-title">{tag}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
+                <div className="branch-selected-list tag-selected-list">
+                  {formData.tags.map((tag) => (
+                    <div key={tag} className="branch-selected-item tag-selected-item">
+                      <span className="branch-selected-link">{tag}</span>
+                      <button
+                        type="button"
+                        className="branch-selected-remove"
+                        onClick={() => removeTag(tag)}
+                        aria-label={`Remove ${tag}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {formData.type === "event" && (
               <>
@@ -739,45 +983,83 @@ export default function RightPanel({
                 <div className="edit-row">
                   <label htmlFor="branches">Branches</label>
                   <div className="edit-separator" />
-                  <input
-                    id="branches"
-                    type="text"
-                    value={formData.branches?.join(", ") || ""}
-                    onChange={(e) => handleArrayChange("branches", e.target.value)}
-                    placeholder="span-id-1, span-id-2"
-                    onBlur={(e) => {
-                      const arr = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
-                      commitDraft({ ...formData, branches: arr });
-                    }}
-                    className="edit-input"
-                  />
+                  <div className="branch-picker">
+                    <input
+                      id="branches"
+                      type="text"
+                      value={branchQuery}
+                      onChange={(e) => {
+                        setBranchQuery(e.target.value);
+                        setIsBranchMenuOpen(true);
+                      }}
+                      onFocus={() => setIsBranchMenuOpen(true)}
+                      onBlur={handleBranchBlur}
+                      placeholder="Search span ID or title..."
+                      className="edit-input branch-input"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (branchSuggestions.length > 0) {
+                            addBranch(branchSuggestions[0].id);
+                          }
+                        }
+                      }}
+                    />
+                    {isBranchMenuOpen && branchQuery.trim().length > 0 && (
+                      <div className="branch-suggestions">
+                        {branchSuggestions.length > 0 ? (
+                          branchSuggestions.map((span) => (
+                            <button
+                              key={span.id}
+                              type="button"
+                              className="branch-suggestion-item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                addBranch(span.id);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">{span.title || span.id}</span>
+                              <span className="branch-suggestion-id">{span.id}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="branch-suggestion-empty">No matching spans</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {Array.isArray(formData.branches) && formData.branches.length > 0 && (
+                  <div className="branch-selected-list">
+                    {formData.branches.map((branchId) => {
+                      const branchElement = timelineData.elements.find((el) => el.id === branchId);
+                      return (
+                        <div key={branchId} className="branch-selected-item">
+                          <button
+                            type="button"
+                            className="branch-selected-link"
+                            onClick={() => onSelect(branchId)}
+                          >
+                            {branchElement?.title || branchId}
+                          </button>
+                          <button
+                            type="button"
+                            className="branch-selected-remove"
+                            onClick={() => removeBranch(branchId)}
+                            aria-label={`Remove ${branchElement?.title || branchId}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Forks (spans only) */}
-            {formData.type === "span" && (
-              <div className="form-group">
-                <div className="edit-row">
-                  <label htmlFor="forks">Forks</label>
-                  <div className="edit-separator" />
-                  <input
-                    id="forks"
-                    type="text"
-                    value={formData.forks?.join(", ") || ""}
-                    onChange={(e) => handleArrayChange("forks", e.target.value)}
-                    placeholder="span-id-1, span-id-2"
-                    onBlur={(e) => {
-                      const arr = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
-                      commitDraft({ ...formData, forks: arr });
-                    }}
-                    className="edit-input"
-                  />
-                </div>
-              </div>
-            )}
 
-            <div className="form-group">
+            <div className="form-group note-form-group">
               {!formData.noteFile ? (
                 <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
                   Add Note

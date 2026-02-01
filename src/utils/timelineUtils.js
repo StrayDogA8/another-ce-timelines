@@ -83,7 +83,6 @@ export function pickStep(range) {
 // build child -> { parentId, offset } from spans
 // Rules:
 // - Branches: must start within parent's time span, alternate above/below with increasing offset
-// - Forks: must start in the exact year parent ends, alternate above/below with increasing offset
 // Pattern: -1, +1, -2, +2, -3, +3, ...
 export function buildSpanChildPlacement(spans) {
   const placement = {};
@@ -96,21 +95,6 @@ export function buildSpanChildPlacement(spans) {
       span.branches.forEach((childId, index) => {
         const magnitude = index + 1;
         const offset = index % 2 === 0 ? -magnitude : +magnitude;
-        placement[childId] = {
-          parentId: span.id,
-          offset,
-        };
-      });
-    }
-
-    // forks alternate above/below
-    // offset -1 = lower lane number = larger Y = BELOW parent (lower on screen)
-    // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
-    // Pattern: index 0 → +1, index 1 → -2, index 2 → +3, index 3 → -4, etc.
-    if (Array.isArray(span.forks)) {
-      span.forks.forEach((childId, index) => {
-        const magnitude = index + 1;
-        const offset = index % 2 === 0 ? +magnitude : -magnitude;
         placement[childId] = {
           parentId: span.id,
           offset,
@@ -165,7 +149,7 @@ export function layoutSpans({
 
   // Calculate how many lanes a family needs (parent + children)
   function getFamilyLaneExtent(span) {
-    const childIds = [...(span.branches || []), ...(span.forks || [])];
+    const childIds = [...(span.branches || [])];
     if (childIds.length === 0) return { minOffset: 0, maxOffset: 0 };
 
     let minOffset = 0;
@@ -194,7 +178,7 @@ export function layoutSpans({
       if (offset === 0) continue; 
       const childLane = baseLane + offset;
 
-      const childIds = [...(span.branches || []), ...(span.forks || [])];
+      const childIds = [...(span.branches || [])];
       for (const childId of childIds) {
         const childPlacement = spanChildPlacement[childId];
         if (childPlacement && childPlacement.offset === offset) {
@@ -275,12 +259,6 @@ export function layoutSpans({
         if (spanById[childId]) children.push(spanById[childId]);
       });
     }
-    if (span.forks) {
-      span.forks.forEach((childId) => {
-        if (spanById[childId]) children.push(spanById[childId]);
-      });
-    }
-
     children.forEach(child => placeSpan(child));
   }
 
