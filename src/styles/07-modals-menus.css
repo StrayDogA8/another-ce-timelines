@@ -278,6 +278,97 @@
   transition: all 0.15s ease;
 }
 
+.settings-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--dark-bg);
+  background: var(--primary-bg);
+  border: 1px solid var(--active-bg);
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.15s ease;
+  resize: vertical;
+}
+
+.settings-textarea:focus {
+  border-color: var(--element-bg);
+}
+
+/* Timeline Breaks UI */
+.settings-row-breaks {
+  align-items: flex-start;
+}
+
+.settings-breaks-container {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.settings-break-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-break-input {
+  width: 90px;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.settings-break-separator {
+  color: var(--element-bg);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.settings-break-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--active-bg);
+  border-radius: 6px;
+  color: var(--element-bg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.settings-break-remove:hover {
+  background: var(--active-bg);
+  border-color: var(--element-bg);
+  color: #b42318;
+}
+
+.settings-break-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px dashed var(--active-bg);
+  border-radius: 8px;
+  color: var(--element-bg);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-break-add:hover {
+  background: var(--active-bg);
+  border-style: solid;
+  border-color: var(--element-bg);
+}
+
 .settings-input:focus {
   border-color: var(--element-bg);
 }

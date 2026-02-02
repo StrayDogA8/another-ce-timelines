@@ -356,6 +356,7 @@ function App() {
     startLabel,
     endLabel,
     useMonths,
+    breaks,
     layout,
   }) => {
     const parsedStart = parseTimelineInput(start);
@@ -382,12 +383,14 @@ function App() {
         startLabel,
         endLabel,
         useMonths,
+        breaks,
         layout,
       };
 
       if (!startLabel) delete nextFile.startLabel;
       if (!endLabel) delete nextFile.endLabel;
       if (useMonths === undefined) delete nextFile.useMonths;
+      if (!breaks || breaks.length === 0) delete nextFile.breaks;
       if (!layout) delete nextFile.layout;
 
       const updatedData = {

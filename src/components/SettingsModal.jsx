@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import "../styles/07-modals-menus.css";
@@ -26,12 +26,14 @@ export default function SettingsModal({
   const [layout, setLayout] = useState("Horizontal");
   const [theme, setTheme] = useState(defaultThemeKey || "");
   const [useMonths, setUseMonths] = useState(false);
+  const [breaks, setBreaks] = useState([]);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [showCenterTimeline, setShowCenterTimeline] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
+  const lastFilePathRef = useRef(null);
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -55,6 +57,51 @@ export default function SettingsModal({
     return DETAIL_MID + ratio * (DETAIL_MAX - DETAIL_MID);
   };
 
+  // Convert stored breaks (numeric) to editable breaks (strings for inputs)
+  const loadBreaks = (storedBreaks = []) => {
+    if (!Array.isArray(storedBreaks) || storedBreaks.length === 0) return [];
+    return storedBreaks.map((item) => ({
+      start: String(item?.start ?? ""),
+      end: String(item?.end ?? ""),
+    }));
+  };
+
+  // Convert editable breaks (strings) to numeric breaks for saving
+  const saveBreaks = (editableBreaks = []) => {
+    const out = [];
+    editableBreaks.forEach((item) => {
+      const startRaw = item?.start?.trim() || "";
+      const endRaw = item?.end?.trim() || "";
+      if (!startRaw || !endRaw) return;
+
+      const parsedStart = parseTimelineInput(startRaw);
+      const parsedEnd = parseTimelineInput(endRaw);
+      if (!Number.isFinite(parsedStart.value) || !Number.isFinite(parsedEnd.value)) return;
+
+      const startVal = parsedStart.value;
+      const endVal = parsedEnd.value;
+      if (startVal === endVal) return;
+
+      const ordered = startVal < endVal
+        ? { start: startVal, end: endVal }
+        : { start: endVal, end: startVal };
+      out.push(ordered);
+    });
+    return out;
+  };
+
+  const addBreak = () => {
+    setBreaks([...breaks, { start: "", end: "" }]);
+  };
+
+  const removeBreak = (index) => {
+    setBreaks(breaks.filter((_, i) => i !== index));
+  };
+
+  const updateBreak = (index, field, value) => {
+    setBreaks(breaks.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+  };
+
   useEffect(() => {
     const updateTooltip = () => {
       const sliderEl = detailSliderRef.current;
@@ -72,19 +119,27 @@ export default function SettingsModal({
 
   useEffect(() => {
     if (timelineData?.file) {
-      setTitle(timelineData.file.title || "");
-      setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
-      setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
-      const nextDetailLevel = Number(timelineData.file.detailLevel || 1);
-      const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
-      setDetailLevel(clampedDetail);
-      setDetailSlider(detailToSlider(clampedDetail));
-      setTheme(timelineData.file.theme || defaultThemeKey || "");
-      setLayout(timelineData.file.layout || "Horizontal");
-      setUseMonths(Boolean(timelineData.file.useMonths));
-      setNegID(timelineData.file.negID || "");
-      setPosID(timelineData.file.posID || "");
-      setIsInitialized(true);
+      const currentPath = timelineData.path || timelineData.file.title;
+      const isNewFile = lastFilePathRef.current !== currentPath;
+
+      // Only fully reset state when loading a different file
+      if (isNewFile) {
+        setTitle(timelineData.file.title || "");
+        setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
+        setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
+        const nextDetailLevel = Number(timelineData.file.detailLevel || 1);
+        const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
+        setDetailLevel(clampedDetail);
+        setDetailSlider(detailToSlider(clampedDetail));
+        setTheme(timelineData.file.theme || defaultThemeKey || "");
+        setLayout(timelineData.file.layout || "Horizontal");
+        setUseMonths(Boolean(timelineData.file.useMonths));
+        setBreaks(loadBreaks(timelineData.file.breaks));
+        setNegID(timelineData.file.negID || "");
+        setPosID(timelineData.file.posID || "");
+        lastFilePathRef.current = currentPath;
+        setIsInitialized(true);
+      }
     }
   }, [timelineData]);
 
@@ -109,6 +164,7 @@ export default function SettingsModal({
         useMonths && parsedEnd.precision !== "day"
           ? snapToMonthGrid(parsedEnd.value)
           : parsedEnd.value;
+      const parsedBreaks = saveBreaks(breaks);
       if (onUpdateTimeline) {
         onUpdateTimeline({
           title,
@@ -121,6 +177,7 @@ export default function SettingsModal({
           startLabel: parsedStart.label,
           endLabel: parsedEnd.label,
           useMonths,
+          breaks: parsedBreaks,
           layout,
         });
       }
@@ -132,7 +189,7 @@ export default function SettingsModal({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [title, start, end, detailLevel, negID, posID, theme, useMonths, layout]);
+  }, [title, start, end, detailLevel, negID, posID, theme, useMonths, layout, breaks]);
 
   if (!isOpen) return null;
 
@@ -271,6 +328,52 @@ export default function SettingsModal({
                 />
                 <span className="settings-toggle-slider"></span>
               </label>
+            </div>
+          </div>
+
+          <div className="settings-row settings-row-breaks">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Timeline Breaks</div>
+              <div className="settings-row-description">
+                Skip empty spans of time.
+              </div>
+            </div>
+            <div className="settings-row-right settings-breaks-container">
+              {breaks.map((breakItem, index) => (
+                <div key={index} className="settings-break-row">
+                  <input
+                    type="text"
+                    className="settings-input settings-break-input"
+                    value={breakItem.start}
+                    onChange={(e) => updateBreak(index, "start", e.target.value)}
+                    placeholder="Start"
+                  />
+                  <span className="settings-break-separator">–</span>
+                  <input
+                    type="text"
+                    className="settings-input settings-break-input"
+                    value={breakItem.end}
+                    onChange={(e) => updateBreak(index, "end", e.target.value)}
+                    placeholder="End"
+                  />
+                  <button
+                    type="button"
+                    className="settings-break-remove"
+                    onClick={() => removeBreak(index)}
+                    aria-label="Remove break"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="settings-break-add"
+                onClick={addBreak}
+              >
+                <Plus size={14} />
+                <span>Add Break</span>
+              </button>
             </div>
           </div>
 

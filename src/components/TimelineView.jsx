@@ -70,6 +70,7 @@ function TimelineView({
     calculatedHeight,
     BASE_LINE_Y,
     ticks,
+    normalizedBreaks,
   } = useMemo(() => {
     const file = timelineData.file;
     const events = timelineData.elements.filter(e => e.type === "event");
@@ -127,7 +128,74 @@ function TimelineView({
 
     const minYear = file?.start ?? rawMin;
     const maxYear = file?.end ?? rawMax;
-    const range = maxYear - minYear;
+
+    const parseBreakValue = (value) => {
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = parseTimelineInput(value);
+        return Number.isFinite(parsed.value) ? parsed.value : null;
+      }
+      return null;
+    };
+
+    const normalizeBreaks = (breaks, min, max) => {
+      if (!Array.isArray(breaks) || breaks.length === 0) return [];
+      const cleaned = breaks
+        .map((item) => {
+          const startRaw = parseBreakValue(item?.start);
+          const endRaw = parseBreakValue(item?.end);
+          if (!Number.isFinite(startRaw) || !Number.isFinite(endRaw)) return null;
+          const start = Math.min(startRaw, endRaw);
+          const end = Math.max(startRaw, endRaw);
+          if (start === end) return null;
+          const clippedStart = Math.max(min, start);
+          const clippedEnd = Math.min(max, end);
+          if (clippedEnd <= clippedStart) return null;
+          return { start: clippedStart, end: clippedEnd };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.start - b.start);
+
+      const merged = [];
+      cleaned.forEach((current) => {
+        const last = merged[merged.length - 1];
+        if (!last || current.start > last.end) {
+          merged.push({ ...current });
+        } else {
+          last.end = Math.max(last.end, current.end);
+        }
+      });
+      return merged;
+    };
+
+    const normalizedBreaks = normalizeBreaks(file?.breaks, minYear, maxYear);
+
+    const compressYear = (year) => {
+      let skipped = 0;
+      for (const gap of normalizedBreaks) {
+        if (year >= gap.end) {
+          skipped += gap.end - gap.start;
+          continue;
+        }
+        if (year > gap.start) {
+          return gap.start - skipped;
+        }
+        break;
+      }
+      return year - skipped;
+    };
+
+    const isYearInBreak = (year) =>
+      normalizedBreaks.some((gap) => year > gap.start && year < gap.end);
+
+    const isBreakBoundary = (year) =>
+      normalizedBreaks.some(
+        (gap) => Math.abs(year - gap.start) < 0.0001 || Math.abs(year - gap.end) < 0.0001
+      );
+
+    const compressedMin = compressYear(minYear);
+    const compressedMax = compressYear(maxYear);
+    const range = Math.max(1, compressedMax - compressedMin);
 
     // Calculate detail level automatically based on range
     // The detailLevel setting will be used as a multiplier later
@@ -140,7 +208,8 @@ function TimelineView({
     const TIMELINE_PADDING = 200; // px padding on each end
     const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
 
-    const yearToPx = (year) => (year - minYear) * PX_PER_YEAR + TIMELINE_PADDING;
+    const yearToPx = (year) =>
+      (compressYear(year) - compressedMin) * PX_PER_YEAR + TIMELINE_PADDING;
 
     // spans
     const SPAN_HEIGHT = 23;
@@ -230,7 +299,7 @@ function TimelineView({
 
     const finalEras = adjustedEras.map((era) => {
       const left = yearToPx(era.start);
-      const width = (era.end - era.start) * PX_PER_YEAR;
+      const width = yearToPx(era.end) - yearToPx(era.start);
       const top = BASE_LINE_Y + ERA_OFFSET;
       return {
         ...era,
@@ -265,14 +334,21 @@ function TimelineView({
       for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
         const y = Math.floor(m / 12);
         const monthIndex = m % 12;
+        const value = Number((y + monthIndex / 12).toFixed(6));
+        if (isYearInBreak(value) || isBreakBoundary(value)) {
+          continue;
+        }
         ticks.push({
-          value: Number((y + monthIndex / 12).toFixed(6)),
+          value,
           label: `${monthLabels[monthIndex]} ${y}`,
         });
       }
     } else {
       const startTick = Math.floor(minYear / step) * step;
       for (let y = startTick; y <= maxYear; y += step) {
+        if (isYearInBreak(y) || isBreakBoundary(y)) {
+          continue;
+        }
         ticks.push({
           value: Number(y.toFixed(6)),
         });
@@ -300,6 +376,7 @@ function TimelineView({
       calculatedHeight,
       BASE_LINE_Y,
       ticks,
+      normalizedBreaks,
     };
   }, [timelineData, currentScale]);
 
@@ -814,7 +891,69 @@ function TimelineView({
         className="timeline"
         style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
       >
-        <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
+        {/* Timeline line with break gaps */}
+        {normalizedBreaks.length === 0 ? (
+          <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
+        ) : (
+          <div className="timeline-line-segments" style={{ top: `${BASE_LINE_Y}px` }}>
+            {(() => {
+              const segments = [];
+              const GAP_WIDTH = 20;
+              let lastEnd = -100; // Start before the padding
+
+              normalizedBreaks.forEach((breakItem, index) => {
+                const breakPx = yearToPx(breakItem.start);
+
+                // Line segment before this break
+                segments.push(
+                  <div
+                    key={`segment-${index}`}
+                    className="timeline-line-segment"
+                    style={{
+                      left: `${lastEnd}px`,
+                      width: `${breakPx - lastEnd - GAP_WIDTH / 2}px`,
+                    }}
+                  />
+                );
+
+                // Break indicator with label
+                const startLabel = formatYear(breakItem.start, file.negID, file.posID, false);
+                const endLabel = formatYear(breakItem.end, file.negID, file.posID, false);
+                segments.push(
+                  <div
+                    key={`break-${index}`}
+                    className="timeline-break-indicator"
+                    style={{
+                      left: `${breakPx - GAP_WIDTH / 2}px`,
+                      width: `${GAP_WIDTH}px`,
+                    }}
+                  >
+                    <svg viewBox="0 0 20 12" preserveAspectRatio="none">
+                      <path d="M0,6 L5,2 L10,10 L15,2 L20,6" stroke="var(--dark-bg)" strokeWidth="2" fill="none" />
+                    </svg>
+                    <div className="timeline-break-label">{startLabel} – {endLabel}</div>
+                  </div>
+                );
+
+                lastEnd = breakPx + GAP_WIDTH / 2;
+              });
+
+              // Final segment after last break
+              segments.push(
+                <div
+                  key="segment-final"
+                  className="timeline-line-segment"
+                  style={{
+                    left: `${lastEnd}px`,
+                    right: '0',
+                  }}
+                />
+              );
+
+              return segments;
+            })()}
+          </div>
+        )}
 
         <div className="eras-layer">
           {finalEras.map((era) => {

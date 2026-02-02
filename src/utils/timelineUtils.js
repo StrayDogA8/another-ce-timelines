@@ -198,7 +198,7 @@ export function layoutSpans({
     processed.add(span.id);
 
     const left = yearToPx(span.start);
-    const width = (span.end - span.start) * PX_PER_YEAR;
+    const width = yearToPx(span.end) - yearToPx(span.start);
     const right = left + width;
     const placement = spanChildPlacement[span.id];
 
