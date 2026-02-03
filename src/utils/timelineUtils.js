@@ -92,7 +92,24 @@ export function buildSpanChildPlacement(spans) {
     // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
     // Pattern: index 0 → -1, index 1 → +1, index 2 → -2, index 3 → +2, etc.
     if (Array.isArray(span.branches)) {
-      span.branches.forEach((childId, index) => {
+      // Sort branches so:
+      // 1) Branches that have their own branches stay closer to the parent.
+      // 2) Later start dates stay closer to the parent.
+      // This helps keep branch "families" grouped together.
+      const orderedBranches = [...span.branches].sort((aId, bId) => {
+        const a = spans.find(s => s.id === aId);
+        const b = spans.find(s => s.id === bId);
+        const aHasChildren = Array.isArray(a?.branches) && a.branches.length > 0;
+        const bHasChildren = Array.isArray(b?.branches) && b.branches.length > 0;
+        if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
+        const aStart = a?.start ?? 0;
+        const bStart = b?.start ?? 0;
+        if (aStart !== bStart) return bStart - aStart;
+        return String(aId).localeCompare(String(bId));
+      });
+      // Alternate offsets around the parent: -1, +1, -2, +2, ...
+      // Negative offsets appear lower on screen, positive offsets higher.
+      orderedBranches.forEach((childId, index) => {
         const magnitude = index + 1;
         const offset = index % 2 === 0 ? -magnitude : +magnitude;
         placement[childId] = {
@@ -125,54 +142,106 @@ export function layoutSpans({
   const spanLaneById = {};
   const spanById = Object.fromEntries(spans.map(s => [s.id, s]));
   const finalSpans = [];
+  const familyBands = new Map();
 
   const childToParent = {};
   Object.entries(spanChildPlacement).forEach(([childId, { parentId }]) => {
     childToParent[childId] = parentId;
   });
 
-  const sortedSpans = [...spans].sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    const aIsChild = !!childToParent[a.id];
-    const bIsChild = !!childToParent[b.id];
-    if (aIsChild !== bIsChild) return aIsChild ? 1 : -1;
-    return 0;
-  });
+  const getRootId = (id) => {
+    let current = id;
+    while (childToParent[current]) {
+      current = childToParent[current];
+    }
+    return current;
+  };
+
+  const familyOffsetsCache = new Map();
+  const getFamilyOffsets = (rootId) => {
+    if (familyOffsetsCache.has(rootId)) return familyOffsetsCache.get(rootId);
+    const root = spanById[rootId];
+    if (!root) return { minOffset: 0, maxOffset: 0 };
+    const stack = [{ id: rootId, offset: 0 }];
+    let minOffset = 0;
+    let maxOffset = 0;
+    while (stack.length > 0) {
+      const { id, offset } = stack.pop();
+      minOffset = Math.min(minOffset, offset);
+      maxOffset = Math.max(maxOffset, offset);
+      const span = spanById[id];
+      const children = Array.isArray(span?.branches) ? span.branches : [];
+      children.forEach((childId) => {
+        const placement = spanChildPlacement[childId];
+        if (!placement) return;
+        stack.push({ id: childId, offset: offset + placement.offset });
+      });
+    }
+    const result = { minOffset, maxOffset };
+    familyOffsetsCache.set(rootId, result);
+    return result;
+  };
+
+  const familyRangeCache = new Map();
+  // Computes the overall time range covered by a family (root + descendants).
+  // Used to prevent other families from taking lanes that overlap in time.
+  const getFamilyRange = (rootId) => {
+    if (familyRangeCache.has(rootId)) return familyRangeCache.get(rootId);
+    const root = spanById[rootId];
+    if (!root) return { start: 0, end: 0 };
+    let minStart = root.start;
+    let maxEnd = root.end;
+    const stack = [rootId];
+    while (stack.length > 0) {
+      const id = stack.pop();
+      const span = spanById[id];
+      if (!span) continue;
+      minStart = Math.min(minStart, span.start);
+      maxEnd = Math.max(maxEnd, span.end);
+      const children = Array.isArray(span.branches) ? span.branches : [];
+      children.forEach((childId) => stack.push(childId));
+    }
+    const result = { start: minStart, end: maxEnd };
+    familyRangeCache.set(rootId, result);
+    return result;
+  };
+
+  const spansOverlap = (startA, endA, startB, endB) =>
+    startA < endB && endA > startB;
+
+  const rootSpans = spans.filter(span => !childToParent[span.id]);
+  const familyRoots = rootSpans.filter(span => Array.isArray(span.branches) && span.branches.length > 0);
+  const otherRoots = rootSpans.filter(span => !Array.isArray(span.branches) || span.branches.length === 0);
+
+  familyRoots.sort((a, b) => a.start - b.start);
+  otherRoots.sort((a, b) => a.start - b.start);
 
   const processed = new Set();
 
-  function spanFitsInLane(lane, start, end) {
+  function spanFitsInLane(lane, start, end, rootId) {
     const startPx = yearToPx(start);
     const laneEnd = spanLaneEnds[lane];
-    return laneEnd === undefined || laneEnd + SPAN_GAP <= startPx;
-  }
-
-  // Calculate how many lanes a family needs (parent + children)
-  function getFamilyLaneExtent(span) {
-    const childIds = [...(span.branches || [])];
-    if (childIds.length === 0) return { minOffset: 0, maxOffset: 0 };
-
-    let minOffset = 0;
-    let maxOffset = 0;
-
-    childIds.forEach(childId => {
-      const childPlacement = spanChildPlacement[childId];
-      if (childPlacement) {
-        const offset = childPlacement.offset;
-        minOffset = Math.min(minOffset, offset);
-        maxOffset = Math.max(maxOffset, offset);
+    if (!(laneEnd === undefined || laneEnd + SPAN_GAP <= startPx)) {
+      return false;
+    }
+    if (!rootId) return true;
+    for (const [familyRoot, band] of familyBands.entries()) {
+      if (familyRoot === rootId) continue;
+      if (!spansOverlap(start, end, band.start, band.end)) continue;
+      if (lane >= band.minLane && lane <= band.maxLane) {
+        return false;
       }
-    });
-
-    return { minOffset, maxOffset };
+    }
+    return true;
   }
 
   function familyFitsAtLane(span, baseLane, start, end) {
-    const { minOffset, maxOffset } = getFamilyLaneExtent(span);
+    const rootId = span.id;
+    const { minOffset, maxOffset } = getFamilyOffsets(rootId);
 
     if (baseLane + minOffset < 0) return false;
 
-    if (!spanFitsInLane(baseLane, start, end)) return false;
+    if (!spanFitsInLane(baseLane, start, end, rootId)) return false;
 
     for (let offset = minOffset; offset <= maxOffset; offset++) {
       if (offset === 0) continue; 
@@ -183,11 +252,21 @@ export function layoutSpans({
         const childPlacement = spanChildPlacement[childId];
         if (childPlacement && childPlacement.offset === offset) {
           const child = spanById[childId];
-          if (child && !spanFitsInLane(childLane, child.start, child.end)) {
+          if (child && !spanFitsInLane(childLane, child.start, child.end, rootId)) {
             return false;
           }
         }
       }
+    }
+
+    const familyRange = getFamilyRange(rootId);
+    for (const [familyRoot, band] of familyBands.entries()) {
+      if (!spansOverlap(familyRange.start, familyRange.end, band.start, band.end)) continue;
+      const candidateMin = baseLane + minOffset;
+      const candidateMax = baseLane + maxOffset;
+      const overlapsBand =
+        candidateMin <= band.maxLane && candidateMax >= band.minLane;
+      if (overlapsBand) return false;
     }
 
     return true;
@@ -204,6 +283,8 @@ export function layoutSpans({
 
     let lane;
 
+    const rootId = getRootId(span.id);
+
     if (placement) {
       const parentLane = spanLaneById[placement.parentId];
       if (parentLane !== undefined) {
@@ -213,13 +294,13 @@ export function layoutSpans({
         while (true) {
           if (searchLane < 0) {
             searchLane = parentLane + 1;
-            while (!spanFitsInLane(searchLane, span.start, span.end)) {
+            while (!spanFitsInLane(searchLane, span.start, span.end, rootId)) {
               searchLane++;
             }
             break;
           }
 
-          if (spanFitsInLane(searchLane, span.start, span.end)) {
+          if (spanFitsInLane(searchLane, span.start, span.end, rootId)) {
             break;
           }
 
@@ -229,7 +310,7 @@ export function layoutSpans({
         lane = searchLane;
       } else {
         lane = 0;
-        while (!spanFitsInLane(lane, span.start, span.end)) {
+        while (!spanFitsInLane(lane, span.start, span.end, rootId)) {
           lane++;
         }
       }
@@ -242,6 +323,17 @@ export function layoutSpans({
 
     spanLaneEnds[lane] = right;
     spanLaneById[span.id] = lane;
+
+    if (!placement) {
+      const { minOffset, maxOffset } = getFamilyOffsets(span.id);
+      const familyRange = getFamilyRange(span.id);
+      familyBands.set(span.id, {
+        minLane: lane + minOffset,
+        maxLane: lane + maxOffset,
+        start: familyRange.start,
+        end: familyRange.end,
+      });
+    }
 
     const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - lane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
 
@@ -262,7 +354,10 @@ export function layoutSpans({
     children.forEach(child => placeSpan(child));
   }
 
-  sortedSpans.forEach(span => placeSpan(span));
+  familyRoots.forEach(span => placeSpan(span));
+  otherRoots.forEach(span => placeSpan(span));
+  // Place any remaining spans that weren't reached via a root (safety net).
+  spans.forEach(span => placeSpan(span));
 
   if (finalSpans.length > 0) {
     const minLane = Math.min(...finalSpans.map((span) => span.lane));

@@ -1179,10 +1179,10 @@ function TimelineView({
                 data-id={span.id}
                 className={`span-item ${isSelected ? "is-selected" : ""}`}
                 style={{
-                  left: `${span.left}px`,
-                  width: `${span.width}px`,
+                  left: `${span.left + (spanChildPlacement[span.id] ? -2 : 0)}px`,
+                  width: `${span.width + (spanChildPlacement[span.id] ? 2 : 0)}px`,
                   top: `${span.top}px`,
-                  background: span.color || "var(--element-bg)",
+                  background: span.color || "var(--element-bg)"
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
