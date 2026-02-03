@@ -22,6 +22,7 @@ export default function HomePage({
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [view, setView] = useState("home");
+  const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -153,6 +154,11 @@ export default function HomePage({
     }
   };
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredTimelines = normalizedQuery
+    ? timelineFiles.filter((file) => file.name.toLowerCase().includes(normalizedQuery))
+    : timelineFiles;
+
   if (loading) {
     return (
       <div className="homepage">
@@ -163,126 +169,30 @@ export default function HomePage({
     );
   }
 
-  if (view === "settings") {
-    return (
-      <div className="homepage">
-        <div className="homepage-container homepage-settings">
-          <div className="homepage-settings-header">
-            <button
-              className="homepage-settings-back"
-              onClick={() => setView("home")}
-              aria-label="Back to home"
-            >
-              <ArrowLeft size={18} strokeWidth={2} />
-              Back
-            </button>
-            <h1 className="homepage-title">App Settings</h1>
-          </div>
-
-          <div className="homepage-settings-content">
-            <div className="settings-row">
-              <div className="settings-row-left">
-                <div className="settings-row-label">Theme</div>
-                <div className="settings-row-description">Used on the homepage and when no timeline is open.</div>
-              </div>
-              <div className="settings-row-right">
-                <select
-                  className="settings-select"
-                  value={appThemeKey || ""}
-                  onChange={(e) => onAppThemeChange?.(e.target.value)}
-                >
-                  {Object.entries(themes || {}).map(([key, theme]) => (
-                    <option key={key} value={key}>
-                      {theme?.name || key}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="settings-row">
-              <div className="settings-row-left">
-                <div className="settings-row-label">Timeline Folder</div>
-                <div className="settings-row-description">
-                  Where .timeline files are stored. Leave blank to use the default app folder.
-                  Changing this will hide timelines stored in the previous folder until you switch back.
-                </div>
-              </div>
-              <div className="settings-row-right">
-                <div className="settings-folder">
-                  <div className="settings-path-pill" title={timelineStorageDir || "Default app storage"}>
-                    <Folder className="settings-path-icon" size={14} />
-                    <span className="settings-path-text">
-                      {timelineStorageDir || "Default app storage"}
-                    </span>
-                  </div>
-                  <button
-                    className="settings-folder-button"
-                    type="button"
-                    onClick={() => onPickTimelinesDir?.()}
-                  >
-                    Choose...
-                  </button>
-                  <button
-                    className="settings-folder-button"
-                    type="button"
-                    onClick={() => onTimelineStorageDirChange?.("")}
-                  >
-                    Use Default
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="settings-row">
-              <div className="settings-row-left">
-                <div className="settings-row-label">Notes Folder</div>
-                <div className="settings-row-description">
-                  Where .md notes are stored. Leave blank to store notes next to timelines.
-                  Changing this will hide notes stored in the previous folder until you switch back.
-                </div>
-              </div>
-              <div className="settings-row-right">
-                <div className="settings-folder">
-                  <div className="settings-path-pill" title={notesStorageDir || "Default app storage"}>
-                    <Folder className="settings-path-icon" size={14} />
-                    <span className="settings-path-text">
-                      {notesStorageDir || "Default app storage"}
-                    </span>
-                  </div>
-                  <button
-                    className="settings-folder-button"
-                    type="button"
-                    onClick={() => onPickNotesDir?.()}
-                  >
-                    Choose...
-                  </button>
-                  <button
-                    className="settings-folder-button"
-                    type="button"
-                    onClick={() => onNotesStorageDirChange?.("")}
-                  >
-                    Use Default
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="homepage">
       <div className="homepage-container">
         <div className="homepage-header">
-          <div>
+          <div className="homepage-header-left">
             <h1 className="homepage-title">timelines</h1>
-            <p className="homepage-subtitle">Select a timeline to open</p>
           </div>
-          <button className="homepage-settings-button" onClick={() => setView("settings")}>
-            <Settings size={16} />
-            App Settings
-          </button>
+          <div className="homepage-header-right">
+            <input
+              className="homepage-search"
+              type="text"
+              placeholder="Search timelines..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search timelines"
+            />
+            <button
+              className="homepage-settings-icon"
+              onClick={() => setView("settings")}
+              aria-label="App Settings"
+            >
+              <Settings size={22} />
+            </button>
+          </div>
         </div>
 
         <div className="timeline-grid">
@@ -291,7 +201,7 @@ export default function HomePage({
             <span>New Timeline</span>
           </button>
 
-          {timelineFiles.map((file) => (
+          {filteredTimelines.map((file) => (
             <button
               key={file.id}
               className="timeline-card"
@@ -304,7 +214,7 @@ export default function HomePage({
           ))}
         </div>
 
-        {timelineFiles.length === 0 && (
+        {filteredTimelines.length === 0 && (
           <div className="no-timelines">
             <p>No timelines found. Create a new one to get started.</p>
           </div>
@@ -316,6 +226,115 @@ export default function HomePage({
         onClose={() => setIsNewTimelineModalOpen(false)}
         onCreate={handleCreateTimeline}
       />
+
+      {view === "settings" && (
+        <div className="settings-backdrop" onClick={() => setView("home")}>
+          <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-header">
+              <button
+                className="settings-back-button"
+                onClick={() => setView("home")}
+                aria-label="Close settings"
+              >
+                <ArrowLeft size={18} strokeWidth={2} />
+              </button>
+              <h2 className="settings-title settings-title-right">APP SETTINGS</h2>
+            </div>
+
+            <div className="settings-content">
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">App Theme</div>
+                  <div className="settings-row-description">
+                    Used on the homepage and as the default theme for timelines.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={appThemeKey || ""}
+                    onChange={(e) => onAppThemeChange?.(e.target.value)}
+                  >
+                    {Object.entries(themes || {}).map(([key, theme]) => (
+                      <option key={key} value={key}>
+                        {theme?.name || key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Timeline Folder</div>
+                  <div className="settings-row-description">
+                    Where .timeline files are stored. Leave blank to use the default app folder.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <div className="settings-path-pill" title={timelineStorageDir || "Default app storage"}>
+                      <Folder className="settings-path-icon" size={14} />
+                      <span className="settings-path-text">
+                        {timelineStorageDir || "Default app storage"}
+                      </span>
+                    </div>
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onPickTimelinesDir?.()}
+                      >
+                        Choose...
+                      </button>
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onTimelineStorageDirChange?.("")}
+                      >
+                        Use Default
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Notes Folder</div>
+                  <div className="settings-row-description">
+                    Where .md notes are stored. Leave blank to store notes next to timelines.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <div className="settings-path-pill" title={notesStorageDir || "Default app storage"}>
+                      <Folder className="settings-path-icon" size={14} />
+                      <span className="settings-path-text">
+                        {notesStorageDir || "Default app storage"}
+                      </span>
+                    </div>
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onPickNotesDir?.()}
+                      >
+                        Choose...
+                      </button>
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onNotesStorageDirChange?.("")}
+                      >
+                        Use Default
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {contextMenu && (
         <div

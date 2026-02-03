@@ -524,8 +524,6 @@ function App() {
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
-        negID: timelineConfig.negID,
-        posID: timelineConfig.posID,
         theme: timelineConfig.theme || defaultThemeKey,
         startLabel: timelineConfig.startLabel,
         endLabel: timelineConfig.endLabel,

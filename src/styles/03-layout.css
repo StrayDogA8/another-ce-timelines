@@ -25,13 +25,14 @@
   top: 0;
   bottom: 0;
   background: var(--secondary-bg);
-  z-index: 20;
+  z-index: 30;
   overflow: auto;
 }
 
 .overlay-sidebar {
   left: 0;
   border-right: 1px solid var(--active-bg);
+  z-index: 40;
 }
 
 .overlay-right {
@@ -59,7 +60,7 @@
   height: 100%;
   cursor: col-resize;
   background: transparent;
-  z-index: 30;
+  z-index: 50;
 }
 
 .app-content,

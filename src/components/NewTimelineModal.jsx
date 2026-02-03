@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { parseTimelineInput } from "../utils/dateUtils";
 import "../styles/07-modals-menus.css";
 
 export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
@@ -14,8 +14,6 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const [detailSlider, setDetailSlider] = useState(50);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
-  const [negID, setNegID] = useState("");
-  const [posID, setPosID] = useState("");
   const detailSliderRef = useRef(null);
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -79,8 +77,6 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       start: startValue,
       end: endValue,
       detailLevel: Number(detailLevel),
-      negID,
-      posID,
       startLabel: parsedStart.label,
       endLabel: parsedEnd.label,
     });
@@ -93,8 +89,6 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     setEnd("2024");
     setDetailLevel(1);
     setDetailSlider(50);
-    setNegID("");
-    setPosID("");
     onClose();
   };
 
@@ -130,9 +124,41 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
             </div>
           </div>
 
+          <div className="settings-row no-border-bottom">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Start Point</div>
+              <div className="settings-row-description">The first year/date shown on the timeline.</div>
+            </div>
+            <div className="settings-row-right">
+              <input
+                type="text"
+                inputMode="numeric"
+                className="settings-input settings-input-small"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="settings-row">
             <div className="settings-row-left">
-              <div className="settings-row-label">Detail Level</div>
+              <div className="settings-row-label">End Point</div>
+              <div className="settings-row-description">The last year/date shown on the timeline.</div>
+            </div>
+            <div className="settings-row-right">
+              <input
+                type="text"
+                inputMode="numeric"
+                className="settings-input settings-input-small"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Timeline Length</div>
               <div className="settings-row-description">Higher values let you add more events between years.</div>
             </div>
             <div className="settings-row-right">
@@ -174,67 +200,6 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
             </div>
           </div>
 
-          <div className="settings-row no-border-bottom">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Start Point</div>
-              <div className="settings-row-description">The first year/date shown on the timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="settings-input settings-input-small"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">End Point</div>
-              <div className="settings-row-description">The last year/date shown on the timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="settings-input settings-input-small"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="settings-row no-border-bottom">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Negative Era</div>
-              <div className="settings-row-description">Optional label for negative years.</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                className="settings-input settings-input-small"
-                value={negID}
-                onChange={(e) => setNegID(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Positive Era</div>
-              <div className="settings-row-description">Optional label for positive years.</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                className="settings-input settings-input-small"
-                value={posID}
-                onChange={(e) => setPosID(e.target.value)}
-              />
-            </div>
-          </div>
         </div>
 
         <div className="settings-footer">
