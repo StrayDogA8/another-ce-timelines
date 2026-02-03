@@ -29,7 +29,6 @@ export default function SettingsModal({
   const [breaks, setBreaks] = useState([]);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
-  const [showCenterTimeline, setShowCenterTimeline] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
@@ -119,7 +118,7 @@ export default function SettingsModal({
 
   useEffect(() => {
     if (timelineData?.file) {
-      const currentPath = timelineData.path || timelineData.file.title;
+      const currentPath = timelineData.path || timelineData.file.id || timelineData.file.title;
       const isNewFile = lastFilePathRef.current !== currentPath;
 
       // Only fully reset state when loading a different file
@@ -214,6 +213,7 @@ export default function SettingsModal({
         </div>
 
         <div className="settings-content">
+          {/* Timeline Name */}
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Name</div>
@@ -230,46 +230,41 @@ export default function SettingsModal({
             </div>
           </div>
 
-          <div className="settings-row">
+          {/* Start Point */}
+          <div className="settings-row no-border-bottom">
             <div className="settings-row-left">
-              <div className="settings-row-label">Timeline Layout</div>
-              <div className="settings-row-description">More layouts will be available soon!</div>
+              <div className="settings-row-label">Start Point</div>
+              <div className="settings-row-description">The first year/date shown on the timeline.</div>
             </div>
             <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={layout}
-                onChange={(e) => setLayout(e.target.value)}
-              >
-                <option value="Horizontal">Horizontal</option>
-              </select>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="settings-input settings-input-small"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
             </div>
           </div>
 
+          {/* End Point */}
           <div className="settings-row">
             <div className="settings-row-left">
-              <div className="settings-row-label">Theme</div>
-              <div className="settings-row-description">Choose a color theme for the app.</div>
+              <div className="settings-row-label">End Point</div>
+              <div className="settings-row-description">The last year/date shown on the timeline.</div>
             </div>
             <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={theme || themeKey || ""}
-                onChange={(e) => {
-                  setTheme(e.target.value);
-                  onThemeChange?.(e.target.value);
-                }}
-              >
-                <option value="default">Default (App Theme)</option>
-                {Object.entries(themes || {}).map(([key, theme]) => (
-                  <option key={key} value={key}>
-                    {theme?.name || key}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="settings-input settings-input-small"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+              />
             </div>
           </div>
 
+          {/* Timeline Length */}
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Length</div>
@@ -314,23 +309,7 @@ export default function SettingsModal({
             </div>
           </div>
 
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Show Months on Ticks</div>
-              <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
-            </div>
-            <div className="settings-row-right">
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={useMonths}
-                  onChange={(e) => setUseMonths(e.target.checked)}
-                />
-                <span className="settings-toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-
+          {/* Timeline Breaks */}
           <div className="settings-row settings-row-breaks">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Breaks</div>
@@ -377,42 +356,71 @@ export default function SettingsModal({
             </div>
           </div>
 
-          <div className="settings-row no-border-bottom">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Start Point</div>
-              <div className="settings-row-description">The first year/date shown on the timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="settings-input settings-input-small"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </div>
-          </div>
-
+          {/* Theme */}
           <div className="settings-row">
             <div className="settings-row-left">
-              <div className="settings-row-label">End Point</div>
-              <div className="settings-row-description">The last year/date shown on the timeline.</div>
+              <div className="settings-row-label">Theme</div>
+              <div className="settings-row-description">Choose a color theme for the timeline.</div>
             </div>
             <div className="settings-row-right">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="settings-input settings-input-small"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-              />
+              <select
+                className="settings-select"
+                value={theme || themeKey || ""}
+                onChange={(e) => {
+                  setTheme(e.target.value);
+                  onThemeChange?.(e.target.value);
+                }}
+              >
+                <option value="default">Default (App Theme)</option>
+                {Object.entries(themes || {}).map(([key, theme]) => (
+                  <option key={key} value={key}>
+                    {theme?.name || key}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
+          {/* Timeline Layout */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Timeline Layout</div>
+              <div className="settings-row-description">More layouts will be available soon!</div>
+            </div>
+            <div className="settings-row-right">
+              <select
+                className="settings-select"
+                value={layout}
+                onChange={(e) => setLayout(e.target.value)}
+              >
+                <option value="Horizontal">Horizontal</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Show Months on Ticks */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Show Months on Ticks</div>
+              <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
+            </div>
+            <div className="settings-row-right">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={useMonths}
+                  onChange={(e) => setUseMonths(e.target.checked)}
+                />
+                <span className="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          {/* Negative Era */}
           <div className="settings-row no-border-bottom">
             <div className="settings-row-left">
               <div className="settings-row-label">Negative Era</div>
-              <div className="settings-row-description">Optional label for negative years.</div>
+              <div className="settings-row-description">Optional label for negative years (e.g., BCE).</div>
             </div>
             <div className="settings-row-right">
               <input
@@ -420,14 +428,16 @@ export default function SettingsModal({
                 className="settings-input settings-input-small"
                 value={negID}
                 onChange={(e) => setNegID(e.target.value)}
+                placeholder="e.g., BCE"
               />
             </div>
           </div>
 
+          {/* Positive Era */}
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Positive Era</div>
-              <div className="settings-row-description">Optional label for positive years.</div>
+              <div className="settings-row-description">Optional label for positive years (e.g., CE).</div>
             </div>
             <div className="settings-row-right">
               <input
@@ -435,23 +445,8 @@ export default function SettingsModal({
                 className="settings-input settings-input-small"
                 value={posID}
                 onChange={(e) => setPosID(e.target.value)}
+                placeholder="e.g., CE"
               />
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Show Center Timeline</div>
-            </div>
-            <div className="settings-row-right">
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={showCenterTimeline}
-                  onChange={(e) => setShowCenterTimeline(e.target.checked)}
-                />
-                <span className="settings-toggle-slider"></span>
-              </label>
             </div>
           </div>
         </div>

@@ -10,7 +10,7 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause, Plus, Minus, MoveVertical, Copy, Trash2, Edit2 } from "lucide-react";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
@@ -32,6 +32,13 @@ function TimelineView({
   isRightPanelOpen = false,
   leftPanelWidth = 0,
   isLeftPanelOpen = false,
+  filterScope,
+  onToggleFilterScope,
+  activeTags = [],
+  allTags = [],
+  onToggleTag,
+  onClearTags,
+  onViewportYearChange,
 }) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
@@ -40,9 +47,13 @@ function TimelineView({
   const isPanningRef = useRef(false);
   const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
+  const [filterMenu, setFilterMenu] = useState(null);
   const [sliderValue, setSliderValue] = useState(0);
+  const [sliderYearLabel, setSliderYearLabel] = useState("");
   const [currentScale, setCurrentScale] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const filterMenuRef = useRef(null);
+  const filterButtonRef = useRef(null);
   const animationFrameRef = useRef(null);
   const lastPlayTimeRef = useRef(null);
   const sliderInputRef = useRef(false);
@@ -71,6 +82,10 @@ function TimelineView({
     BASE_LINE_Y,
     ticks,
     normalizedBreaks,
+    compressedMin,
+    compressedMax,
+    TIMELINE_PADDING,
+    decompressYear,
   } = useMemo(() => {
     const file = timelineData.file;
     const events = timelineData.elements.filter(e => e.type === "event");
@@ -196,6 +211,17 @@ function TimelineView({
     const compressedMin = compressYear(minYear);
     const compressedMax = compressYear(maxYear);
     const range = Math.max(1, compressedMax - compressedMin);
+    const decompressYear = (compressedYear) => {
+      let skipped = 0;
+      for (const gap of normalizedBreaks) {
+        const gapStartCompressed = gap.start - skipped;
+        if (compressedYear < gapStartCompressed) {
+          break;
+        }
+        skipped += gap.end - gap.start;
+      }
+      return compressedYear + skipped;
+    };
 
     // Calculate detail level automatically based on range
     // The detailLevel setting will be used as a multiplier later
@@ -377,6 +403,10 @@ function TimelineView({
       BASE_LINE_Y,
       ticks,
       normalizedBreaks,
+      compressedMin,
+      compressedMax,
+      TIMELINE_PADDING,
+      decompressYear,
     };
   }, [timelineData, currentScale]);
 
@@ -388,6 +418,41 @@ function TimelineView({
     }
   }, [calculatedHeight, onHeightChange]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const scale = scaleRef.current;
+    const { maxX, range } = getPanBounds(container);
+    const panPosition = maxX - (sliderValue / 100) * range;
+    const viewportWidth = container.clientWidth;
+    const centerPx = -panPosition + viewportWidth / 2;
+    const timelineX = centerPx / scale;
+    const compressedYear =
+      (timelineX - TIMELINE_PADDING) / PX_PER_YEAR + compressedMin;
+    const clampedCompressed = Math.min(
+      Math.max(compressedYear, compressedMin),
+      compressedMax
+    );
+    const rawYear = decompressYear(clampedCompressed);
+    const showMonths = file.useMonths === true;
+    const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
+    onViewportYearChange?.(snappedYear);
+    const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
+    setSliderYearLabel(
+      formatYear(displayYear, file.negID, file.posID, showMonths)
+    );
+  }, [
+    sliderValue,
+    currentScale,
+    timelineWidth,
+    PX_PER_YEAR,
+    compressedMin,
+    compressedMax,
+    TIMELINE_PADDING,
+    decompressYear,
+    file,
+  ]);
+
   // Helper function to apply transform
   const applyTransform = () => {
     const timelineEl = timelineRef.current;
@@ -397,6 +462,19 @@ function TimelineView({
     const scale = scaleRef.current;
     timelineEl.style.transformOrigin = "0 0";
     timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+
+  const getPanBounds = (container) => {
+    const scale = scaleRef.current;
+    const scaledTimelineWidth = timelineWidth * scale;
+    const viewportWidth = container.clientWidth;
+    const baseMaxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    const extra = Math.max(0, viewportWidth / 2 - TIMELINE_PADDING * scale);
+    return {
+      minX: -baseMaxPan - extra,
+      maxX: extra,
+      range: baseMaxPan + extra * 2,
+    };
   };
 
   const centerVertical = () => {
@@ -424,10 +502,8 @@ function TimelineView({
     translateRef.current.x = localX - canvasX * newScale;
     translateRef.current.y = localY - canvasY * newScale;
 
-    const scaledTimelineWidth = timelineWidth * newScale;
-    const viewportWidth = container.clientWidth;
-    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-    translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+    const { minX, maxX } = getPanBounds(container);
+    translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
 
     applyTransform();
     setCurrentScale(newScale);
@@ -449,6 +525,56 @@ function TimelineView({
     const rect = container.getBoundingClientRect();
     zoomToPoint(0.9, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
+
+  const handleToggleFilterMenu = (e) => {
+    e.stopPropagation();
+    if (filterMenu) {
+      setFilterMenu(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFilterMenu({
+      x: rect.left,
+      y: rect.bottom + 4,
+      align: "left",
+      anchorLeft: rect.left,
+      ready: false,
+    });
+  };
+
+  useEffect(() => {
+    if (!filterMenu || !filterMenuRef.current) return;
+    const menuRect = filterMenuRef.current.getBoundingClientRect();
+    const padding = 8;
+    const maxX = window.innerWidth - menuRect.width - padding;
+    const maxY = window.innerHeight - menuRect.height - padding;
+    const preferredX = filterMenu.align === "left" && Number.isFinite(filterMenu.anchorLeft)
+      ? filterMenu.anchorLeft - menuRect.width
+      : filterMenu.x;
+    const nextX = Math.min(Math.max(padding, preferredX), Math.max(padding, maxX));
+    const nextY = Math.min(Math.max(padding, filterMenu.y), Math.max(padding, maxY));
+    if (nextX !== filterMenu.x || nextY !== filterMenu.y || !filterMenu.ready) {
+      setFilterMenu((prev) =>
+        prev ? { ...prev, x: nextX, y: nextY, ready: true } : prev
+      );
+    }
+  }, [filterMenu]);
+
+  // Close filter menu when clicking outside
+  useEffect(() => {
+    if (!filterMenu) return;
+
+    const handleClickOutside = (e) => {
+      const clickedInsideMenu = filterMenuRef.current?.contains(e.target);
+      const clickedFilterButton = filterButtonRef.current?.contains(e.target);
+      if (!clickedInsideMenu && !clickedFilterButton) {
+        setFilterMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [filterMenu]);
 
   // DPI + zoom/pan effect
   useEffect(() => {
@@ -486,18 +612,13 @@ function TimelineView({
         }
 
         // Clamp horizontal pan to timeline bounds
-        const scale = scaleRef.current;
-        const scaledTimelineWidth = timelineWidth * scale;
-        const viewportWidth = container.clientWidth;
-        const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-
-        // Clamp translateRef.current.x between -maxPan and 0
-        translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+        const { minX, maxX, range } = getPanBounds(container);
+        translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
 
         applyTransform();
 
-        if (!isPlaying && maxPan > 0) {
-          const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+        if (!isPlaying && range > 0) {
+          const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
           setSliderValue(Math.min(100, Math.max(0, panPercentage)));
         }
 
@@ -533,18 +654,15 @@ function TimelineView({
       translateRef.current.y += dy;
 
       // Clamp horizontal pan to timeline bounds
-      const scale = scaleRef.current;
-      const scaledTimelineWidth = timelineWidth * scale;
-      const viewportWidth = container.clientWidth;
-      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-      translateRef.current.x = Math.min(0, Math.max(-maxPan, translateRef.current.x));
+      const { minX, maxX, range } = getPanBounds(container);
+      translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
 
       lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
       applyTransform();
 
       // Update slider when panning horizontally
-      if (!isPlaying && maxPan > 0) {
-        const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+      if (!isPlaying && range > 0) {
+        const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
         setSliderValue(Math.min(100, Math.max(0, panPercentage)));
       }
     };
@@ -609,11 +727,8 @@ function TimelineView({
     const targetY = translateRef.current.y + (viewportCenterY - elementTargetY);
 
     // Clamp target position to scroll bounds
-    const scale = scaleRef.current;
-    const scaledTimelineWidth = timelineWidth * scale;
-    const viewportWidth = container.clientWidth;
-    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-    targetX = Math.min(0, Math.max(-maxPan, targetX));
+    const { minX, maxX } = getPanBounds(container);
+    targetX = Math.min(maxX, Math.max(minX, targetX));
 
     // Animate to target position
     const startX = translateRef.current.x;
@@ -635,13 +750,10 @@ function TimelineView({
 
       // Update scrollbar during animation
       if (!isPlaying) {
-        const scale = scaleRef.current;
-        const scaledTimelineWidth = timelineWidth * scale;
-        const viewportWidth = container.clientWidth;
-        const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+        const { maxX, range } = getPanBounds(container);
 
-        if (maxPan > 0) {
-          const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+        if (range > 0) {
+          const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
           setSliderValue(Math.min(100, Math.max(0, panPercentage)));
         }
       }
@@ -755,13 +867,8 @@ function TimelineView({
     const container = containerRef.current;
     if (!container) return;
 
-    const currentScale = scaleRef.current;
-    const scaledTimelineWidth = timelineWidth * currentScale;
-    const viewportWidth = container.clientWidth;
-
-    // Calculate how far we can pan 
-    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-    const panPosition = -(value / 100) * maxPan;
+    const { minX, maxX, range } = getPanBounds(container);
+    const panPosition = maxX - (value / 100) * range;
 
     translateRef.current.x = panPosition;
     applyTransform();
@@ -786,12 +893,9 @@ function TimelineView({
       const container = containerRef.current;
       if (!container) return;
 
-      const scale = scaleRef.current;
-      const scaledTimelineWidth = timelineWidth * scale;
-      const viewportWidth = container.clientWidth;
-      const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+      const { minX, maxX, range } = getPanBounds(container);
 
-      if (maxPan <= 0) {
+      if (range <= 0) {
         setIsPlaying(false);
         return;
       }
@@ -807,14 +911,14 @@ function TimelineView({
       const deltaPx = (speedPxPerSec * deltaMs) / 1000;
 
       let nextX = translateRef.current.x - deltaPx;
-      nextX = Math.min(0, Math.max(-maxPan, nextX));
+      nextX = Math.min(maxX, Math.max(minX, nextX));
       translateRef.current.x = nextX;
       applyTransform();
 
-      const panPercentage = Math.abs(nextX / maxPan) * 100;
+      const panPercentage = ((maxX - nextX) / range) * 100;
       setSliderValue(Math.min(100, Math.max(0, panPercentage)));
 
-      if (nextX <= -maxPan + 0.5) {
+      if (nextX <= minX + 0.5) {
         setIsPlaying(false);
         return;
       }
@@ -840,11 +944,8 @@ function TimelineView({
     const container = containerRef.current;
     if (!container) return;
 
-    const currentScale = scaleRef.current;
-    const scaledTimelineWidth = timelineWidth * currentScale;
-    const viewportWidth = container.clientWidth;
-    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
-    const panPosition = -(sliderValue / 100) * maxPan;
+    const { maxX, range } = getPanBounds(container);
+    const panPosition = maxX - (sliderValue / 100) * range;
 
     translateRef.current.x = panPosition;
     applyTransform();
@@ -857,18 +958,15 @@ function TimelineView({
 
     if (isPlaying) return; // Don't update if playing to avoid conflicts
 
-    const scale = scaleRef.current;
-    const scaledTimelineWidth = timelineWidth * scale;
-    const viewportWidth = container.clientWidth;
-    const maxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+    const { maxX, range } = getPanBounds(container);
 
-    if (maxPan <= 0) {
+    if (range <= 0) {
       setSliderValue(0);
       return;
     }
 
     // Calculate current pan percentage (translateRef.x is negative when panned right)
-    const panPercentage = Math.abs(translateRef.current.x / maxPan) * 100;
+    const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
     setSliderValue(Math.min(100, Math.max(0, panPercentage)));
   }, [currentScale, isPlaying, timelineWidth]);
 
@@ -898,7 +996,8 @@ function TimelineView({
           <div className="timeline-line-segments" style={{ top: `${BASE_LINE_Y}px` }}>
             {(() => {
               const segments = [];
-              const GAP_WIDTH = 20;
+              const GAP_WIDTH = 24;
+              const GAP_OVERLAP = 2;
               let lastEnd = -100; // Start before the padding
 
               normalizedBreaks.forEach((breakItem, index) => {
@@ -911,7 +1010,7 @@ function TimelineView({
                     className="timeline-line-segment"
                     style={{
                       left: `${lastEnd}px`,
-                      width: `${breakPx - lastEnd - GAP_WIDTH / 2}px`,
+                      width: `${breakPx - lastEnd - GAP_WIDTH / 2 + GAP_OVERLAP}px`,
                     }}
                   />
                 );
@@ -928,14 +1027,21 @@ function TimelineView({
                       width: `${GAP_WIDTH}px`,
                     }}
                   >
-                    <svg viewBox="0 0 20 12" preserveAspectRatio="none">
-                      <path d="M0,6 L5,2 L10,10 L15,2 L20,6" stroke="var(--dark-bg)" strokeWidth="2" fill="none" />
+                    <svg viewBox="0 0 20 10" preserveAspectRatio="none">
+                      <path
+                        d="M0,5 L4,5 L7,1 L10,9 L13,1 L16,5 L20,5"
+                        stroke="var(--dark-bg)"
+                        strokeWidth="3"
+                        strokeLinecap="square"
+                        strokeLinejoin="miter"
+                        fill="none"
+                      />
                     </svg>
                     <div className="timeline-break-label">{startLabel} – {endLabel}</div>
                   </div>
                 );
 
-                lastEnd = breakPx + GAP_WIDTH / 2;
+                lastEnd = breakPx + GAP_WIDTH / 2 - GAP_OVERLAP;
               });
 
               // Final segment after last break
@@ -992,6 +1098,7 @@ function TimelineView({
         {/* Connectors layer - behind everything */}
         <div className="connectors-layer">
           {finalSpans.map((span) => {
+            const SPAN_HEIGHT = 23;
             const placement = spanChildPlacement[span.id];
             const isChild = !!placement;
             const isTopChild = isChild && placement.offset > 0;
@@ -1006,18 +1113,28 @@ function TimelineView({
             if (parentSpan) {
               const laneDifference = Math.abs(span.lane - parentSpan.lane);
               if (laneDifference > 1) {
-                connectorHeight = `${18 + (laneDifference - 1) * 28}px`;
-                const extraOffset = (laneDifference - 1) * 24;
-                connectorOffset = isBottomChild ? `-${2 + extraOffset}px` : `${2 + extraOffset}px`;
+                const SPAN_HEIGHT = 23;
+                const childTop = span.top;
+                const parentTop = parentSpan.top;
+                const deltaTop = parentTop - childTop;
+                const extraTrim = 12;
+                const height = Math.max(0, Math.abs(deltaTop) + SPAN_HEIGHT - extraTrim);
+                connectorHeight = `${height}px`;
+                connectorOffset = deltaTop < 0 ? `${deltaTop + extraTrim - 3}px` : `0px`;
               }
             }
+
+            const CONNECTOR_OFFSET_X = 19;
+            const laneDifference = parentSpan ? Math.abs(span.lane - parentSpan.lane) : 0;
+            const connectorLeft =
+              span.left - (laneDifference === 1 ? CONNECTOR_OFFSET_X : 0);
 
             return (
               <div
                 key={`connector-${span.id}`}
                 style={{
                   position: 'absolute',
-                  left: `${span.left}px`,
+                  left: `${connectorLeft}px`,
                   top: `${span.top}px`,
                   pointerEvents: 'none',
                 }}
@@ -1332,6 +1449,16 @@ function TimelineView({
         <div className="timeline-canvas-divider" />
         <button
           type="button"
+          className={`timeline-canvas-button${activeTags.length > 0 ? ' timeline-canvas-button-active' : ''}`}
+          onClick={handleToggleFilterMenu}
+          aria-label="Filter"
+          title="Filter"
+          ref={filterButtonRef}
+        >
+          <ListFilter size={16} />
+        </button>
+        <button
+          type="button"
           className="timeline-canvas-button"
           onClick={onOpenSettings}
           aria-label="Timeline settings"
@@ -1340,6 +1467,72 @@ function TimelineView({
           <Settings size={16} />
         </button>
       </div>
+
+      {filterMenu && (
+        <div
+          ref={filterMenuRef}
+          className="timeline-context-menu sidebar-filter-menu"
+          style={{
+            position: 'fixed',
+            left: `${filterMenu.x}px`,
+            top: `${filterMenu.y}px`,
+            opacity: filterMenu.ready ? 1 : 0,
+            pointerEvents: filterMenu.ready ? "auto" : "none",
+          }}
+          onWheel={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onWheelCapture={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.events ?? true}
+              onChange={() => onToggleFilterScope?.("events")}
+            />
+            <span>Apply to events</span>
+          </label>
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.spans ?? true}
+              onChange={() => onToggleFilterScope?.("spans")}
+            />
+            <span>Apply to spans</span>
+          </label>
+          <div className="filter-menu-divider" />
+          <div className="filter-menu-dropdown">
+            {allTags.length === 0 && (
+              <div className="filter-menu-empty">No tags found</div>
+            )}
+            {allTags.map((tag) => {
+              const isChecked = activeTags.includes(tag);
+              return (
+                <label key={tag} className="context-menu-item filter-menu-item">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => onToggleTag?.(tag)}
+                  />
+                  <span className="filter-menu-label">{tag}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="filter-menu-divider" />
+          <button
+            className="context-menu-item"
+            type="button"
+            onClick={() => onClearTags?.()}
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       <div
         className="timeline-slider-container"
@@ -1372,8 +1565,12 @@ function TimelineView({
             style={{
               left: (() => {
                 if (!containerRef.current) return '50%';
-                const scaledTimelineWidth = timelineWidth * currentScale;
-                const viewportWidthPercent = Math.min(100, (containerRef.current.clientWidth / scaledTimelineWidth) * 100);
+                const scale = scaleRef.current;
+                const viewportWidth = containerRef.current.clientWidth;
+                const scaledTimelineWidth = timelineWidth * scale;
+                const extra = Math.max(0, viewportWidth / 2 - TIMELINE_PADDING * scale);
+                const totalScrollable = scaledTimelineWidth + extra * 2;
+                const viewportWidthPercent = Math.min(100, (viewportWidth / totalScrollable) * 100);
                 const halfWidth = viewportWidthPercent / 2;
                 // Map sliderValue (0-100) to the safe range (halfWidth to 100-halfWidth)
                 const safeRange = 100 - viewportWidthPercent;
@@ -1382,14 +1579,18 @@ function TimelineView({
               })(),
               width: (() => {
                 if (!containerRef.current) return '10%';
-                const scaledTimelineWidth = timelineWidth * currentScale;
+                const scale = scaleRef.current;
                 const viewportWidth = containerRef.current.clientWidth;
-                const widthPercent = Math.min(100, (viewportWidth / scaledTimelineWidth) * 100);
+                const scaledTimelineWidth = timelineWidth * scale;
+                const extra = Math.max(0, viewportWidth / 2 - TIMELINE_PADDING * scale);
+                const totalScrollable = scaledTimelineWidth + extra * 2;
+                const widthPercent = Math.min(100, (viewportWidth / totalScrollable) * 100);
                 return `${widthPercent}%`;
               })()
             }}
           />
         </div>
+        <div className="slider-year">{sliderYearLabel}</div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import NewTimelineModal from "./components/NewTimelineModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
 import { saveTimelineToFile, chooseTimelinesDir, chooseNotesDir } from "./utils/electronApi";
-import { updateElementWithNewId } from "./utils/idUtils";
+import { updateElementWithNewId, makeUniqueId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
 import themeConfig from "./config/theme.json";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
@@ -40,6 +40,7 @@ function App() {
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
   const [activeTags, setActiveTags] = useState([]);
+  const [viewportYear, setViewportYear] = useState(null);
   const [filterScope, setFilterScope] = useState({
     events: true,
     spans: true,
@@ -143,6 +144,10 @@ function App() {
     setActiveTags([]);
   };
 
+  const handleFilterByTag = (tag) => {
+    setActiveTags([tag]);
+  };
+
   const handleEditElement = (id) => {
     setSelectedId(id);
     setEditRequestId(id);
@@ -185,11 +190,18 @@ function App() {
   };
 
   const handleAddEvent = () => {
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const fallbackMid =
+      timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
+    const baseYear = Number.isFinite(viewportYear) ? viewportYear : fallbackMid;
+    const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
+    const eventBaseId = generateIdFromTitle("New Event", "event");
+    const eventId = makeUniqueId(eventBaseId, timelineData.elements);
     const newEvent = {
-      id: generateIdFromTitle("New Event", "event"),
+      id: eventId,
       type: "event",
       title: "New Event",
-      date: timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2),
+      date: clampedYear,
       parents: [],
       eventLineStyle: "solid",
       eventBorderStyle: "solid",
@@ -209,18 +221,26 @@ function App() {
     });
 
     setSelectedId(newEvent.id);
+    setEditRequestId(newEvent.id);
   };
 
   const handleAddSpan = () => {
-    const midpoint = timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
-    const duration = Math.floor((timelineData.file.end - timelineData.file.start) / 4);
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const range = timelineData.file.end - timelineData.file.start;
+    const duration = Math.max(1, Math.floor(range / 4));
+    const fallbackStart = timelineData.file.start + Math.floor(range / 2);
+    const baseStart = Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
+    const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
+    const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
 
+    const spanBaseId = generateIdFromTitle("New Span", "span");
+    const spanId = makeUniqueId(spanBaseId, timelineData.elements);
     const newSpan = {
-      id: generateIdFromTitle("New Span", "span"),
+      id: spanId,
       type: "span",
       title: "New Span",
-      start: midpoint - duration / 2,
-      end: midpoint + duration / 2,
+      start,
+      end,
       color: "#A6977E",
       branches: [],
     };
@@ -238,18 +258,26 @@ function App() {
     });
 
     setSelectedId(newSpan.id);
+    setEditRequestId(newSpan.id);
   };
 
   const handleAddEra = () => {
-    const midpoint = timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
-    const duration = Math.floor((timelineData.file.end - timelineData.file.start) / 3);
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const range = timelineData.file.end - timelineData.file.start;
+    const duration = Math.max(1, Math.floor(range / 3));
+    const fallbackStart = timelineData.file.start + Math.floor(range / 2);
+    const baseStart = Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
+    const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
+    const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
 
+    const eraBaseId = generateIdFromTitle("New Era", "era");
+    const eraId = makeUniqueId(eraBaseId, timelineData.elements);
     const newEra = {
-      id: generateIdFromTitle("New Era", "era"),
+      id: eraId,
       type: "era",
       title: "New Era",
-      start: midpoint - duration / 2,
-      end: midpoint + duration / 2,
+      start,
+      end,
       color: "#F4D05A",
     };
 
@@ -266,16 +294,7 @@ function App() {
     });
 
     setSelectedId(newEra.id);
-  };
-
-  const makeUniqueId = (baseId, elements) => {
-    let nextId = baseId;
-    let counter = 2;
-    while (elements.some((el) => el.id === nextId)) {
-      nextId = `${baseId}-${counter}`;
-      counter += 1;
-    }
-    return nextId;
+    setEditRequestId(newEra.id);
   };
 
   const handleDuplicateElement = (elementId) => {
@@ -678,6 +697,20 @@ function App() {
     elements: filteredElements,
   }), [timelineData, filteredElements]);
 
+  const allTags = useMemo(() => {
+    if (!timelineData?.elements) return [];
+    const tags = new Set();
+    timelineData.elements.forEach((element) => {
+      if (element.type !== "event" && element.type !== "span") return;
+      if (Array.isArray(element.tags)) {
+        element.tags.forEach((tag) => {
+          if (tag) tags.add(tag);
+        });
+      }
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [timelineData]);
+
   useEffect(() => {
     if (!selectedId) return;
     const isVisible = filteredElements.some((el) => el.id === selectedId);
@@ -742,6 +775,9 @@ function App() {
           onNewTimeline={handleNewTimeline}
           onDuplicateTimeline={handleDuplicateTimeline}
           onBackToHome={handleBackToHome}
+          onDelete={handleDelete}
+          onDuplicateElement={handleDuplicateElement}
+          onEditElement={handleEditElement}
         />
       </aside>
 
@@ -777,6 +813,13 @@ function App() {
           isRightPanelOpen={Boolean(selectedId)}
           leftPanelWidth={currentLeftWidth}
           isLeftPanelOpen={!isLeftCollapsed}
+          filterScope={filterScope}
+          onToggleFilterScope={handleToggleFilterScope}
+          activeTags={activeTags}
+          allTags={allTags}
+          onToggleTag={handleToggleTag}
+          onClearTags={handleClearTags}
+          onViewportYearChange={setViewportYear}
         />
       </main>
 
@@ -823,6 +866,9 @@ function App() {
               onEditRequestHandled={() => setEditRequestId(null)}
               isMaximized={isRightMaximized}
               onToggleMaximize={() => setIsRightMaximized((prev) => !prev)}
+              onFilterByTag={handleFilterByTag}
+              activeTags={activeTags}
+              onToggleTag={handleToggleTag}
             />
           </aside>
         </>

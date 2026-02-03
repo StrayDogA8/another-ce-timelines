@@ -15,6 +15,19 @@ export function generateIdFromTitle(title, type) {
   return `${type}-${sanitized}`;
 }
 
+export function makeUniqueId(baseId, elements, excludeId) {
+  const ids = new Set(elements.map((el) => el.id));
+  if (excludeId) ids.delete(excludeId);
+  if (!ids.has(baseId)) return baseId;
+  let counter = 2;
+  let nextId = `${baseId}-${counter}`;
+  while (ids.has(nextId)) {
+    counter += 1;
+    nextId = `${baseId}-${counter}`;
+  }
+  return nextId;
+}
+
 /**
  * Update all references to an element ID throughout the timeline data
  * @param {Object} timelineData 
@@ -68,7 +81,8 @@ export function updateElementWithNewId(timelineData, updatedElement, originalId)
     };
   }
 
-  const newId = generateIdFromTitle(updatedElement.title, updatedElement.type);
+  const baseId = generateIdFromTitle(updatedElement.title, updatedElement.type);
+  const newId = makeUniqueId(baseId, timelineData.elements, originalId);
 
   const elementWithNewId = {
     ...updatedElement,

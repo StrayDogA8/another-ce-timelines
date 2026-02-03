@@ -264,6 +264,27 @@ export function layoutSpans({
 
   sortedSpans.forEach(span => placeSpan(span));
 
+  if (finalSpans.length > 0) {
+    const minLane = Math.min(...finalSpans.map((span) => span.lane));
+    if (minLane > 0) {
+      const laneShift = minLane;
+      finalSpans.forEach((span) => {
+        span.lane -= laneShift;
+        span.top += laneShift * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+        spanLaneById[span.id] = span.lane;
+      });
+      const shiftedLaneEnds = [];
+      spanLaneEnds.forEach((end, index) => {
+        if (end === undefined) return;
+        shiftedLaneEnds[index - laneShift] = end;
+      });
+      spanLaneEnds.length = 0;
+      shiftedLaneEnds.forEach((end, index) => {
+        spanLaneEnds[index] = end;
+      });
+    }
+  }
+
   return { finalSpans, spanLaneEnds, spanLaneById, spanChildPlacement };
 }
 

@@ -143,6 +143,21 @@
   height: 100%;
 }
 
+/* Edit Mode Section Labels */
+.edit-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--element-bg);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.edit-section-label:first-of-type {
+  margin-top: 0;
+}
+
 .validation-errors {
   display: flex;
   flex-direction: column;
@@ -354,12 +369,40 @@
 }
 
 .tag-chip {
-  padding: 4px 8px;
+  padding: 4px 10px;
   background: var(--active-bg);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
   color: var(--dark-bg);
+  border: none;
+}
+
+.tag-chip-link {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tag-chip-link:hover {
+  background: var(--element-bg);
+  color: var(--secondary-bg);
+}
+
+.tag-chip.is-selected {
+  background: var(--element-bg);
+  color: var(--secondary-bg);
+}
+
+.tag-chip.is-selected:hover {
+  background: color-mix(in srgb, var(--element-bg), black 10%);
+}
+
+.view-group-chips {
+  align-items: flex-start;
+}
+
+.view-group-chips .tag-chip-list {
+  transform: translateY(-3px);
 }
 
 .tag-selected-list {
@@ -406,6 +449,62 @@
 }
 
 .branch-selected-remove:hover {
+  color: var(--dark-bg);
+}
+
+/* Chip-style selected items (for branches and tags in edit mode) */
+.chip-selected-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  max-width: 260px;
+  margin-left: auto;
+}
+
+.chip-selected-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--active-bg);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.chip-selected-link {
+  border: none;
+  background: none;
+  color: var(--dark-bg);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.chip-selected-link:hover {
+  color: var(--link-blue);
+}
+
+.chip-selected-text {
+  color: var(--dark-bg);
+  font-weight: 500;
+}
+
+.chip-selected-remove {
+  border: none;
+  background: none;
+  color: var(--gray-2);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.chip-selected-remove:hover {
   color: var(--dark-bg);
 }
 

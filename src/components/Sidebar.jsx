@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2 } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -25,6 +25,9 @@ export default function Sidebar({
   onNewTimeline,
   onDuplicateTimeline,
   onBackToHome,
+  onDelete,
+  onDuplicateElement,
+  onEditElement,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -37,6 +40,7 @@ export default function Sidebar({
   const [timelineMenu, setTimelineMenu] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const [filterMenu, setFilterMenu] = useState(null);
+  const [elementMenu, setElementMenu] = useState(null);
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [submenuPosition, setSubmenuPosition] = useState(null);
   const menuRef = useRef(null);
@@ -133,6 +137,11 @@ export default function Sidebar({
     if (action) action();
   };
 
+  const handleElementMenuAction = (action) => {
+    setElementMenu(null);
+    if (action) action();
+  };
+
   const handleToggleFilterMenu = (e) => {
     e.stopPropagation();
     if (filterMenu) {
@@ -209,6 +218,22 @@ export default function Sidebar({
   }, [timelineMenu, openSubmenu]);
 
   useEffect(() => {
+    if (!elementMenu) return;
+
+    const handleClickOutside = (e) => {
+      const menu = document.querySelector('.timeline-context-menu');
+      if (menu && !menu.contains(e.target)) {
+        setElementMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [elementMenu]);
+
+  useEffect(() => {
     if (!filterMenu) return;
 
     const handleClickOutside = (e) => {
@@ -264,6 +289,15 @@ export default function Sidebar({
         className={`sb-row ${isSelected ? "is-selected" : ""}`}
         style={{ paddingLeft: 16 + level * 16 }}
         onClick={() => onSelect?.(item.id)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setElementMenu({
+            x: e.clientX,
+            y: e.clientY,
+            element: item,
+          });
+        }}
       >
         <span className="sb-row-title">{item.title}</span>
         <span className="sb-row-right">{rightText}</span>
@@ -605,6 +639,43 @@ export default function Sidebar({
             onClick={() => onClearTags?.()}
           >
             Clear
+          </button>
+        </div>
+      )}
+
+      {elementMenu?.element && (
+        <div
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${elementMenu.x}px`,
+            top: `${elementMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleElementMenuAction(() => onEditElement?.(elementMenu.element.id))}
+          >
+            <Edit2 size={16} />
+            <span>Edit {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
+          </button>
+          {elementMenu.element.type !== "era" && (
+            <button
+              className="context-menu-item"
+              onClick={() => handleElementMenuAction(() => onDuplicateElement?.(elementMenu.element.id))}
+            >
+              <Copy size={16} />
+              <span>Duplicate {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
+            </button>
+          )}
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item context-menu-item-danger"
+            onClick={() => handleElementMenuAction(() => onDelete?.(elementMenu.element.id))}
+          >
+            <Trash2 size={16} />
+            <span>Delete {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
           </button>
         </div>
       )}

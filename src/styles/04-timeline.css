@@ -25,6 +25,7 @@
   right: 0;
   height: 3px;
   background: var(--dark-bg);
+  z-index: 0;
 }
 
 .timeline-line-segments {
@@ -43,8 +44,9 @@
 
 .timeline-break-indicator {
   position: absolute;
-  top: -4px;
-  height: 12px;
+  top: -3px;
+  transform: translateY(-0.5px);
+  height: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -53,7 +55,6 @@
 .timeline-break-indicator svg {
   width: 100%;
   height: 100%;
-  opacity: 0.7;
 }
 
 .timeline-break-label {
@@ -71,6 +72,7 @@
   position: absolute;
   transform: translateX(-50%);
   text-align: center;
+  z-index: 1;
 }
 
 .tick-line {
@@ -94,9 +96,10 @@
   inset: 0;
 }
 
-.event-lines-layer { position: relative; z-index: 0; }
-.connectors-layer { position: relative; z-index: 1; }
-.spans-layer { position: relative; z-index: 2; }
+.event-lines-layer { position: relative; z-index: 1; }
+.connectors-layer { position: relative; z-index: 2; }
+.spans-layer { position: relative; z-index: 3; }
+.events-layer { position: relative; z-index: 3; }
 
 .span-item {
   position: absolute;
@@ -117,17 +120,17 @@
 .span-connector-top,
 .span-connector-bottom {
   position: absolute;
-  width: 20px;
+  width: 19px;
   padding-top: 24px;
 }
 
 .span-connector-top {
-  transform: translate(-19px, 0px);
+  transform: translateY(0px);
   border-top-left-radius: 8px;
 }
 
 .span-connector-bottom {
-  transform: translate(-19px, -4px);
+  transform: translateY(-4px);
   border-bottom-left-radius: 8px;
 }
 
@@ -238,10 +241,19 @@
 
 .slider-track {
   position: relative;
-  width: 100%;
+  flex: 1;
   height: 20px;
   display: flex;
   align-items: center;
+}
+
+.slider-year {
+  min-width: 64px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dark-bg);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .timeline-slider {
@@ -335,6 +347,11 @@
 
 .timeline-canvas-button:active {
   transform: translateY(1px);
+}
+
+.timeline-canvas-button-active {
+  background: var(--active-bg);
+  border-color: var(--element-bg);
 }
 
 .timeline-canvas-divider {

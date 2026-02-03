@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Copy, Check, Edit2, Eye, ChevronDown, ChevronRight, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
+import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
@@ -15,13 +15,15 @@ export default function RightPanel({
   onEditRequestHandled,
   isMaximized,
   onToggleMaximize,
+  onFilterByTag,
+  activeTags = [],
+  onToggleTag,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
   const [copied, setCopied] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
-  const [isBranchesOpen, setIsBranchesOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const prevSelectedIdRef = useRef(null);
@@ -38,6 +40,11 @@ export default function RightPanel({
   useEffect(() => {
     if (selectedElement) {
       const prevId = prevSelectedIdRef.current;
+      const shouldPreserveEditMode =
+        isEditMode &&
+        formData &&
+        formData.type === selectedElement.type &&
+        formData.title === selectedElement.title;
       setFormData({
         ...selectedElement,
         dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
@@ -48,11 +55,13 @@ export default function RightPanel({
       setTagQuery("");
       setValidationErrors([]);
       if (prevId !== selectedElement.id) {
-        setIsEditMode(false);
-        setBranchQuery("");
-        setIsBranchMenuOpen(false);
-        setIsParentMenuOpen(false);
-        setIsTagMenuOpen(false);
+        if (!shouldPreserveEditMode) {
+          setIsEditMode(false);
+          setBranchQuery("");
+          setIsBranchMenuOpen(false);
+          setIsParentMenuOpen(false);
+          setIsTagMenuOpen(false);
+        }
       }
       prevSelectedIdRef.current = selectedElement.id;
     }
@@ -612,60 +621,63 @@ export default function RightPanel({
               </div>
             )}
 
+            {/* Branches (spans only) */}
+            {formData.type === "span" && (
+              <div className="view-group view-group-chips">
+                <label>Branches</label>
+                <div className="view-separator" />
+                {Array.isArray(formData.branches) && formData.branches.length > 0 ? (
+                  <div className="tag-chip-list">
+                    {formData.branches.map((branchId) => {
+                      const branchElement = timelineData.elements.find(el => el.id === branchId);
+                      return (
+                        <button
+                          key={branchId}
+                          type="button"
+                          className="tag-chip tag-chip-link"
+                          onClick={() => onSelect(branchId)}
+                        >
+                          {branchElement?.title || branchId}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p>None</p>
+                )}
+              </div>
+            )}
+
             {/* Tags */}
-            <div className="view-group">
+            <div className="view-group view-group-chips">
               <label>Tags</label>
               <div className="view-separator" />
               {Array.isArray(formData.tags) && formData.tags.length > 0 ? (
                 <div className="tag-chip-list">
-                  {formData.tags.map((tag) => (
-                    <span key={tag} className="tag-chip">
-                      {tag}
-                    </span>
-                  ))}
+                  {formData.tags.map((tag) => {
+                    const isSelected = activeTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
+                        onClick={() => {
+                          if (onToggleTag) {
+                            onToggleTag(tag);
+                          } else {
+                            onFilterByTag?.(tag);
+                          }
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <p>None</p>
               )}
             </div>
-
-            {/* Branches (spans only) */}
-            {formData.type === "span" && (
-              <>
-                <div className="color-group-solo">
-                  <button
-                    type="button"
-                    className="color-toggle"
-                    onClick={() => setIsBranchesOpen(!isBranchesOpen)}
-                  >
-                    {isBranchesOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <label>Branches</label>
-                  </button>
-                </div>
-                {isBranchesOpen && (
-                  <div className="dropdown-content">
-                    {formData.branches && formData.branches.length > 0 ? (
-                      formData.branches.map((branchId, index) => {
-                        const branchElement = timelineData.elements.find(el => el.id === branchId);
-                        return (
-                          <div key={index} className="dropdown-item">
-                            <button
-                              type="button"
-                              className="dropdown-link"
-                              onClick={() => onSelect(branchId)}
-                            >
-                              {branchElement?.title || branchId}
-                            </button>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="dropdown-item">None</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
 
 
             {formData.noteFile && (
@@ -697,6 +709,9 @@ export default function RightPanel({
                 ))}
               </div>
             )}
+
+            {/* Details Section */}
+            <div className="edit-section-label">Details</div>
 
             {/* Title */}
             <div className="form-group">
@@ -772,37 +787,6 @@ export default function RightPanel({
               </>
             )}
 
-            {/* Color (spans and eras only) */}
-            {formData.type !== "event" && (
-              <div className="form-group">
-                <div className="edit-row">
-                  <label htmlFor="color">Color</label>
-                  <div className="edit-separator" />
-                  <div className="edit-color-wrap">
-                    <input
-                      id="color"
-                      type="color"
-                      value={formData.color}
-                      onChange={(e) => {
-                        handleChange("color", e.target.value);
-                        commitDraft({ ...formData, color: e.target.value });
-                      }}
-                      className="edit-color-picker"
-                      aria-label="Pick color"
-                    />
-                    <input
-                      type="text"
-                      value={formData.color}
-                      onChange={(e) => handleChange("color", e.target.value)}
-                      onBlur={(e) => commitDraft({ ...formData, color: e.target.value })}
-                      className="edit-color-text"
-                      placeholder="#000000"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Parent (events only) */}
             {formData.type === "event" && (
               <div className="form-group">
@@ -868,115 +852,6 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Tags */}
-            <div className="form-group">
-              <div className="edit-row">
-                <label htmlFor="tags">Tags</label>
-                <div className="edit-separator" />
-                <div className="branch-picker tag-picker">
-                  <input
-                    id="tags"
-                    type="text"
-                    value={tagQuery}
-                    onChange={(e) => {
-                      setTagQuery(e.target.value);
-                      setIsTagMenuOpen(true);
-                    }}
-                    onFocus={() => setIsTagMenuOpen(true)}
-                    onBlur={handleTagBlur}
-                    placeholder="Add a tag..."
-                    className="edit-input branch-input"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const trimmed = tagQuery.trim();
-                        if (trimmed) addTag(trimmed);
-                      }
-                    }}
-                  />
-                  {isTagMenuOpen && tagSuggestions.length > 0 && (
-                    <div className="branch-suggestions">
-                      {tagSuggestions.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className="branch-suggestion-item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            addTag(tag);
-                          }}
-                        >
-                          <span className="branch-suggestion-title">{tag}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
-                <div className="branch-selected-list tag-selected-list">
-                  {formData.tags.map((tag) => (
-                    <div key={tag} className="branch-selected-item tag-selected-item">
-                      <span className="branch-selected-link">{tag}</span>
-                      <button
-                        type="button"
-                        className="branch-selected-remove"
-                        onClick={() => removeTag(tag)}
-                        aria-label={`Remove ${tag}`}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {formData.type === "event" && (
-              <>
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label htmlFor="eventLineStyle">Line Style</label>
-                    <div className="edit-separator" />
-                    <div className="edit-select-wrap">
-                      <select
-                        id="eventLineStyle"
-                        className="edit-select"
-                        value={formData.eventLineStyle || "solid"}
-                        onChange={(e) => handleChange("eventLineStyle", e.target.value)}
-                        onBlur={(e) => commitDraft({ ...formData, eventLineStyle: e.target.value })}
-                      >
-                        <option value="solid">Solid</option>
-                        <option value="dashed">Dashed</option>
-                        <option value="dotted">Dotted</option>
-                        <option value="none">None</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label htmlFor="eventBorderStyle">Border Style</label>
-                    <div className="edit-separator" />
-                    <div className="edit-select-wrap">
-                      <select
-                        id="eventBorderStyle"
-                        className="edit-select"
-                        value={formData.eventBorderStyle || "solid"}
-                        onChange={(e) => handleChange("eventBorderStyle", e.target.value)}
-                        onBlur={(e) => commitDraft({ ...formData, eventBorderStyle: e.target.value })}
-                      >
-                        <option value="solid">Solid</option>
-                        <option value="dashed">Dashed</option>
-                        <option value="dotted">Dotted</option>
-                        <option value="none">None</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
             {/* Branches (spans only) */}
             {formData.type === "span" && (
               <div className="form-group">
@@ -1030,21 +905,21 @@ export default function RightPanel({
                   </div>
                 </div>
                 {Array.isArray(formData.branches) && formData.branches.length > 0 && (
-                  <div className="branch-selected-list">
+                  <div className="chip-selected-list">
                     {formData.branches.map((branchId) => {
                       const branchElement = timelineData.elements.find((el) => el.id === branchId);
                       return (
-                        <div key={branchId} className="branch-selected-item">
+                        <div key={branchId} className="chip-selected-item">
                           <button
                             type="button"
-                            className="branch-selected-link"
+                            className="chip-selected-link"
                             onClick={() => onSelect(branchId)}
                           >
                             {branchElement?.title || branchId}
                           </button>
                           <button
                             type="button"
-                            className="branch-selected-remove"
+                            className="chip-selected-remove"
                             onClick={() => removeBranch(branchId)}
                             aria-label={`Remove ${branchElement?.title || branchId}`}
                           >
@@ -1058,6 +933,149 @@ export default function RightPanel({
               </div>
             )}
 
+            {/* Tags */}
+            <div className="form-group">
+              <div className="edit-row">
+                <label htmlFor="tags">Tags</label>
+                <div className="edit-separator" />
+                <div className="branch-picker tag-picker">
+                  <input
+                    id="tags"
+                    type="text"
+                    value={tagQuery}
+                    onChange={(e) => {
+                      setTagQuery(e.target.value);
+                      setIsTagMenuOpen(true);
+                    }}
+                    onFocus={() => setIsTagMenuOpen(true)}
+                    onBlur={handleTagBlur}
+                    placeholder="Add a tag..."
+                    className="edit-input branch-input"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = tagQuery.trim();
+                        if (trimmed) addTag(trimmed);
+                      }
+                    }}
+                  />
+                  {isTagMenuOpen && tagSuggestions.length > 0 && (
+                    <div className="branch-suggestions">
+                      {tagSuggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className="branch-suggestion-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            addTag(tag);
+                          }}
+                        >
+                          <span className="branch-suggestion-title">{tag}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
+                <div className="chip-selected-list">
+                  {formData.tags.map((tag) => (
+                    <div key={tag} className="chip-selected-item">
+                      <span className="chip-selected-text">{tag}</span>
+                      <button
+                        type="button"
+                        className="chip-selected-remove"
+                        onClick={() => removeTag(tag)}
+                        aria-label={`Remove ${tag}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Style Section */}
+            <div className="edit-section-label">Style</div>
+
+            {/* Color (spans and eras only) */}
+            {formData.type !== "event" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="color">Color</label>
+                  <div className="edit-separator" />
+                  <div className="edit-color-wrap">
+                    <input
+                      id="color"
+                      type="color"
+                      value={formData.color}
+                      onChange={(e) => {
+                        handleChange("color", e.target.value);
+                        commitDraft({ ...formData, color: e.target.value });
+                      }}
+                      className="edit-color-picker"
+                      aria-label="Pick color"
+                    />
+                    <input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) => handleChange("color", e.target.value)}
+                      onBlur={(e) => commitDraft({ ...formData, color: e.target.value })}
+                      className="edit-color-text"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Event styling (events only) */}
+            {formData.type === "event" && (
+              <>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="eventLineStyle">Line Style</label>
+                    <div className="edit-separator" />
+                    <div className="edit-select-wrap">
+                      <select
+                        id="eventLineStyle"
+                        className="edit-select"
+                        value={formData.eventLineStyle || "solid"}
+                        onChange={(e) => handleChange("eventLineStyle", e.target.value)}
+                        onBlur={(e) => commitDraft({ ...formData, eventLineStyle: e.target.value })}
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="eventBorderStyle">Border Style</label>
+                    <div className="edit-separator" />
+                    <div className="edit-select-wrap">
+                      <select
+                        id="eventBorderStyle"
+                        className="edit-select"
+                        value={formData.eventBorderStyle || "solid"}
+                        onChange={(e) => handleChange("eventBorderStyle", e.target.value)}
+                        onBlur={(e) => commitDraft({ ...formData, eventBorderStyle: e.target.value })}
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="form-group note-form-group">
               {!formData.noteFile ? (
