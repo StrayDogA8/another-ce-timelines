@@ -56,6 +56,8 @@ function TimelineView({
   const filterButtonRef = useRef(null);
   const animationFrameRef = useRef(null);
   const lastPlayTimeRef = useRef(null);
+  const lastSliderUpdateTimeRef = useRef(0);
+  const lastSliderValueRef = useRef(0);
   const sliderInputRef = useRef(false);
   const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
   const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
@@ -243,7 +245,10 @@ function TimelineView({
     const SPAN_GAP = 6;
     const SPAN_VERTICAL_GAP = 0;
 
-    const spanChildPlacement = buildSpanChildPlacement(adjustedSpans);
+    const spanChildPlacement = buildSpanChildPlacement(
+      adjustedSpans,
+      timelineData?.file?.branchOrdering || "later-first"
+    );
 
     // First pass: calculate with temporary BASE_LINE_Y to determine content extent
     const TEMP_BASE_LINE_Y = 500;
@@ -269,7 +274,7 @@ function TimelineView({
 
     // events
     const EVENT_WIDTH = 160;
-    const EVENT_GAP = 6;
+    const EVENT_GAP = 15;
     const LANE_SPACING = 37;
     const BOX_OFFSET = 50;
 
@@ -916,7 +921,15 @@ function TimelineView({
       applyTransform();
 
       const panPercentage = ((maxX - nextX) / range) * 100;
-      setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+      const clampedPercentage = Math.min(100, Math.max(0, panPercentage));
+      const timeSinceUpdate = time - lastSliderUpdateTimeRef.current;
+      const delta = Math.abs(clampedPercentage - lastSliderValueRef.current);
+
+      if (timeSinceUpdate >= 33 || delta >= 0.2) {
+        lastSliderUpdateTimeRef.current = time;
+        lastSliderValueRef.current = clampedPercentage;
+        setSliderValue(clampedPercentage);
+      }
 
       if (nextX <= minX + 0.5) {
         setIsPlaying(false);

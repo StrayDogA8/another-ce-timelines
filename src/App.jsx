@@ -46,6 +46,12 @@ function App() {
     spans: true,
   });
 
+  const HISTORY_LIMIT = 100;
+  const historyRef = useRef({ past: [], future: [] });
+  const historyLockRef = useRef(false);
+  const prevTimelineRef = useRef(null);
+  const lastTimelineIdRef = useRef(null);
+
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
 
@@ -111,6 +117,109 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedId, timelineData]);
+
+  useEffect(() => {
+    const fileId = timelineData?.file?.id || null;
+    if (fileId !== lastTimelineIdRef.current) {
+      historyRef.current = { past: [], future: [] };
+      prevTimelineRef.current = timelineData;
+      lastTimelineIdRef.current = fileId;
+    }
+  }, [timelineData?.file?.id]);
+
+  useEffect(() => {
+    if (!timelineData) {
+      historyRef.current = { past: [], future: [] };
+      prevTimelineRef.current = null;
+      return;
+    }
+
+    if (historyLockRef.current) {
+      historyLockRef.current = false;
+      prevTimelineRef.current = timelineData;
+      return;
+    }
+
+    if (prevTimelineRef.current && timelineData !== prevTimelineRef.current) {
+      const nextPast = [...historyRef.current.past, prevTimelineRef.current];
+      if (nextPast.length > HISTORY_LIMIT) {
+        nextPast.shift();
+      }
+      historyRef.current = { past: nextPast, future: [] };
+    }
+
+    prevTimelineRef.current = timelineData;
+  }, [timelineData]);
+
+  const undoTimeline = () => {
+    if (!timelineData) return;
+    const { past, future } = historyRef.current;
+    if (past.length === 0) return;
+
+    const previous = past[past.length - 1];
+    historyRef.current = {
+      past: past.slice(0, -1),
+      future: [timelineData, ...future],
+    };
+
+    historyLockRef.current = true;
+    setTimelineData(previous);
+
+    const timelineId =
+      previous.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
+    saveTimelineToFile(previous, timelineId).catch(console.error);
+  };
+
+  const redoTimeline = () => {
+    if (!timelineData) return;
+    const { past, future } = historyRef.current;
+    if (future.length === 0) return;
+
+    const next = future[0];
+    historyRef.current = {
+      past: [...past, timelineData].slice(-HISTORY_LIMIT),
+      future: future.slice(1),
+    };
+
+    historyLockRef.current = true;
+    setTimelineData(next);
+
+    const timelineId =
+      next.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
+    saveTimelineToFile(next, timelineId).catch(console.error);
+  };
+
+  useEffect(() => {
+    const handleUndoRedo = (e) => {
+      if (!timelineData) return;
+      const isMac = navigator.platform.includes("Mac");
+      const isMod = isMac ? e.metaKey : e.ctrlKey;
+      if (!isMod) return;
+
+      const target = e.target;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+      if (isEditable) return;
+
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redoTimeline();
+        } else {
+          undoTimeline();
+        }
+      } else if (e.key === "y" || e.key === "Y") {
+        e.preventDefault();
+        redoTimeline();
+      }
+    };
+
+    window.addEventListener("keydown", handleUndoRedo);
+    return () => window.removeEventListener("keydown", handleUndoRedo);
+  }, [timelineData, currentTimelineId]);
 
   const currentLeftWidth = isLeftCollapsed ? COLLAPSED_WIDTH : sidebarWidth;
 
@@ -377,6 +486,7 @@ function App() {
     useMonths,
     breaks,
     layout,
+    branchOrdering,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -404,6 +514,7 @@ function App() {
         useMonths,
         breaks,
         layout,
+        branchOrdering,
       };
 
       if (!startLabel) delete nextFile.startLabel;
@@ -411,6 +522,7 @@ function App() {
       if (useMonths === undefined) delete nextFile.useMonths;
       if (!breaks || breaks.length === 0) delete nextFile.breaks;
       if (!layout) delete nextFile.layout;
+      if (!branchOrdering) delete nextFile.branchOrdering;
 
       const updatedData = {
         ...prevData,
@@ -528,6 +640,7 @@ function App() {
         startLabel: timelineConfig.startLabel,
         endLabel: timelineConfig.endLabel,
         layout: timelineConfig.layout || "Horizontal",
+        branchOrdering: timelineConfig.branchOrdering || "later-first",
       },
       elements: []
     };

@@ -84,7 +84,7 @@ export function pickStep(range) {
 // Rules:
 // - Branches: must start within parent's time span, alternate above/below with increasing offset
 // Pattern: -1, +1, -2, +2, -3, +3, ...
-export function buildSpanChildPlacement(spans) {
+export function buildSpanChildPlacement(spans, branchOrdering = "later-first") {
   const placement = {};
   for (const span of spans) {
     // branches alternate below/above
@@ -92,21 +92,22 @@ export function buildSpanChildPlacement(spans) {
     // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
     // Pattern: index 0 → -1, index 1 → +1, index 2 → -2, index 3 → +2, etc.
     if (Array.isArray(span.branches)) {
-      // Sort branches so:
-      // 1) Branches that have their own branches stay closer to the parent.
-      // 2) Later start dates stay closer to the parent.
-      // This helps keep branch "families" grouped together.
-      const orderedBranches = [...span.branches].sort((aId, bId) => {
-        const a = spans.find(s => s.id === aId);
-        const b = spans.find(s => s.id === bId);
-        const aHasChildren = Array.isArray(a?.branches) && a.branches.length > 0;
-        const bHasChildren = Array.isArray(b?.branches) && b.branches.length > 0;
-        if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
-        const aStart = a?.start ?? 0;
-        const bStart = b?.start ?? 0;
-        if (aStart !== bStart) return bStart - aStart;
-        return String(aId).localeCompare(String(bId));
-      });
+      const orderedBranches =
+        branchOrdering === "original"
+          ? [...span.branches]
+          : [...span.branches].sort((aId, bId) => {
+              const a = spans.find(s => s.id === aId);
+              const b = spans.find(s => s.id === bId);
+              const aHasChildren = Array.isArray(a?.branches) && a.branches.length > 0;
+              const bHasChildren = Array.isArray(b?.branches) && b.branches.length > 0;
+              if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
+              const aStart = a?.start ?? 0;
+              const bStart = b?.start ?? 0;
+              if (aStart !== bStart) return bStart - aStart;
+              return String(aId).localeCompare(String(bId));
+            });
+      // "later-first": branches with their own branches stay closer, then later start dates.
+      // "original": keep the branch list order from the .timeline file.
       // Alternate offsets around the parent: -1, +1, -2, +2, ...
       // Negative offsets appear lower on screen, positive offsets higher.
       orderedBranches.forEach((childId, index) => {
@@ -115,6 +116,7 @@ export function buildSpanChildPlacement(spans) {
         placement[childId] = {
           parentId: span.id,
           offset,
+          priority: index,
         };
       });
     }
@@ -351,7 +353,17 @@ export function layoutSpans({
         if (spanById[childId]) children.push(spanById[childId]);
       });
     }
-    children.forEach(child => placeSpan(child));
+    children
+      .sort((a, b) => {
+        const aPriority = spanChildPlacement[a.id]?.priority ?? 0;
+        const bPriority = spanChildPlacement[b.id]?.priority ?? 0;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        const aStart = a.start ?? 0;
+        const bStart = b.start ?? 0;
+        if (aStart !== bStart) return bStart - aStart;
+        return String(a.id).localeCompare(String(b.id));
+      })
+      .forEach(child => placeSpan(child));
   }
 
   familyRoots.forEach(span => placeSpan(span));
@@ -401,25 +413,15 @@ export function layoutEvents({
 
   const finalEvents = laidOut.map((event, idx) => {
     const x = event._x;
-    const preferredLane = idx % 2;
 
     function fitsInLane(lane) {
       const end = laneEnds[lane];
       return end === undefined || end + EVENT_GAP <= x;
     }
 
-    let laneToUse;
-    if (fitsInLane(preferredLane)) {
-      laneToUse = preferredLane;
-    } else {
-      let l = 0;
-      while (true) {
-        if (fitsInLane(l)) {
-          laneToUse = l;
-          break;
-        }
-        l++;
-      }
+    let laneToUse = 0;
+    while (!fitsInLane(laneToUse)) {
+      laneToUse++;
     }
 
     laneEnds[laneToUse] = x + EVENT_WIDTH;

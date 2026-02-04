@@ -29,6 +29,7 @@ export default function SettingsModal({
   const [breaks, setBreaks] = useState([]);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
+  const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [isInitialized, setIsInitialized] = useState(false);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
@@ -101,19 +102,19 @@ export default function SettingsModal({
     setBreaks(breaks.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
   };
 
-  useEffect(() => {
-    const updateTooltip = () => {
-      const sliderEl = detailSliderRef.current;
-      if (!sliderEl) return;
-      const sliderWidth = sliderEl.getBoundingClientRect().width;
-      const thumbSize = 20;
-      const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
-      setDetailTooltipLeft(left);
-    };
+  const updateDetailTooltipPosition = () => {
+    const sliderEl = detailSliderRef.current;
+    if (!sliderEl) return;
+    const sliderWidth = sliderEl.getBoundingClientRect().width;
+    const thumbSize = 20;
+    const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
+    setDetailTooltipLeft(left);
+  };
 
-    updateTooltip();
-    window.addEventListener("resize", updateTooltip);
-    return () => window.removeEventListener("resize", updateTooltip);
+  useEffect(() => {
+    updateDetailTooltipPosition();
+    window.addEventListener("resize", updateDetailTooltipPosition);
+    return () => window.removeEventListener("resize", updateDetailTooltipPosition);
   }, [detailSlider]);
 
   useEffect(() => {
@@ -136,6 +137,7 @@ export default function SettingsModal({
         setBreaks(loadBreaks(timelineData.file.breaks));
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
+        setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         lastFilePathRef.current = currentPath;
         setIsInitialized(true);
       }
@@ -178,6 +180,7 @@ export default function SettingsModal({
           useMonths,
           breaks: parsedBreaks,
           layout,
+          branchOrdering,
         });
       }
     }, 300);
@@ -188,7 +191,19 @@ export default function SettingsModal({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [title, start, end, detailLevel, negID, posID, theme, useMonths, layout, breaks]);
+  }, [
+    title,
+    start,
+    end,
+    detailLevel,
+    negID,
+    posID,
+    theme,
+    useMonths,
+    layout,
+    breaks,
+    branchOrdering,
+  ]);
 
   if (!isOpen) return null;
 
@@ -287,10 +302,20 @@ export default function SettingsModal({
                     setDetailLevel(snappedDetail);
                     setDetailSlider(detailToSlider(snappedDetail));
                   }}
-                  onMouseEnter={() => setShowDetailTooltip(true)}
+                  onMouseEnter={() => {
+                    updateDetailTooltipPosition();
+                    setShowDetailTooltip(true);
+                  }}
                   onMouseLeave={() => setShowDetailTooltip(false)}
-                  onMouseDown={() => setShowDetailTooltip(true)}
+                  onMouseDown={() => {
+                    updateDetailTooltipPosition();
+                    setShowDetailTooltip(true);
+                  }}
                   onMouseUp={() => setShowDetailTooltip(false)}
+                  onFocus={() => {
+                    updateDetailTooltipPosition();
+                    setShowDetailTooltip(true);
+                  }}
                 />
                 {showDetailTooltip && (
                   <div
@@ -394,6 +419,26 @@ export default function SettingsModal({
                 onChange={(e) => setLayout(e.target.value)}
               >
                 <option value="Horizontal">Horizontal</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Branch Ordering */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Branch Ordering</div>
+              <div className="settings-row-description">
+                Choose whether later-starting branches stay closer to the parent.
+              </div>
+            </div>
+            <div className="settings-row-right">
+              <select
+                className="settings-select"
+                value={branchOrdering}
+                onChange={(e) => setBranchOrdering(e.target.value)}
+              >
+                <option value="later-first">Later starts closer</option>
+                <option value="original">Follow branch list order</option>
               </select>
             </div>
           </div>
