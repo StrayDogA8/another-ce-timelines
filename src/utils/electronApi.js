@@ -131,6 +131,48 @@ export async function writeNote({ timelineId, filename, content }) {
   }
 }
 
+export async function deleteNote({ timelineId, filename }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.deleteNote({ timelineId, filename });
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function renameNote({ timelineId, oldFilename, newFilename }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.renameNote({ timelineId, oldFilename, newFilename });
+  } catch (error) {
+    console.error('Error renaming note:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function renameTimeline({ oldId, newId }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.renameTimeline({ oldId, newId });
+  } catch (error) {
+    console.error('Error renaming timeline:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function chooseTimelinesDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

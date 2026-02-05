@@ -6,7 +6,13 @@ import SettingsModal from "./components/SettingsModal";
 import NewTimelineModal from "./components/NewTimelineModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
-import { saveTimelineToFile, chooseTimelinesDir, chooseNotesDir } from "./utils/electronApi";
+import {
+  saveTimelineToFile,
+  chooseTimelinesDir,
+  chooseNotesDir,
+  renameNote,
+  renameTimeline,
+} from "./utils/electronApi";
 import { updateElementWithNewId, makeUniqueId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
@@ -298,6 +304,7 @@ function App() {
     const originalId = updatedElement.id;
 
     setTimelineData((prevData) => {
+      const originalElement = prevData.elements.find((el) => el.id === originalId);
       const nextElement = { ...updatedElement };
       if (!nextElement.dateLabel) delete nextElement.dateLabel;
       if (!nextElement.startLabel) delete nextElement.startLabel;
@@ -314,6 +321,12 @@ function App() {
 
       if (newId && newId !== originalId) {
         setSelectedId(newId);
+        if (originalElement?.noteFile) {
+          const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+          const oldFilename = originalElement.noteFile;
+          const newFilename = `${newId}.md`;
+          renameNote({ timelineId, oldFilename, newFilename }).catch(console.error);
+        }
       }
 
       
@@ -523,11 +536,16 @@ function App() {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
     setTimelineData((prevData) => {
+      const oldTimelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      const nextTimelineId = title
+        ? title.toLowerCase().replace(/\s+/g, '-')
+        : oldTimelineId;
       const applyMonthSnap = useMonths === true;
       const startValue = parsedStart.value ?? prevData.file.start;
       const endValue = parsedEnd.value ?? prevData.file.end;
       const nextFile = {
         ...prevData.file,
+        id: `${nextTimelineId}-timeline`,
         title,
         start:
           applyMonthSnap && parsedStart.precision !== "day"
@@ -561,10 +579,12 @@ function App() {
         file: nextFile,
       };
 
-      
-      // Get the timeline ID from the file, removing the '-timeline' suffix if present
-      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      if (nextTimelineId !== oldTimelineId) {
+        renameTimeline({ oldId: oldTimelineId, newId: nextTimelineId }).catch(console.error);
+        setCurrentTimelineId(nextTimelineId);
+      }
+
+      saveTimelineToFile(updatedData, nextTimelineId).catch(console.error);
 
       return updatedData;
     });

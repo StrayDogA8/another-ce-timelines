@@ -16,6 +16,8 @@ const safeName = (value) => String(value || '')
   .replace(/^-+|-+$/g, '')
   .toLowerCase();
 
+const getTimelineIdFromTitle = (title) => safeName(title) || 'timeline';
+
 const readAppSettings = async () => {
   try {
     const content = await fs.readFile(appSettingsPath(), 'utf8');
@@ -47,7 +49,8 @@ const getNotesBaseDir = async () => {
 
 const getNotesDir = async (timelineId) => {
   const baseDir = await getNotesBaseDir();
-  return path.join(baseDir, `${timelineId}.assets`, 'notes');
+  const safeTimelineId = safeName(timelineId) || 'timeline';
+  return path.join(baseDir, safeTimelineId);
 };
 
 function createWindow() {
@@ -338,23 +341,16 @@ ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) =>
     const notesDir = await getNotesDir(timelineId);
     await fs.mkdir(notesDir, { recursive: true });
 
-    const base = safeName(title) || safeName(elementId) || 'note';
-    let filename = `${base}.md`;
-    let counter = 1;
-
-    while (true) {
-      try {
-        await fs.access(path.join(notesDir, filename));
-        counter += 1;
-        filename = `${base}-${counter}.md`;
-      } catch (err) {
-        break;
-      }
-    }
-
+    const base = safeName(elementId) || safeName(title) || 'note';
+    const filename = `${base}.md`;
     const filePath = path.join(notesDir, filename);
-    const heading = title ? `# ${title}\n\n` : '';
-    await fs.writeFile(filePath, heading, 'utf8');
+
+    try {
+      await fs.access(filePath);
+    } catch (err) {
+      const heading = title ? `# ${title}\n\n` : '';
+      await fs.writeFile(filePath, heading, 'utf8');
+    }
 
     return { success: true, filename };
   } catch (error) {
@@ -372,6 +368,9 @@ ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
     const content = await fs.readFile(filePath, 'utf8');
     return { success: true, content };
   } catch (error) {
+    if (error.code === 'ENOENT') {
+      return { success: false, error: 'NOT_FOUND' };
+    }
     console.error('Error reading note:', error);
     return { success: false, error: error.message };
   }
@@ -389,6 +388,80 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     return { success: true };
   } catch (error) {
     console.error('Error writing note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('rename-note', async (event, { timelineId, oldFilename, newFilename }) => {
+  try {
+    if (!timelineId || !oldFilename || !newFilename) {
+      return { success: false, error: 'Missing timelineId or filenames' };
+    }
+    const notesDir = await getNotesDir(timelineId);
+    const oldPath = path.join(notesDir, oldFilename);
+    const nextPath = path.join(notesDir, newFilename);
+    try {
+      await fs.rename(oldPath, nextPath);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return { success: false, error: 'Note file not found' };
+      }
+
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+
+      const content = await fs.readFile(oldPath, 'utf8');
+      await fs.writeFile(nextPath, content, 'utf8');
+      await fs.unlink(oldPath);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error renaming note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
+  try {
+    if (!oldId || !newId) {
+      return { success: false, error: 'Missing timeline ids' };
+    }
+    const timelinesDir = await getTimelinesDir();
+    const oldTimelinePath = path.join(timelinesDir, `${oldId}.timeline`);
+    const newTimelinePath = path.join(timelinesDir, `${newId}.timeline`);
+
+    try {
+      await fs.rename(oldTimelinePath, newTimelinePath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+
+    const notesBase = await getNotesBaseDir();
+    const oldNotesPath = path.join(notesBase, safeName(oldId) || oldId);
+    const newNotesPath = path.join(notesBase, safeName(newId) || newId);
+    try {
+      await fs.rename(oldNotesPath, newNotesPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error renaming timeline:', error);
+    return { success: false, error: error.message };
+  }
+});
+ipcMain.handle('delete-note', async (event, { timelineId, filename }) => {
+  try {
+    if (!timelineId || !filename) {
+      return { success: false, error: 'Missing timelineId or filename' };
+    }
+    const filePath = path.join(await getNotesDir(timelineId), filename);
+    await fs.unlink(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting note:', error);
     return { success: false, error: error.message };
   }
 });

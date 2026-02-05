@@ -309,12 +309,12 @@ export default function HomePage({
                 </div>
               </div>
               <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Notes Folder</div>
-                  <div className="settings-row-description">
-                    Where .md notes are stored. Leave blank to store notes next to timelines.
+                  <div className="settings-row-left">
+                    <div className="settings-row-label">Notes Folder</div>
+                    <div className="settings-row-description">
+                      Where .md notes are stored. Notes are saved under a folder per timeline.
+                    </div>
                   </div>
-                </div>
                 <div className="settings-row-right">
                   <div className="settings-folder settings-folder-column">
                     <div className="settings-path-pill" title={notesStorageDir || "Default app storage"}>

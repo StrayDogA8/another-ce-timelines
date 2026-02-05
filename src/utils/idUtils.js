@@ -89,6 +89,11 @@ export function updateElementWithNewId(timelineData, updatedElement, originalId)
     id: newId,
   };
 
+  const originalElement = timelineData.elements.find(el => el.id === originalId);
+  if (originalElement?.noteFile) {
+    elementWithNewId.noteFile = `${newId}.md`;
+  }
+
   const elementsWithUpdatedElement = timelineData.elements.map(el =>
     el.id === originalId ? elementWithNewId : el
   );

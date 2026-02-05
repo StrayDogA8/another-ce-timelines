@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2 } from "lucide-react";
+import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2 } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
-import { createNote, readNote, writeNote } from "../utils/electronApi";
+import { createNote, readNote, writeNote, deleteNote } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
@@ -26,6 +26,7 @@ export default function RightPanel({
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
+  const [noteExists, setNoteExists] = useState(false);
   const prevSelectedIdRef = useRef(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
@@ -81,6 +82,7 @@ export default function RightPanel({
     const loadNote = async () => {
       if (!selectedElement?.noteFile) {
         setNoteContent("");
+        setNoteExists(false);
         return;
       }
       const timelineId = timelineData?.file?.id?.replace('-timeline', '');
@@ -91,8 +93,16 @@ export default function RightPanel({
       setIsNoteLoading(false);
       if (result?.success) {
         setNoteContent(result.content ?? "");
+        setNoteExists(true);
       } else {
+        if (result?.error === "NOT_FOUND") {
+          const next = { ...selectedElement };
+          delete next.noteFile;
+          setFormData(next);
+          onUpdate?.(next);
+        }
         setNoteContent("");
+        setNoteExists(false);
       }
     };
 
@@ -416,7 +426,7 @@ export default function RightPanel({
       console.error('Failed to create note:', result?.error);
       return;
     }
-    const next = { ...formData, noteFile: result.filename };
+    const next = { ...formData, noteFile: result.filename || `${formData.id}.md` };
     setFormData(next);
     onUpdate?.(next);
     setNoteContent(result?.content ?? `# ${formData.title}\n\n`);
@@ -431,6 +441,31 @@ export default function RightPanel({
       filename: formData.noteFile,
       content: noteContent,
     });
+  };
+
+  const handleDeleteNote = async () => {
+    if (!formData?.noteFile) return;
+    const confirmed = window.confirm("Delete this note? This cannot be undone.");
+    if (!confirmed) return;
+
+    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
+    if (!timelineId) return;
+
+    const result = await deleteNote({
+      timelineId,
+      filename: formData.noteFile,
+    });
+
+    if (!result?.success) {
+      console.error('Failed to delete note:', result?.error);
+      return;
+    }
+
+    const next = { ...formData };
+    delete next.noteFile;
+    setFormData(next);
+    setNoteContent("");
+    onUpdate?.(next);
   };
 
   const renderNoteMarkdown = (content, isLoading) => {
@@ -1114,6 +1149,14 @@ export default function RightPanel({
                     <button type="button" onClick={insertLink} title="Link">
                       <Link2 size={14} />
                     </button>
+                    {noteExists && (
+                      <>
+                        <div className="note-toolbar-divider" />
+                        <button type="button" onClick={handleDeleteNote} title="Delete Note">
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
                   <textarea
                     className="note-textarea"
