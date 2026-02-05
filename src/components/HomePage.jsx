@@ -250,17 +250,28 @@ export default function HomePage({
                   </div>
                 </div>
                 <div className="settings-row-right">
-                  <select
-                    className="settings-select"
-                    value={appThemeKey || ""}
-                    onChange={(e) => onAppThemeChange?.(e.target.value)}
-                  >
-                    {Object.entries(themes || {}).map(([key, theme]) => (
-                      <option key={key} value={key}>
-                        {theme?.name || key}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="settings-folder settings-folder-column">
+                    <select
+                      className="settings-select"
+                      value={appThemeKey || ""}
+                      onChange={(e) => onAppThemeChange?.(e.target.value)}
+                    >
+                      {Object.entries(themes || {}).map(([key, theme]) => (
+                        <option key={key} value={key}>
+                          {theme?.name || key}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => window.electron?.openThemesFolder?.()}
+                      >
+                        Open Theme Folder
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="settings-row">

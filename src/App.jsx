@@ -9,13 +9,14 @@ import HomePage from "./components/HomePage";
 import { saveTimelineToFile, chooseTimelinesDir, chooseNotesDir } from "./utils/electronApi";
 import { updateElementWithNewId, makeUniqueId } from "./utils/idUtils";
 import { generateIdFromTitle } from "./utils/idUtils";
-import themeConfig from "./config/theme.json";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
+import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
 import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
 import "./index.css";
 
 function App() {
+  const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 600;
   const COLLAPSED_WIDTH = 44;
@@ -117,6 +118,37 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedId, timelineData]);
+
+  useEffect(() => {
+    const loadUserThemes = async () => {
+      if (!window.electron?.listThemes) return;
+      try {
+        const userThemes = await window.electron.listThemes();
+        if (!userThemes || Object.keys(userThemes).length === 0) return;
+        setThemeConfig((prev) => ({
+          ...prev,
+          themes: {
+            ...prev.themes,
+            ...userThemes,
+          },
+        }));
+      } catch (error) {
+        console.error('Failed to load user themes:', error);
+      }
+    };
+
+    loadUserThemes();
+  }, []);
+
+  useEffect(() => {
+    const resolvedDefault = getInitialThemeKey(themeConfig);
+    setThemeKey((current) =>
+      themeConfig.themes?.[current] ? current : resolvedDefault
+    );
+    setAppThemeKey((current) =>
+      themeConfig.themes?.[current] ? current : resolvedDefault
+    );
+  }, [themeConfig]);
 
   useEffect(() => {
     const fileId = timelineData?.file?.id || null;
@@ -732,7 +764,7 @@ function App() {
 
   useEffect(() => {
     applyTheme(themeConfig, themeKey);
-  }, [themeKey]);
+  }, [themeKey, themeConfig]);
 
   useEffect(() => {
     if (timelineData?.file) {

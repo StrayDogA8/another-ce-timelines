@@ -1,0 +1,24 @@
+{
+  "name": "Dark",
+  "colors": {
+    "dark-bg": "#C8CDD2",
+    "element-bg": "#828283",
+    "active-bg": "#C9C9C9",
+    "secondary-bg": "#050505",
+    "tertiary-bg": "#1C1F23",
+    "primary-bg": "#030303",
+    "gray-1": "#B7BCC1",
+    "gray-2": "#8E9398",
+    "gray-3": "#4A4E54",
+    "gray-4": "#1E2125",
+    "gray-5": "#0B0C0E",
+    "info-bg": "#5282DB",
+    "info-blue": "#405D9E",
+    "link-blue": "#789ABD",
+    "off-white": "#F2F3F4",
+    "light-bg": "#2A2D31",
+    "hover-bg": "#24272B",
+    "border-color": "#3B3F45",
+    "secondary-text": "#B0B5BA"
+  }
+}

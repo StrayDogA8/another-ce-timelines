@@ -1,11 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const themeConfig = require('../src/config/theme.json');
 
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 const defaultTimelinesDir = () => path.join(app.getPath('userData'), 'timelines');
+const userThemesDir = () => path.join(app.getPath('userData'), 'themes');
 
 const safeName = (value) => String(value || '')
   .trim()
@@ -49,12 +51,30 @@ const getNotesDir = async (timelineId) => {
 };
 
 function createWindow() {
-  // Get the active theme
-  const themes = themeConfig.themes || {};
+  const loadThemesFromDisk = () => {
+    const themes = {};
+    const themesDir = path.join(__dirname, '..', 'src', 'config', 'themes');
+    try {
+      if (fsSync.existsSync(themesDir)) {
+        const files = fsSync.readdirSync(themesDir);
+        files.forEach((file) => {
+          if (!file.endsWith('.json')) return;
+          const filePath = path.join(themesDir, file);
+          const data = JSON.parse(fsSync.readFileSync(filePath, 'utf8'));
+          const key = file.replace('.json', '');
+          themes[key] = data;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load themes for main window background:', error);
+    }
+    return themes;
+  };
+
+  const themes = loadThemesFromDisk();
   const activeTheme =
     themes[themeConfig.activeTheme] || themes[Object.keys(themes)[0]];
-  const backgroundColor =
-    activeTheme?.colors?.['secondary-bg'] || '#ffffff';
+  const backgroundColor = activeTheme?.colors?.['secondary-bg'] || '#ffffff';
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -430,5 +450,43 @@ ipcMain.handle('choose-notes-dir', async () => {
   } catch (error) {
     console.error('Error choosing notes directory:', error);
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-themes-folder', async () => {
+  try {
+    const dir = userThemesDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    console.error('Error opening themes folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-themes', async () => {
+  try {
+    const dir = userThemesDir();
+    await fs.mkdir(dir, { recursive: true });
+    const files = await fs.readdir(dir);
+    const themeFiles = files.filter((file) => file.endsWith('.json'));
+    const themes = {};
+
+    for (const file of themeFiles) {
+      try {
+        const content = await fs.readFile(path.join(dir, file), 'utf8');
+        const data = JSON.parse(content);
+        const key = file.replace('.json', '');
+        themes[key] = data;
+      } catch (error) {
+        console.error(`Failed to load theme ${file}:`, error);
+      }
+    }
+
+    return themes;
+  } catch (error) {
+    console.error('Error listing themes:', error);
+    return {};
   }
 });

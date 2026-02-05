@@ -1,20 +1,20 @@
 
-        "dark-bg": Primary Text, Timeline Line       
-        "element-bg": Section Labels, Secondary Text
-        "active-bg": Borders, 
-        "secondary-bg": Default Event BG, Sidebar / Right Panel BG, Settings BG
-        "tertiary-bg": "#F3EDE3",
-        "primary-bg": Timeline View BG, Text Input BG
-        "gray-1": Event Year
-        "gray-2": "#807C76",
-        "gray-3": "#211F1E",
-        "gray-4": "#141414",
-        "gray-5": "#151515",
-        "info-bg": "#87C6FA",
-        "info-blue": "#87C6FA",
-        "link-blue": "#417FB2",
-        "off-white": "#FFFAF4",
-        "light-bg": "#F3EDE3",
-        "hover-bg": "#EDE6DA",
-        "border-color": "#D4CAB8",
-        "secondary-text": "#807C76"
+        "dark-bg": Primary text, timeline line, primary icon color
+        "element-bg": Section labels, accents, button fills, span/era defaults
+        "active-bg": Borders, hover backgrounds, slider tracks
+        "secondary-bg": Panels, cards, context menus, event backgrounds
+        "tertiary-bg": Era fallback background
+        "primary-bg": Timeline view background, inputs, homepage background
+        "gray-1": Event year text, subtle headers
+        "gray-2": Secondary text, muted labels
+        "gray-3": Title bar text and subtle UI text
+        "gray-4": Timeline tick text
+        "gray-5": Unused
+        "info-bg": Selection outlines and highlight rings
+        "info-blue": Focus outlines and highlight borders
+        "link-blue": Link text and underline color
+        "off-white": Unused
+        "light-bg": Unused
+        "hover-bg": Unused
+        "border-color": Unused
+        "secondary-text": Unused
