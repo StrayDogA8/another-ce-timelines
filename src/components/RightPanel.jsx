@@ -3,7 +3,7 @@ import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Head
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
-import { createNote, readNote, writeNote, deleteNote } from "../utils/electronApi";
+import { createNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
@@ -27,6 +27,7 @@ export default function RightPanel({
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
+  const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const prevSelectedIdRef = useRef(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
@@ -111,6 +112,23 @@ export default function RightPanel({
       isMounted = false;
     };
   }, [selectedElement, timelineData]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadNotesBaseDir = async () => {
+      const result = await getNotesBaseDir();
+      if (!isMounted) return;
+      if (result?.success && result.fileUrl) {
+        const normalized = result.fileUrl.endsWith("/") ? result.fileUrl : `${result.fileUrl}/`;
+        setNotesBaseUrl(normalized);
+      }
+    };
+
+    loadNotesBaseDir();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
 
   useEffect(() => {
@@ -472,7 +490,164 @@ export default function RightPanel({
     const raw = isLoading ? "_Loading note..._" : content || "";
     const withUnderline = raw.replace(/__(.+?)__/g, "<u>$1</u>");
     const withHighlight = withUnderline.replace(/==(.+?)==/g, "<mark>$1</mark>");
-    return marked.parse(withHighlight);
+    const html = marked.parse(withHighlight);
+    return sanitizeHtml(html);
+  };
+
+  const sanitizeHtml = (html) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const allowedTags = new Set([
+      "a",
+      "abbr",
+      "b",
+      "blockquote",
+      "br",
+      "code",
+      "del",
+      "div",
+      "em",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "i",
+      "img",
+      "li",
+      "mark",
+      "ol",
+      "p",
+      "pre",
+      "span",
+      "strong",
+      "table",
+      "tbody",
+      "thead",
+      "tr",
+      "td",
+      "th",
+      "u",
+      "ul",
+    ]);
+
+    const commonAttributes = new Set(["class"]);
+    const attributeAllowlist = {
+      a: new Set(["href", "target", "rel", "class"]),
+      img: new Set(["src", "alt", "title", "width", "height", "loading", "class"]),
+    };
+
+    const baseUrl = notesBaseUrl || "";
+    const baseUrlLower = baseUrl.toLowerCase();
+
+    const normalizeSrc = (rawValue) => {
+      const value = String(rawValue || "").trim();
+      if (!value) return null;
+
+      if (/^https:\/\//i.test(value)) return value;
+
+      if (/^file:\/\//i.test(value)) {
+        if (!baseUrl) return null;
+        return value.toLowerCase().startsWith(baseUrlLower) ? value : null;
+      }
+
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+        return null;
+      }
+
+      if (!baseUrl) return null;
+
+      try {
+        const resolved = new URL(value, baseUrl).toString();
+        if (!resolved.toLowerCase().startsWith(baseUrlLower)) return null;
+        return resolved;
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const normalizeHref = (rawValue) => {
+      const value = String(rawValue || "").trim();
+      if (!value) return null;
+
+      if (/^https:\/\//i.test(value) || /^mailto:/i.test(value)) {
+        return value;
+      }
+
+      if (/^file:\/\//i.test(value)) {
+        if (!baseUrl) return null;
+        return value.toLowerCase().startsWith(baseUrlLower) ? value : null;
+      }
+
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+        return null;
+      }
+
+      if (!baseUrl) return null;
+
+      try {
+        const resolved = new URL(value, baseUrl).toString();
+        if (!resolved.toLowerCase().startsWith(baseUrlLower)) return null;
+        return resolved;
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const nodes = Array.from(doc.body.querySelectorAll("*"));
+    nodes.forEach((node) => {
+      const tagName = node.tagName.toLowerCase();
+      if (!allowedTags.has(tagName)) {
+        const parent = node.parentNode;
+        if (parent && parent.nodeType === Node.ELEMENT_NODE) {
+          while (node.firstChild) {
+            parent.insertBefore(node.firstChild, node);
+          }
+          parent.removeChild(node);
+        } else {
+          node.remove();
+        }
+        return;
+      }
+
+      [...node.attributes].forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        const allowedForTag = attributeAllowlist[tagName];
+        const isAllowed =
+          (allowedForTag && allowedForTag.has(name)) || commonAttributes.has(name);
+        if (!isAllowed || name.startsWith("on")) {
+          node.removeAttribute(attr.name);
+        }
+      });
+
+      if (tagName === "a") {
+        const href = normalizeHref(node.getAttribute("href"));
+        if (!href) {
+          node.removeAttribute("href");
+        } else {
+          node.setAttribute("href", href);
+        }
+        node.setAttribute("rel", "noopener noreferrer");
+        node.setAttribute("target", "_blank");
+      }
+
+      if (tagName === "img") {
+        const src = normalizeSrc(node.getAttribute("src"));
+        if (!src) {
+          node.remove();
+          return;
+        }
+        node.setAttribute("src", src);
+        if (!node.getAttribute("loading")) {
+          node.setAttribute("loading", "lazy");
+        }
+      }
+
+    });
+
+    return doc.body.innerHTML;
   };
 
   const wrapSelection = (prefix, suffix = prefix) => {

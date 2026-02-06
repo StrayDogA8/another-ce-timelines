@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electron', {
   chooseTimelinesDir: () => ipcRenderer.invoke('choose-timelines-dir'),
   chooseNotesDir: () => ipcRenderer.invoke('choose-notes-dir'),
   openThemesFolder: () => ipcRenderer.invoke('open-themes-folder'),
+  getNotesBaseDir: () => ipcRenderer.invoke('get-notes-base-dir'),
   listThemes: () => ipcRenderer.invoke('list-themes'),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),

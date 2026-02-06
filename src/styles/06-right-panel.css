@@ -782,6 +782,12 @@
   text-underline-offset: 2px;
 }
 
+.note-render img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 .form-delete-section {
   margin-top: 1.5rem;
   padding-top: 1.5rem;

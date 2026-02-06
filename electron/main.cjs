@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const themeConfig = require('../src/config/theme.json');
@@ -17,6 +18,16 @@ const safeName = (value) => String(value || '')
   .toLowerCase();
 
 const getTimelineIdFromTitle = (title) => safeName(title) || 'timeline';
+
+const sanitizeId = (value, fallback = '') => safeName(value) || fallback;
+
+const sanitizeTimelineId = (value) => sanitizeId(value, 'timeline');
+
+const sanitizeNoteFilename = (value) => {
+  const base = String(value || '').replace(/\.md$/i, '');
+  const cleaned = sanitizeId(base, 'note');
+  return `${cleaned}.md`;
+};
 
 const readAppSettings = async () => {
   try {
@@ -53,31 +64,32 @@ const getNotesDir = async (timelineId) => {
   return path.join(baseDir, safeTimelineId);
 };
 
-function createWindow() {
-  const loadThemesFromDisk = () => {
-    const themes = {};
-    const themesDir = path.join(__dirname, '..', 'src', 'config', 'themes');
-    try {
-      if (fsSync.existsSync(themesDir)) {
-        const files = fsSync.readdirSync(themesDir);
-        files.forEach((file) => {
-          if (!file.endsWith('.json')) return;
-          const filePath = path.join(themesDir, file);
-          const data = JSON.parse(fsSync.readFileSync(filePath, 'utf8'));
-          const key = file.replace('.json', '');
-          themes[key] = data;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load themes for main window background:', error);
-    }
-    return themes;
-  };
+async function getStartupBackgroundColor() {
+  const fallback = '#FFFAF4';
+  try {
+    const settings = await readAppSettings();
+    const themeKey = settings?.theme || themeConfig.activeTheme;
+    const themesDir = userThemesDir();
 
-  const themes = loadThemesFromDisk();
-  const activeTheme =
-    themes[themeConfig.activeTheme] || themes[Object.keys(themes)[0]];
-  const backgroundColor = activeTheme?.colors?.['secondary-bg'] || '#ffffff';
+    if (!fsSync.existsSync(themesDir)) {
+      return fallback;
+    }
+
+    const filePath = path.join(themesDir, `${sanitizeId(themeKey, '')}.json`);
+    if (!fsSync.existsSync(filePath)) {
+      return fallback;
+    }
+
+    const data = JSON.parse(fsSync.readFileSync(filePath, 'utf8'));
+    return data?.colors?.['secondary-bg'] || fallback;
+  } catch (error) {
+    console.error('Failed to resolve startup theme background:', error);
+    return fallback;
+  }
+}
+
+async function createWindow() {
+  const backgroundColor = await getStartupBackgroundColor();
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -149,7 +161,7 @@ async function initializeUserData() {
 
 app.whenReady().then(async () => {
   await initializeUserData();
-  createWindow();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -191,7 +203,7 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
     // Ensure directory exists
     await fs.mkdir(dataDir, { recursive: true });
 
-    const safeFilename = filename.replace(/[^a-z0-9-_]/gi, '-');
+    const safeFilename = sanitizeTimelineId(filename);
     const filePath = path.join(dataDir, `${safeFilename}.timeline`);
 
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
@@ -240,7 +252,8 @@ ipcMain.handle('list-timelines', async () => {
 ipcMain.handle('load-timeline', async (event, filename) => {
   try {
     const userDataDir = await getTimelinesDir();
-    const filePath = path.join(userDataDir, `${filename}.timeline`);
+    const safeFilename = sanitizeTimelineId(filename);
+    const filePath = path.join(userDataDir, `${safeFilename}.timeline`);
 
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
@@ -315,7 +328,8 @@ ipcMain.handle('import-timeline', async () => {
 ipcMain.handle('delete-timeline', async (event, filename) => {
   try {
     const userDataDir = await getTimelinesDir();
-    const filePath = path.join(userDataDir, `${filename}.timeline`);
+    const safeFilename = sanitizeTimelineId(filename);
+    const filePath = path.join(userDataDir, `${safeFilename}.timeline`);
 
     await fs.unlink(filePath);
     console.log(`Deleted timeline: ${filename}`);
@@ -338,11 +352,11 @@ ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) =>
       return { success: false, error: 'Missing timelineId' };
     }
 
-    const notesDir = await getNotesDir(timelineId);
+    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
     await fs.mkdir(notesDir, { recursive: true });
 
     const base = safeName(elementId) || safeName(title) || 'note';
-    const filename = `${base}.md`;
+    const filename = sanitizeNoteFilename(base);
     const filePath = path.join(notesDir, filename);
 
     try {
@@ -364,7 +378,10 @@ ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const filePath = path.join(await getNotesDir(timelineId), filename);
+    const filePath = path.join(
+      await getNotesDir(sanitizeTimelineId(timelineId)),
+      sanitizeNoteFilename(filename)
+    );
     const content = await fs.readFile(filePath, 'utf8');
     return { success: true, content };
   } catch (error) {
@@ -381,9 +398,9 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const notesDir = await getNotesDir(timelineId);
+    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
     await fs.mkdir(notesDir, { recursive: true });
-    const filePath = path.join(notesDir, filename);
+    const filePath = path.join(notesDir, sanitizeNoteFilename(filename));
     await fs.writeFile(filePath, content ?? '', 'utf8');
     return { success: true };
   } catch (error) {
@@ -397,9 +414,9 @@ ipcMain.handle('rename-note', async (event, { timelineId, oldFilename, newFilena
     if (!timelineId || !oldFilename || !newFilename) {
       return { success: false, error: 'Missing timelineId or filenames' };
     }
-    const notesDir = await getNotesDir(timelineId);
-    const oldPath = path.join(notesDir, oldFilename);
-    const nextPath = path.join(notesDir, newFilename);
+    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
+    const oldPath = path.join(notesDir, sanitizeNoteFilename(oldFilename));
+    const nextPath = path.join(notesDir, sanitizeNoteFilename(newFilename));
     try {
       await fs.rename(oldPath, nextPath);
     } catch (error) {
@@ -428,8 +445,10 @@ ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
       return { success: false, error: 'Missing timeline ids' };
     }
     const timelinesDir = await getTimelinesDir();
-    const oldTimelinePath = path.join(timelinesDir, `${oldId}.timeline`);
-    const newTimelinePath = path.join(timelinesDir, `${newId}.timeline`);
+    const safeOldId = sanitizeTimelineId(oldId);
+    const safeNewId = sanitizeTimelineId(newId);
+    const oldTimelinePath = path.join(timelinesDir, `${safeOldId}.timeline`);
+    const newTimelinePath = path.join(timelinesDir, `${safeNewId}.timeline`);
 
     try {
       await fs.rename(oldTimelinePath, newTimelinePath);
@@ -438,8 +457,8 @@ ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
     }
 
     const notesBase = await getNotesBaseDir();
-    const oldNotesPath = path.join(notesBase, safeName(oldId) || oldId);
-    const newNotesPath = path.join(notesBase, safeName(newId) || newId);
+    const oldNotesPath = path.join(notesBase, safeOldId);
+    const newNotesPath = path.join(notesBase, safeNewId);
     try {
       await fs.rename(oldNotesPath, newNotesPath);
     } catch (error) {
@@ -457,7 +476,10 @@ ipcMain.handle('delete-note', async (event, { timelineId, filename }) => {
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const filePath = path.join(await getNotesDir(timelineId), filename);
+    const filePath = path.join(
+      await getNotesDir(sanitizeTimelineId(timelineId)),
+      sanitizeNoteFilename(filename)
+    );
     await fs.unlink(filePath);
     return { success: true };
   } catch (error) {
@@ -534,6 +556,17 @@ ipcMain.handle('open-themes-folder', async () => {
     return { success: true, path: dir };
   } catch (error) {
     console.error('Error opening themes folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-notes-base-dir', async () => {
+  try {
+    const dir = await getNotesBaseDir();
+    const fileUrl = pathToFileURL(dir).toString();
+    return { success: true, path: dir, fileUrl };
+  } catch (error) {
+    console.error('Error resolving notes base dir:', error);
     return { success: false, error: error.message };
   }
 });

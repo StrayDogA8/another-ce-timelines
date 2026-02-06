@@ -173,6 +173,20 @@ export async function renameTimeline({ oldId, newId }) {
   }
 }
 
+export async function getNotesBaseDir() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.getNotesBaseDir();
+  } catch (error) {
+    console.error('Error resolving notes base directory:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function chooseTimelinesDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

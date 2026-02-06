@@ -13,8 +13,7 @@ import {
   renameNote,
   renameTimeline,
 } from "./utils/electronApi";
-import { updateElementWithNewId, makeUniqueId } from "./utils/idUtils";
-import { generateIdFromTitle } from "./utils/idUtils";
+import { updateElementWithNewId, makeUniqueId, generateIdFromTitle } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
@@ -44,6 +43,7 @@ function App() {
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
   const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
+  const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
   const [activeTags, setActiveTags] = useState([]);
@@ -149,9 +149,6 @@ function App() {
   useEffect(() => {
     const resolvedDefault = getInitialThemeKey(themeConfig);
     setThemeKey((current) =>
-      themeConfig.themes?.[current] ? current : resolvedDefault
-    );
-    setAppThemeKey((current) =>
       themeConfig.themes?.[current] ? current : resolvedDefault
     );
   }, [themeConfig]);
@@ -538,7 +535,7 @@ function App() {
     setTimelineData((prevData) => {
       const oldTimelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
       const nextTimelineId = title
-        ? title.toLowerCase().replace(/\s+/g, '-')
+        ? generateIdFromTitle(title, "timeline").replace(/^timeline-/, "")
         : oldTimelineId;
       const applyMonthSnap = useMonths === true;
       const startValue = parsedStart.value ?? prevData.file.start;
@@ -679,7 +676,7 @@ function App() {
     setIsNewTimelineModalOpen(false);
 
     // Create new timeline data structure
-    const timelineId = timelineConfig.title.toLowerCase().replace(/\s+/g, '-');
+    const timelineId = generateIdFromTitle(timelineConfig.title, "timeline").replace(/^timeline-/, "");
     const newTimeline = {
       file: {
         id: `${timelineId}-timeline`,
@@ -720,7 +717,7 @@ function App() {
     try {
       // Create duplicate with new name
       const duplicateName = `${timelineData.file.title} Copy`;
-      const duplicateId = duplicateName.toLowerCase().replace(/\s+/g, '-');
+      const duplicateId = generateIdFromTitle(duplicateName, "timeline").replace(/^timeline-/, "");
 
       const duplicateData = {
         ...timelineData,
@@ -762,8 +759,7 @@ function App() {
     const loadAppSettings = async () => {
       const settings = await getAppSettings();
       if (!isMounted) return;
-      const nextTheme = resolveThemeKey(settings?.theme);
-      setAppThemeKey(nextTheme);
+      setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
       setTimelineStorageDir(storedTimelineDir);
@@ -775,6 +771,11 @@ function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const resolved = resolveThemeKey(appThemePreference);
+    setAppThemeKey(resolved);
+  }, [appThemePreference, themeConfig]);
 
   useEffect(() => {
     if (!timelineData) {
@@ -795,10 +796,11 @@ function App() {
   }, [timelineData?.file, appThemeKey]);
 
   const handleAppThemeChange = async (nextThemeKey) => {
+    setAppThemePreference(nextThemeKey);
     const resolved = resolveThemeKey(nextThemeKey);
     setAppThemeKey(resolved);
     await saveAppSettings({
-      theme: resolved,
+      theme: nextThemeKey,
       timelineStorageDir,
       notesStorageDir,
     });
@@ -807,7 +809,7 @@ function App() {
   const handleTimelineStorageDirChange = async (nextDir) => {
     setTimelineStorageDir(nextDir || "");
     await saveAppSettings({
-      theme: appThemeKey,
+      theme: appThemePreference,
       timelineStorageDir: nextDir || "",
       notesStorageDir,
     });
@@ -816,7 +818,7 @@ function App() {
   const handleNotesStorageDirChange = async (nextDir) => {
     setNotesStorageDir(nextDir || "");
     await saveAppSettings({
-      theme: appThemeKey,
+      theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir: nextDir || "",
     });
