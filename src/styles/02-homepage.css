@@ -195,6 +195,13 @@
   white-space: nowrap;
 }
 
+.settings-path-error {
+  width: 225px;
+  font-size: 11px;
+  color: #b42318;
+  text-align: left;
+}
+
 .settings-folder-button {
   padding: 8px 12px;
   font-size: 12px;

@@ -29,9 +29,19 @@ export default function SettingsModal({
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [isInitialized, setIsInitialized] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
+  const [breakErrors, setBreakErrors] = useState([]);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
   const lastFilePathRef = useRef(null);
+  const backdropPointerDownRef = useRef(false);
+
+  const sanitizeTitle = (value) => String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
   // Convert stored breaks (numeric) to editable breaks (strings for inputs)
   const loadBreaks = (storedBreaks = []) => {
@@ -42,40 +52,67 @@ export default function SettingsModal({
     }));
   };
 
+  // Validate a single break entry
+  const validateBreak = (item) => {
+    const startRaw = item?.start?.trim() || "";
+    const endRaw = item?.end?.trim() || "";
+    if (!startRaw && !endRaw) return null; // Empty is OK
+    if (!startRaw || !endRaw) return "Both start and end required";
+
+    const parsedStart = parseTimelineInput(startRaw);
+    const parsedEnd = parseTimelineInput(endRaw);
+    if (!Number.isFinite(parsedStart.value)) return "Invalid start date";
+    if (!Number.isFinite(parsedEnd.value)) return "Invalid end date";
+    if (parsedStart.value === parsedEnd.value) return "Start and end must differ";
+    return null;
+  };
+
   // Convert editable breaks (strings) to numeric breaks for saving
   const saveBreaks = (editableBreaks = []) => {
     const out = [];
-    editableBreaks.forEach((item) => {
+    const errors = [];
+    editableBreaks.forEach((item, index) => {
+      const error = validateBreak(item);
+      errors[index] = error;
+
+      if (error) return;
       const startRaw = item?.start?.trim() || "";
       const endRaw = item?.end?.trim() || "";
       if (!startRaw || !endRaw) return;
 
       const parsedStart = parseTimelineInput(startRaw);
       const parsedEnd = parseTimelineInput(endRaw);
-      if (!Number.isFinite(parsedStart.value) || !Number.isFinite(parsedEnd.value)) return;
 
       const startVal = parsedStart.value;
       const endVal = parsedEnd.value;
-      if (startVal === endVal) return;
 
       const ordered = startVal < endVal
         ? { start: startVal, end: endVal }
         : { start: endVal, end: startVal };
       out.push(ordered);
     });
+    setBreakErrors(errors);
     return out;
   };
 
   const addBreak = () => {
     setBreaks([...breaks, { start: "", end: "" }]);
+    setBreakErrors((prev) => [...prev, null]);
   };
 
   const removeBreak = (index) => {
     setBreaks(breaks.filter((_, i) => i !== index));
+    setBreakErrors((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateBreak = (index, field, value) => {
-    setBreaks(breaks.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+    const nextBreaks = breaks.map((b, i) => (i === index ? { ...b, [field]: value } : b));
+    setBreaks(nextBreaks);
+    setBreakErrors((prev) => {
+      const nextErrors = [...prev];
+      nextErrors[index] = validateBreak(nextBreaks[index]);
+      return nextErrors;
+    });
   };
 
   const updateDetailTooltipPosition = () => {
@@ -114,6 +151,8 @@ export default function SettingsModal({
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
+        setValidationErrors([]);
+        setBreakErrors([]);
         lastFilePathRef.current = currentPath;
         setIsInitialized(true);
       }
@@ -133,6 +172,35 @@ export default function SettingsModal({
     saveTimeoutRef.current = setTimeout(() => {
       const parsedStart = parseTimelineInput(start);
       const parsedEnd = parseTimelineInput(end);
+      const errors = [];
+
+      if (!title.trim()) {
+        errors.push("Timeline name is required.");
+      } else if (!sanitizeTitle(title)) {
+        errors.push("Timeline name must include at least one letter or number.");
+      }
+
+      if (!Number.isFinite(parsedStart.value)) {
+        errors.push("Start point must be a number or MM/DD/YYYY.");
+      }
+      if (!Number.isFinite(parsedEnd.value)) {
+        errors.push("End point must be a number or MM/DD/YYYY.");
+      }
+      if (
+        Number.isFinite(parsedStart.value) &&
+        Number.isFinite(parsedEnd.value) &&
+        parsedStart.value >= parsedEnd.value
+      ) {
+        errors.push("Start point must be less than end point.");
+      }
+
+      if (errors.length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
+
+      setValidationErrors([]);
+
       const startValue =
         useMonths && parsedStart.precision !== "day"
           ? snapToMonthGrid(parsedStart.value)
@@ -183,14 +251,23 @@ export default function SettingsModal({
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
+  const handleBackdropMouseDown = (e) => {
+    backdropPointerDownRef.current = e.target === e.currentTarget;
+  };
+
+  const handleBackdropMouseUp = (e) => {
+    if (backdropPointerDownRef.current && e.target === e.currentTarget) {
       onClose();
     }
+    backdropPointerDownRef.current = false;
   };
 
   return (
-    <div className="settings-backdrop" onClick={handleBackdropClick}>
+    <div
+      className="settings-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onMouseUp={handleBackdropMouseUp}
+    >
       <div className="settings-modal">
         <div className="settings-header">
           <button
@@ -203,20 +280,34 @@ export default function SettingsModal({
           <h2 className="settings-title">SETTINGS</h2>
         </div>
 
+        {validationErrors.length > 0 && (
+          <div className="settings-errors">
+            {validationErrors.map((error, index) => (
+              <div key={index} className="settings-error">
+                {error}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="settings-content">
           {/* Timeline Name */}
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Name</div>
-              <div className="settings-row-description">Your file will be saved as: {title.toLowerCase().replace(/\s+/g, '-')}.timeline</div>
+              <div className="settings-row-description">Your file will be saved as: {sanitizeTitle(title) || "untitled"}.timeline</div>
             </div>
             <div className="settings-row-right">
               <input
                 type="text"
                 className="settings-input"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
                 placeholder="Enter timeline name"
+                maxLength={100}
               />
             </div>
           </div>
@@ -233,7 +324,11 @@ export default function SettingsModal({
                 inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e) => {
+                  setStart(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
+                maxLength={20}
               />
             </div>
           </div>
@@ -250,7 +345,11 @@ export default function SettingsModal({
                 inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                onChange={(e) => {
+                  setEnd(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
+                maxLength={20}
               />
             </div>
           </div>
@@ -320,30 +419,37 @@ export default function SettingsModal({
             </div>
             <div className="settings-row-right settings-breaks-container">
               {breaks.map((breakItem, index) => (
-                <div key={index} className="settings-break-row">
-                  <input
-                    type="text"
-                    className="settings-input settings-break-input"
-                    value={breakItem.start}
-                    onChange={(e) => updateBreak(index, "start", e.target.value)}
-                    placeholder="Start"
-                  />
-                  <span className="settings-break-separator">–</span>
-                  <input
-                    type="text"
-                    className="settings-input settings-break-input"
-                    value={breakItem.end}
-                    onChange={(e) => updateBreak(index, "end", e.target.value)}
-                    placeholder="End"
-                  />
-                  <button
-                    type="button"
-                    className="settings-break-remove"
-                    onClick={() => removeBreak(index)}
-                    aria-label="Remove break"
-                  >
-                    <X size={14} />
-                  </button>
+                <div key={index} className="settings-break-row-wrap">
+                  <div className="settings-break-row">
+                    <input
+                      type="text"
+                      className={`settings-input settings-break-input ${breakErrors[index] ? 'settings-input-error' : ''}`}
+                      value={breakItem.start}
+                      onChange={(e) => updateBreak(index, "start", e.target.value)}
+                      placeholder="Start"
+                      maxLength={20}
+                    />
+                    <span className="settings-break-separator">–</span>
+                    <input
+                      type="text"
+                      className={`settings-input settings-break-input ${breakErrors[index] ? 'settings-input-error' : ''}`}
+                      value={breakItem.end}
+                      onChange={(e) => updateBreak(index, "end", e.target.value)}
+                      placeholder="End"
+                      maxLength={20}
+                    />
+                    <button
+                      type="button"
+                      className="settings-break-remove"
+                      onClick={() => removeBreak(index)}
+                      aria-label="Remove break"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {breakErrors[index] && (
+                    <div className="settings-break-error">{breakErrors[index]}</div>
+                  )}
                 </div>
               ))}
               <button
@@ -450,6 +556,7 @@ export default function SettingsModal({
                 value={negID}
                 onChange={(e) => setNegID(e.target.value)}
                 placeholder="e.g., BCE"
+                maxLength={10}
               />
             </div>
           </div>
@@ -467,6 +574,7 @@ export default function SettingsModal({
                 value={posID}
                 onChange={(e) => setPosID(e.target.value)}
                 placeholder="e.g., CE"
+                maxLength={10}
               />
             </div>
           </div>

@@ -25,6 +25,30 @@ export default function HomePage({
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
 
+  const getPathIssue = (value) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const isAbsolute =
+      /^[a-zA-Z]:[\\/]/.test(trimmed) ||
+      trimmed.startsWith("\\\\") ||
+      trimmed.startsWith("/");
+    if (!isAbsolute) return "Path should be absolute.";
+    const invalidCharPattern = /[<>:"|?*\x00-\x1F]/;
+    const isDrivePath = /^[a-zA-Z]:[\\/]/.test(trimmed);
+    const pathToCheck = isDrivePath ? trimmed.slice(2) : trimmed;
+    if (invalidCharPattern.test(pathToCheck)) {
+      return "Path contains invalid characters.";
+    }
+    if (/[. ]$/.test(trimmed)) {
+      return "Path cannot end with a dot or space.";
+    }
+    return null;
+  };
+
+  const timelinePathIssue = getPathIssue(timelineStorageDir);
+  const notesPathIssue = getPathIssue(notesStorageDir);
+
   useEffect(() => {
     const loadTimelineList = async () => {
       if (window.electron?.listTimelines) {
@@ -33,23 +57,11 @@ export default function HomePage({
           setTimelineFiles(files);
         } catch (error) {
           console.error('Failed to list timelines:', error);
+          setTimelineFiles([]);
         }
       } else {
-        // Fallback to static imports for web version
-        const timelineModules = import.meta.glob('../data/*.timeline', { eager: true });
-
-        const files = Object.keys(timelineModules).map(path => {
-          const filename = path.split('/').pop().replace('.timeline', '');
-          const module = timelineModules[path];
-          const data = module.default || module;
-
-          return {
-            id: filename,
-            name: data.file?.title || filename
-          };
-        });
-
-        setTimelineFiles(files);
+        console.warn("Timeline listing is only available in the desktop app.");
+        setTimelineFiles([]);
       }
       setLoading(false);
     };
@@ -96,14 +108,11 @@ export default function HomePage({
 
   const handleDuplicate = async (file) => {
     try {
-      // Load the original timeline
-      let originalData;
-      if (window.electron?.loadTimeline) {
-        originalData = await window.electron.loadTimeline(file.id);
-      } else {
-        const module = await import(`../data/${file.id}.timeline`);
-        originalData = module.default || module;
+      if (!window.electron?.loadTimeline || !window.electron?.saveTimeline) {
+        throw new Error("Duplicate is only available in the desktop app.");
       }
+      // Load the original timeline
+      const originalData = await window.electron.loadTimeline(file.id);
 
       // Create duplicate with new name
       const duplicateName = `${file.name} Copy`;
@@ -119,9 +128,7 @@ export default function HomePage({
       };
 
       // Save the duplicate
-      if (window.electron?.saveTimeline) {
-        await window.electron.saveTimeline(duplicateData, duplicateId);
-      }
+      await window.electron.saveTimeline(duplicateData, duplicateId);
 
       // Reload timeline list
       if (window.electron?.listTimelines) {
@@ -289,6 +296,9 @@ export default function HomePage({
                         {timelineStorageDir || "Default app storage"}
                       </span>
                     </div>
+                    {timelinePathIssue && (
+                      <div className="settings-path-error">{timelinePathIssue}</div>
+                    )}
                     <div className="settings-folder-actions">
                       <button
                         className="settings-folder-button"
@@ -323,6 +333,9 @@ export default function HomePage({
                         {notesStorageDir || "Default app storage"}
                       </span>
                     </div>
+                    {notesPathIssue && (
+                      <div className="settings-path-error">{notesPathIssue}</div>
+                    )}
                     <div className="settings-folder-actions">
                       <button
                         className="settings-folder-button"

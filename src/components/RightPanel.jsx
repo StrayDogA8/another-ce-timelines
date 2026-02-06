@@ -38,6 +38,17 @@ export default function RightPanel({
   const [tagQuery, setTagQuery] = useState("");
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const tagMenuTimeoutRef = useRef(null);
+  const TAG_MAX_LENGTH = 32;
+  const ID_MAX_LENGTH = 60;
+
+  const isValidIdValue = (value) => /^[a-z0-9_-]+$/i.test(value);
+  const isValidTagValue = (value) => /^[a-z0-9 _-]+$/i.test(value);
+  const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");
+
+  const pushValidationError = (message) => {
+    if (!message) return;
+    setValidationErrors([message]);
+  };
 
   useEffect(() => {
     if (selectedElement) {
@@ -154,6 +165,17 @@ export default function RightPanel({
     if (field === "dateInput" || field === "parents") {
       setValidationErrors([]);
     }
+  };
+
+  const isValidHexColor = (color) => /^#[0-9A-Fa-f]{6}$/.test(color);
+
+  const normalizeColor = (color) => {
+    if (!color) return "#808080";
+    if (isValidHexColor(color)) return color;
+    // Try to salvage partial hex colors
+    const cleaned = color.replace(/[^0-9A-Fa-f#]/g, "");
+    if (isValidHexColor(cleaned)) return cleaned;
+    return "#808080";
   };
 
   const validateEventParents = (draft) => {
@@ -311,6 +333,17 @@ export default function RightPanel({
       clearTimeout(parentMenuTimeoutRef.current);
     }
     const trimmed = parentQuery.trim();
+    if (trimmed) {
+      if (trimmed.length > ID_MAX_LENGTH) {
+        pushValidationError(`Parent ID must be ${ID_MAX_LENGTH} characters or fewer.`);
+        return;
+      }
+      if (!isValidIdValue(trimmed)) {
+        pushValidationError("Parent ID can only include letters, numbers, hyphens, and underscores.");
+        return;
+      }
+    }
+    if (validationErrors.length) setValidationErrors([]);
     handleChange("parents", trimmed ? [trimmed] : []);
     commitDraft({ ...formData, parents: trimmed ? [trimmed] : [] });
     parentMenuTimeoutRef.current = setTimeout(() => {
@@ -328,10 +361,20 @@ export default function RightPanel({
   };
 
   const addTag = (tag) => {
-    if (!tag) return;
+    const normalized = normalizeTagValue(tag);
+    if (!normalized) return;
+    if (normalized.length > TAG_MAX_LENGTH) {
+      pushValidationError(`Tags must be ${TAG_MAX_LENGTH} characters or fewer.`);
+      return;
+    }
+    if (!isValidTagValue(normalized)) {
+      pushValidationError("Tags can only include letters, numbers, spaces, hyphens, and underscores.");
+      return;
+    }
     const existing = Array.isArray(formData.tags) ? formData.tags : [];
-    if (existing.includes(tag)) return;
-    const nextTags = [...existing, tag];
+    if (existing.includes(normalized)) return;
+    const nextTags = [...existing, normalized];
+    if (validationErrors.length) setValidationErrors([]);
     setFormData((prev) => ({ ...prev, tags: nextTags }));
     commitDraft({ ...formData, tags: nextTags });
     setTagQuery("");
@@ -365,6 +408,9 @@ export default function RightPanel({
       }
     }
     if (draft.type !== "event" && parsedStart.value !== null && parsedEnd.value !== null) {
+      if (parsedStart.value >= parsedEnd.value) {
+        errors.push("Start must be before End.");
+      }
       if (parsedStart.value < timelineStart || parsedEnd.value > timelineEnd) {
         errors.push("Span/Era range must be within the timeline bounds.");
       }
@@ -964,6 +1010,7 @@ export default function RightPanel({
                   onChange={(e) => handleChange("title", e.target.value)}
                   onBlur={(e) => commitDraft({ ...formData, title: e.target.value })}
                   className="edit-input"
+                  maxLength={200}
                 />
               </div>
             </div>
@@ -984,6 +1031,7 @@ export default function RightPanel({
                     }}
                     onBlur={(e) => commitDraft({ ...formData, dateInput: e.target.value })}
                     className="edit-input"
+                    maxLength={20}
                   />
                 </div>
               </div>
@@ -1003,6 +1051,7 @@ export default function RightPanel({
                     }}
                     onBlur={(e) => commitDraft({ ...formData, startInput: e.target.value })}
                     className="edit-input"
+                    maxLength={20}
                   />
                   </div>
                 </div>
@@ -1020,6 +1069,7 @@ export default function RightPanel({
                     }}
                     onBlur={(e) => commitDraft({ ...formData, endInput: e.target.value })}
                     className="edit-input"
+                    maxLength={20}
                   />
                   </div>
                 </div>
@@ -1042,12 +1092,14 @@ export default function RightPanel({
                         setParentQuery(value);
                         setIsParentMenuOpen(true);
                         const trimmed = value.trim();
+                        if (validationErrors.length) setValidationErrors([]);
                         handleChange("parents", trimmed ? [trimmed] : []);
                       }}
                       onFocus={() => setIsParentMenuOpen(true)}
                       onBlur={handleParentBlur}
                       placeholder="Search span ID or title..."
                       className="edit-input branch-input"
+                      maxLength={ID_MAX_LENGTH}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -1105,11 +1157,13 @@ export default function RightPanel({
                       onChange={(e) => {
                         setBranchQuery(e.target.value);
                         setIsBranchMenuOpen(true);
+                        if (validationErrors.length) setValidationErrors([]);
                       }}
                       onFocus={() => setIsBranchMenuOpen(true)}
                       onBlur={handleBranchBlur}
                       placeholder="Search span ID or title..."
                       className="edit-input branch-input"
+                      maxLength={ID_MAX_LENGTH}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -1178,23 +1232,25 @@ export default function RightPanel({
                 <label htmlFor="tags">Tags</label>
                 <div className="edit-separator" />
                 <div className="branch-picker tag-picker">
-                  <input
-                    id="tags"
-                    type="text"
-                    value={tagQuery}
-                    onChange={(e) => {
-                      setTagQuery(e.target.value);
-                      setIsTagMenuOpen(true);
-                    }}
-                    onFocus={() => setIsTagMenuOpen(true)}
-                    onBlur={handleTagBlur}
-                    placeholder="Add a tag..."
-                    className="edit-input branch-input"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const trimmed = tagQuery.trim();
-                        if (trimmed) addTag(trimmed);
+                    <input
+                      id="tags"
+                      type="text"
+                      value={tagQuery}
+                      onChange={(e) => {
+                        setTagQuery(e.target.value);
+                        setIsTagMenuOpen(true);
+                        if (validationErrors.length) setValidationErrors([]);
+                      }}
+                      onFocus={() => setIsTagMenuOpen(true)}
+                      onBlur={handleTagBlur}
+                      placeholder="Add a tag..."
+                      className="edit-input branch-input"
+                      maxLength={TAG_MAX_LENGTH}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = tagQuery.trim();
+                          if (trimmed) addTag(trimmed);
                       }
                     }}
                   />
@@ -1261,8 +1317,13 @@ export default function RightPanel({
                       type="text"
                       value={formData.color}
                       onChange={(e) => handleChange("color", e.target.value)}
-                      onBlur={(e) => commitDraft({ ...formData, color: e.target.value })}
+                      onBlur={(e) => {
+                        const normalized = normalizeColor(e.target.value);
+                        handleChange("color", normalized);
+                        commitDraft({ ...formData, color: normalized });
+                      }}
                       className="edit-color-text"
+                      maxLength={7}
                       placeholder="#000000"
                     />
                   </div>

@@ -608,23 +608,12 @@ function App() {
 
   const handleLoadTimeline = async (timelineId) => {
     try {
-      let loadedTimeline;
-
-      // Try to load from Electron first (if available)
-      if (window.electron?.loadTimeline) {
-        try {
-          loadedTimeline = await window.electron.loadTimeline(timelineId);
-          console.log('Loaded timeline from Electron file system');
-        } catch {
-          console.log('Electron load failed, falling back to static import');
-        }
+      if (!window.electron?.loadTimeline) {
+        throw new Error("Timeline loading is only available in the desktop app.");
       }
 
-      // Fall back to static import if Electron load failed or not available
-      if (!loadedTimeline) {
-        const module = await import(`./data/${timelineId}.timeline`);
-        loadedTimeline = module.default || module;
-      }
+      const loadedTimeline = await window.electron.loadTimeline(timelineId);
+      console.log('Loaded timeline from Electron file system');
 
       const normalizeTimelineData = (data) => {
         const nextElements = (data.elements || []).map((element) => {

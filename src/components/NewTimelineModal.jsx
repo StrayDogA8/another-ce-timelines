@@ -12,6 +12,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const [detailSlider, setDetailSlider] = useState(50);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
+  const [validationErrors, setValidationErrors] = useState([]);
   const detailSliderRef = useRef(null);
 
   useEffect(() => {
@@ -37,16 +38,47 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     }
   };
 
+  const sanitizeFilename = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
   const handleCreate = () => {
+    const errors = [];
     if (!title.trim()) {
-      alert("Please enter a timeline name");
-      return;
+      errors.push("Please enter a timeline name.");
+    }
+
+    const sanitized = sanitizeFilename(title);
+    if (!sanitized) {
+      errors.push("Timeline name must contain at least one letter or number.");
     }
 
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
     const startValue = parsedStart.value;
     const endValue = parsedEnd.value;
+
+    if (!Number.isFinite(startValue)) {
+      errors.push("Start point must be a number or MM/DD/YYYY.");
+    }
+
+    if (!Number.isFinite(endValue)) {
+      errors.push("End point must be a number or MM/DD/YYYY.");
+    }
+
+    if (Number.isFinite(startValue) && Number.isFinite(endValue) && startValue >= endValue) {
+      errors.push("Start point must be less than end point.");
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
 
     onCreate({
       title: title.trim(),
@@ -65,6 +97,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     setEnd("2024");
     setDetailLevel(1);
     setDetailSlider(50);
+    setValidationErrors([]);
     onClose();
   };
 
@@ -82,6 +115,16 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
           <h2 className="settings-title">NEW TIMELINE</h2>
         </div>
 
+        {validationErrors.length > 0 && (
+          <div className="settings-errors">
+            {validationErrors.map((error, index) => (
+              <div key={index} className="settings-error">
+                {error}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="settings-content">
           <div className="settings-row">
             <div className="settings-row-left">
@@ -93,9 +136,13 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
                 type="text"
                 className="settings-input"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
                 placeholder="Enter timeline name"
                 autoFocus
+                maxLength={100}
               />
             </div>
           </div>
@@ -111,7 +158,11 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
                 inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e) => {
+                  setStart(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
+                maxLength={20}
               />
             </div>
           </div>
@@ -127,7 +178,11 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
                 inputMode="numeric"
                 className="settings-input settings-input-small"
                 value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                onChange={(e) => {
+                  setEnd(e.target.value);
+                  if (validationErrors.length) setValidationErrors([]);
+                }}
+                maxLength={20}
               />
             </div>
           </div>

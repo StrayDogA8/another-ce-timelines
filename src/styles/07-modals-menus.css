@@ -210,6 +210,24 @@
   padding: 0;
 }
 
+.settings-errors {
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border: 1px solid #b42318;
+  border-radius: 8px;
+  background: color-mix(in srgb, #b42318 12%, transparent);
+}
+
+.settings-error {
+  font-size: 12px;
+  color: #b42318;
+  line-height: 1.4;
+}
+
+.settings-error + .settings-error {
+  margin-top: 4px;
+}
+
 .settings-content::-webkit-scrollbar {
   width: 6px;
 }
@@ -318,6 +336,16 @@
   width: 90px;
   padding: 8px 10px;
   text-align: center;
+}
+
+.settings-input-error {
+  border-color: #b42318;
+}
+
+.settings-break-error {
+  font-size: 11px;
+  color: #b42318;
+  margin-left: 4px;
 }
 
 .settings-break-separator {

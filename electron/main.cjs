@@ -128,32 +128,12 @@ async function createWindow() {
   });
 }
 
-// Initialize user data directory and copy example timelines on first run
+// Initialize user data directory
 async function initializeUserData() {
   const userDataDir = await getTimelinesDir();
 
   try {
     await fs.mkdir(userDataDir, { recursive: true });
-
-    // Check if this is first run by looking for any .timeline files
-    const files = await fs.readdir(userDataDir);
-    const hasTimelineFiles = files.some(f => f.endsWith('.timeline'));
-
-    if (!hasTimelineFiles) {
-      // First run - copy example timelines from src/data
-      console.log('First run detected, copying example timelines...');
-      const templatesDir = path.join(__dirname, '..', 'src', 'data');
-      const templateFiles = await fs.readdir(templatesDir);
-
-      for (const file of templateFiles) {
-        if (file.endsWith('.timeline')) {
-          const srcPath = path.join(templatesDir, file);
-          const destPath = path.join(userDataDir, file);
-          await fs.copyFile(srcPath, destPath);
-          console.log(`Copied example: ${file}`);
-        }
-      }
-    }
   } catch (error) {
     console.error('Error initializing user data:', error);
   }

@@ -158,23 +158,11 @@ export default function Sidebar({
           setTimelineFiles(files);
         } catch (error) {
           console.error('Failed to list timelines:', error);
+          setTimelineFiles([]);
         }
       } else {
-        // Fallback to static imports for web version
-        const timelineModules = import.meta.glob('../data/*.timeline', { eager: true });
-
-        const files = Object.keys(timelineModules).map(path => {
-          const filename = path.split('/').pop().replace('.timeline', '');
-          const module = timelineModules[path];
-          const data = module.default || module;
-
-          return {
-            id: filename,
-            name: data.file?.title || filename
-          };
-        });
-
-        setTimelineFiles(files);
+        console.warn("Timeline listing is only available in the desktop app.");
+        setTimelineFiles([]);
       }
     };
 
