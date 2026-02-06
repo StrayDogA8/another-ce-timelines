@@ -64,20 +64,11 @@ function TimelineView({
 
   const {
     file,
-    events,
-    adjustedEvents,
-    adjustedSpans,
-    adjustedEras,
     spanChildPlacement,
-    spanBandHeight,
     finalSpans,
     finalEvents,
     finalEras,
-    minYear,
-    maxYear,
-    range,
     PX_PER_YEAR,
-    step,
     timelineWidth,
     yearToPx,
     calculatedHeight,
@@ -262,7 +253,6 @@ function TimelineView({
       SPAN_GAP,
       SPAN_VERTICAL_GAP,
       spanChildPlacement,
-      PX_PER_YEAR,
     });
 
     const spanBandHeight = calcSpanBandHeight(
@@ -314,7 +304,6 @@ function TimelineView({
       SPAN_GAP,
       SPAN_VERTICAL_GAP,
       spanChildPlacement,
-      PX_PER_YEAR,
     });
 
     const finalEvents = layoutEvents({
@@ -872,7 +861,7 @@ function TimelineView({
     const container = containerRef.current;
     if (!container) return;
 
-    const { minX, maxX, range } = getPanBounds(container);
+    const { minX: _minX, maxX, range } = getPanBounds(container);
     const panPosition = maxX - (value / 100) * range;
 
     translateRef.current.x = panPosition;

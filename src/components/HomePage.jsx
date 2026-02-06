@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
-import "../styles/09-homepage.css";
+import "../styles/02-homepage.css";
 import "../styles/07-modals-menus.css";
 
 export default function HomePage({

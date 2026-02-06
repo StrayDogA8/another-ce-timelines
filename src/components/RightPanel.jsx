@@ -3,13 +3,13 @@ import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Head
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { createNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
   selectedElement,
   onUpdate,
-  onDelete,
   timelineData,
   editRequestId,
   onEditRequestHandled,
@@ -23,11 +23,11 @@ export default function RightPanel({
   const [validationErrors, setValidationErrors] = useState([]);
   const [copied, setCopied] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
+  const [notesBasePath, setNotesBasePath] = useState("");
   const prevSelectedIdRef = useRef(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
@@ -122,6 +122,9 @@ export default function RightPanel({
         const normalized = result.fileUrl.endsWith("/") ? result.fileUrl : `${result.fileUrl}/`;
         setNotesBaseUrl(normalized);
       }
+      if (result?.success && result.path) {
+        setNotesBasePath(result.path);
+      }
     };
 
     loadNotesBaseDir();
@@ -130,6 +133,14 @@ export default function RightPanel({
     };
   }, []);
 
+  // Cleanup all menu timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (branchMenuTimeoutRef.current) clearTimeout(branchMenuTimeoutRef.current);
+      if (parentMenuTimeoutRef.current) clearTimeout(parentMenuTimeoutRef.current);
+      if (tagMenuTimeoutRef.current) clearTimeout(tagMenuTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedElement || !editRequestId) return;
@@ -174,7 +185,7 @@ export default function RightPanel({
   };
 
   const stripInputs = (data) => {
-    const { dateInput, startInput, endInput, ...rest } = data;
+    const { dateInput: _dateInput, startInput: _startInput, endInput: _endInput, ...rest } = data;
     return rest;
   };
 
@@ -413,15 +424,6 @@ export default function RightPanel({
   };
 
 
-  const handleArrayChange = (field, value) => {
-    const arr = value.split(",").map(t => t.trim()).filter(Boolean);
-    setFormData(prev => ({ ...prev, [field]: arr }));
-    // Clear validation errors when updating parents
-    if (field === "parents") {
-      setValidationErrors([]);
-    }
-  };
-
   const handleCopyId = async () => {
     try {
       await navigator.clipboard.writeText(formData.id);
@@ -495,52 +497,45 @@ export default function RightPanel({
   };
 
   const sanitizeHtml = (html) => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const allowedTags = new Set([
-      "a",
-      "abbr",
-      "b",
-      "blockquote",
-      "br",
-      "code",
-      "del",
-      "div",
-      "em",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "hr",
-      "i",
-      "img",
-      "li",
-      "mark",
-      "ol",
-      "p",
-      "pre",
-      "span",
-      "strong",
-      "table",
-      "tbody",
-      "thead",
-      "tr",
-      "td",
-      "th",
-      "u",
-      "ul",
-    ]);
+    const baseUrl = notesBaseUrl || "";
+    const basePath = notesBasePath || "";
 
-    const commonAttributes = new Set(["class"]);
-    const attributeAllowlist = {
-      a: new Set(["href", "target", "rel", "class"]),
-      img: new Set(["src", "alt", "title", "width", "height", "loading", "class"]),
+    const normalizeFsPath = (inputPath) => {
+      if (!inputPath) return "";
+      let value = decodeURIComponent(String(inputPath)).replace(/\\/g, "/");
+      if (/^\/[a-zA-Z]:\//.test(value)) {
+        value = value.slice(1);
+      }
+      const parts = [];
+      value.split("/").forEach((part) => {
+        if (!part || part === ".") return;
+        if (part === "..") {
+          if (parts.length) parts.pop();
+          return;
+        }
+        parts.push(part);
+      });
+      return parts.join("/");
     };
 
-    const baseUrl = notesBaseUrl || "";
-    const baseUrlLower = baseUrl.toLowerCase();
+    const isPathInsideBase = (candidatePath) => {
+      if (!basePath) return false;
+      const normalizedBase = normalizeFsPath(basePath).toLowerCase();
+      const normalizedCandidate = normalizeFsPath(candidatePath).toLowerCase();
+      if (!normalizedBase) return false;
+      if (normalizedCandidate === normalizedBase) return true;
+      return normalizedCandidate.startsWith(`${normalizedBase}/`);
+    };
+
+    const fileUrlToPath = (fileUrl) => {
+      try {
+        const url = new URL(fileUrl);
+        if (url.protocol !== "file:") return null;
+        return url.pathname;
+      } catch {
+        return null;
+      }
+    };
 
     const normalizeSrc = (rawValue) => {
       const value = String(rawValue || "").trim();
@@ -549,8 +544,9 @@ export default function RightPanel({
       if (/^https:\/\//i.test(value)) return value;
 
       if (/^file:\/\//i.test(value)) {
-        if (!baseUrl) return null;
-        return value.toLowerCase().startsWith(baseUrlLower) ? value : null;
+        const filePath = fileUrlToPath(value);
+        if (!filePath || !isPathInsideBase(filePath)) return null;
+        return value;
       }
 
       if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
@@ -561,9 +557,10 @@ export default function RightPanel({
 
       try {
         const resolved = new URL(value, baseUrl).toString();
-        if (!resolved.toLowerCase().startsWith(baseUrlLower)) return null;
+        const resolvedPath = fileUrlToPath(resolved);
+        if (!resolvedPath || !isPathInsideBase(resolvedPath)) return null;
         return resolved;
-      } catch (error) {
+      } catch {
         return null;
       }
     };
@@ -577,8 +574,9 @@ export default function RightPanel({
       }
 
       if (/^file:\/\//i.test(value)) {
-        if (!baseUrl) return null;
-        return value.toLowerCase().startsWith(baseUrlLower) ? value : null;
+        const filePath = fileUrlToPath(value);
+        if (!filePath || !isPathInsideBase(filePath)) return null;
+        return value;
       }
 
       if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
@@ -589,38 +587,70 @@ export default function RightPanel({
 
       try {
         const resolved = new URL(value, baseUrl).toString();
-        if (!resolved.toLowerCase().startsWith(baseUrlLower)) return null;
+        const resolvedPath = fileUrlToPath(resolved);
+        if (!resolvedPath || !isPathInsideBase(resolvedPath)) return null;
         return resolved;
-      } catch (error) {
+      } catch {
         return null;
       }
     };
 
+    const sanitized = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: [
+        "a",
+        "abbr",
+        "b",
+        "blockquote",
+        "br",
+        "code",
+        "del",
+        "div",
+        "em",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "hr",
+        "i",
+        "img",
+        "li",
+        "mark",
+        "ol",
+        "p",
+        "pre",
+        "span",
+        "strong",
+        "table",
+        "tbody",
+        "thead",
+        "tr",
+        "td",
+        "th",
+        "u",
+        "ul",
+      ],
+      ALLOWED_ATTR: [
+        "style",
+        "href",
+        "target",
+        "rel",
+        "src",
+        "alt",
+        "title",
+        "width",
+        "height",
+        "loading",
+      ],
+      KEEP_CONTENT: true,
+    });
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(sanitized, "text/html");
     const nodes = Array.from(doc.body.querySelectorAll("*"));
     nodes.forEach((node) => {
       const tagName = node.tagName.toLowerCase();
-      if (!allowedTags.has(tagName)) {
-        const parent = node.parentNode;
-        if (parent && parent.nodeType === Node.ELEMENT_NODE) {
-          while (node.firstChild) {
-            parent.insertBefore(node.firstChild, node);
-          }
-          parent.removeChild(node);
-        } else {
-          node.remove();
-        }
-        return;
-      }
-
-      [...node.attributes].forEach((attr) => {
-        const name = attr.name.toLowerCase();
-        const allowedForTag = attributeAllowlist[tagName];
-        const isAllowed =
-          (allowedForTag && allowedForTag.has(name)) || commonAttributes.has(name);
-        if (!isAllowed || name.startsWith("on")) {
-          node.removeAttribute(attr.name);
-        }
-      });
 
       if (tagName === "a") {
         const href = normalizeHref(node.getAttribute("href"));
@@ -644,7 +674,6 @@ export default function RightPanel({
           node.setAttribute("loading", "lazy");
         }
       }
-
     });
 
     return doc.body.innerHTML;

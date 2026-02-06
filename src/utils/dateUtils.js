@@ -12,14 +12,6 @@ const precisionFromValue = (value) => {
   return isMonthGrid ? "month" : "day";
 };
 
-const dayOfYear = (year, month, day) => {
-  let total = 0;
-  for (let m = 1; m < month; m += 1) {
-    total += daysInMonth(year, m);
-  }
-  return total + day;
-};
-
 export const parseTimelineInput = (value) => {
   if (value === null || value === undefined) {
     return { value: null, label: null, precision: null };

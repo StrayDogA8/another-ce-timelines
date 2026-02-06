@@ -1,6 +1,7 @@
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, clamp, detailToSlider, sliderToDetail } from "../utils/sliderUtils";
 import "../styles/07-modals-menus.css";
 
 export default function SettingsModal({
@@ -13,9 +14,6 @@ export default function SettingsModal({
   themes,
   onThemeChange,
 }) {
-  const DETAIL_MIN = 0.2;
-  const DETAIL_MID = 1;
-  const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -34,28 +32,6 @@ export default function SettingsModal({
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
   const lastFilePathRef = useRef(null);
-
-  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-  const detailToSlider = (value) => {
-    const clamped = clamp(value, DETAIL_MIN, DETAIL_MAX);
-    if (clamped <= DETAIL_MID) {
-      const ratio = (clamped - DETAIL_MIN) / (DETAIL_MID - DETAIL_MIN);
-      return ratio * 50;
-    }
-    const ratio = (clamped - DETAIL_MID) / (DETAIL_MAX - DETAIL_MID);
-    return 50 + ratio * 50;
-  };
-
-  const sliderToDetail = (position) => {
-    const pos = clamp(position, 0, 100);
-    if (pos <= 50) {
-      const ratio = pos / 50;
-      return DETAIL_MIN + ratio * (DETAIL_MID - DETAIL_MIN);
-    }
-    const ratio = (pos - 50) / 50;
-    return DETAIL_MID + ratio * (DETAIL_MAX - DETAIL_MID);
-  };
 
   // Convert stored breaks (numeric) to editable breaks (strings for inputs)
   const loadBreaks = (storedBreaks = []) => {

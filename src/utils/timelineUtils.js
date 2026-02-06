@@ -138,7 +138,6 @@ export function layoutSpans({
   SPAN_GAP,
   SPAN_VERTICAL_GAP,
   spanChildPlacement,
-  PX_PER_YEAR,
 }) {
   const spanLaneEnds = [];
   const spanLaneById = {};
@@ -262,7 +261,7 @@ export function layoutSpans({
     }
 
     const familyRange = getFamilyRange(rootId);
-    for (const [familyRoot, band] of familyBands.entries()) {
+    for (const [, band] of familyBands.entries()) {
       if (!spansOverlap(familyRange.start, familyRange.end, band.start, band.end)) continue;
       const candidateMin = baseLane + minOffset;
       const candidateMax = baseLane + maxOffset;
@@ -411,7 +410,7 @@ export function layoutEvents({
 
   const laneEnds = [];
 
-  const finalEvents = laidOut.map((event, idx) => {
+  const finalEvents = laidOut.map((event) => {
     const x = event._x;
 
     function fitsInLane(lane) {

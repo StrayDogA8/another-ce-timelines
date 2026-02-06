@@ -107,6 +107,7 @@ function App() {
 
         e.preventDefault();
 
+        if (!timelineData?.elements) return;
         const element = timelineData.elements.find(el => el.id === selectedId);
         if (!element) return;
 
@@ -614,7 +615,7 @@ function App() {
         try {
           loadedTimeline = await window.electron.loadTimeline(timelineId);
           console.log('Loaded timeline from Electron file system');
-        } catch (electronError) {
+        } catch {
           console.log('Electron load failed, falling back to static import');
         }
       }
@@ -1025,7 +1026,6 @@ function App() {
               onSelect={handleSelect}
               selectedElement={selectedElement}
               onUpdate={handleUpdate}
-              onDelete={handleDelete}
               timelineData={timelineData}
               editRequestId={editRequestId}
               onEditRequestHandled={() => setEditRequestId(null)}

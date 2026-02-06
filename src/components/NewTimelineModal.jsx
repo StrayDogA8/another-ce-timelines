@@ -1,12 +1,10 @@
 import { ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { parseTimelineInput } from "../utils/dateUtils";
+import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, detailToSlider, sliderToDetail } from "../utils/sliderUtils";
 import "../styles/07-modals-menus.css";
 
 export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
-  const DETAIL_MIN = 0.2;
-  const DETAIL_MID = 1;
-  const DETAIL_MAX = 5;
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("0");
   const [end, setEnd] = useState("2024");
@@ -15,28 +13,6 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const detailSliderRef = useRef(null);
-
-  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-  const detailToSlider = (value) => {
-    const clamped = clamp(value, DETAIL_MIN, DETAIL_MAX);
-    if (clamped <= DETAIL_MID) {
-      const ratio = (clamped - DETAIL_MIN) / (DETAIL_MID - DETAIL_MIN);
-      return ratio * 50;
-    }
-    const ratio = (clamped - DETAIL_MID) / (DETAIL_MAX - DETAIL_MID);
-    return 50 + ratio * 50;
-  };
-
-  const sliderToDetail = (position) => {
-    const pos = clamp(position, 0, 100);
-    if (pos <= 50) {
-      const ratio = pos / 50;
-      return DETAIL_MIN + ratio * (DETAIL_MID - DETAIL_MIN);
-    }
-    const ratio = (pos - 50) / 50;
-    return DETAIL_MID + ratio * (DETAIL_MAX - DETAIL_MID);
-  };
 
   useEffect(() => {
     const updateTooltip = () => {

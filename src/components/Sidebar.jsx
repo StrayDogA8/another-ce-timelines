@@ -94,12 +94,6 @@ export default function Sidebar({
     return Array.from(tags).sort((a, b) => a.localeCompare(b));
   }, [allElements]);
 
-  const formatRangeOld = (start, end, startLabel, endLabel) => {
-    const left = startLabel ?? fmtYear(start);
-    const right = endLabel ?? fmtYear(end);
-    return `${left} â€“ ${right}`;
-  };
-
   const formatRange = (start, end, startLabel, endLabel) => {
     const left = startLabel ?? fmtYear(start);
     const right = endLabel ?? fmtYear(end);
@@ -107,7 +101,6 @@ export default function Sidebar({
   };
 
   const allExpanded = openEras && openSpans && openEvents;
-  const allCollapsed = !openEras && !openSpans && !openEvents;
 
   const handleToggleAll = () => {
     if (allExpanded) {
