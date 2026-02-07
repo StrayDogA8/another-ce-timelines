@@ -613,6 +613,19 @@ ipcMain.handle('open-fonts-folder', async () => {
   }
 });
 
+ipcMain.handle('open-external', async (event, { url }) => {
+  try {
+    if (!url || typeof url !== 'string') {
+      return { success: false, error: 'Missing url' };
+    }
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external url:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-notes-base-dir', async () => {
   try {
     const dir = await getNotesBaseDir();

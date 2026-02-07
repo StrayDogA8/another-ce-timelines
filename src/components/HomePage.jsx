@@ -614,6 +614,32 @@ export default function HomePage({
                   </div>
                 </div>
               </div>
+
+              <div className="settings-row settings-row-docs">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Documentation</div>
+                  <div className="settings-row-description">
+                    Timelines 0.1.0 (Alpha)
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() =>
+                          window.electron?.openExternal?.({
+                            url: "https://github.com/sreegjl/timelines",
+                          })
+                        }
+                      >
+                        Open Docs
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

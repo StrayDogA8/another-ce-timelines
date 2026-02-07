@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electron', {
   listFonts: () => ipcRenderer.invoke('list-fonts'),
   saveUserTheme: (payload) => ipcRenderer.invoke('save-user-theme', payload),
   deleteUserTheme: (payload) => ipcRenderer.invoke('delete-user-theme', payload),
+  openExternal: (payload) => ipcRenderer.invoke('open-external', payload),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),

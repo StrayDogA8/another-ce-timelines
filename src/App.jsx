@@ -691,6 +691,7 @@ function App() {
         id: `${timelineId}-timeline`,
         type: "timeline",
         title: timelineConfig.title,
+        appVersion: "0.1.0-alpha.1",
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
