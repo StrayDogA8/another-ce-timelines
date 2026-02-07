@@ -9,9 +9,7 @@
 
 
 
-**Target release: Q2 2026.**
-
-**An early alpha version is now available for testing.**
+**Target release: Q2 2026. An early alpha version is now available for testing.**
 
 A free app that allows users to create and share customized timelines for use in historical chronologies, world-building, and project management. 
 
