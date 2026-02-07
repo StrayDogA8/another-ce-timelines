@@ -12,6 +12,7 @@ export default function SettingsModal({
   themeKey,
   defaultThemeKey,
   themes,
+  fonts,
   onThemeChange,
 }) {
   const [title, setTitle] = useState("");
@@ -23,6 +24,7 @@ export default function SettingsModal({
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [layout, setLayout] = useState("Horizontal");
   const [theme, setTheme] = useState(defaultThemeKey || "");
+  const [fontFamily, setFontFamily] = useState("default");
   const [useMonths, setUseMonths] = useState(false);
   const [breaks, setBreaks] = useState([]);
   const [negID, setNegID] = useState("");
@@ -145,6 +147,7 @@ export default function SettingsModal({
         setDetailLevel(clampedDetail);
         setDetailSlider(detailToSlider(clampedDetail));
         setTheme(timelineData.file.theme || defaultThemeKey || "");
+        setFontFamily(timelineData.file.font || "default");
         setLayout(timelineData.file.layout || "Horizontal");
         setUseMonths(Boolean(timelineData.file.useMonths));
         setBreaks(loadBreaks(timelineData.file.breaks));
@@ -219,6 +222,7 @@ export default function SettingsModal({
           negID,
           posID,
           theme,
+          font: fontFamily,
           startLabel: parsedStart.label,
           endLabel: parsedEnd.label,
           useMonths,
@@ -243,6 +247,7 @@ export default function SettingsModal({
     negID,
     posID,
     theme,
+    fontFamily,
     useMonths,
     layout,
     breaks,
@@ -250,6 +255,27 @@ export default function SettingsModal({
   ]);
 
   if (!isOpen) return null;
+
+  const fontNames = Array.from(
+    new Set(
+      (fonts || [])
+        .map((font) => font?.name?.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const fontOptions = [
+    { value: "default", label: "Default (App Font)" },
+    { value: "Inter", label: "Inter" },
+    ...fontNames.map((name) => ({ value: name, label: name })),
+  ];
+
+  if (fontFamily && !fontOptions.some((option) => option.value === fontFamily)) {
+    fontOptions.unshift({
+      value: fontFamily,
+      label: `${fontFamily} (Missing)`,
+    });
+  }
 
   const handleBackdropMouseDown = (e) => {
     backdropPointerDownRef.current = e.target === e.currentTarget;
@@ -482,6 +508,27 @@ export default function SettingsModal({
                 {Object.entries(themes || {}).map(([key, theme]) => (
                   <option key={key} value={key}>
                     {theme?.name || key}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Font */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Font</div>
+              <div className="settings-row-description">Choose a font for this timeline.</div>
+            </div>
+            <div className="settings-row-right">
+              <select
+                className="settings-select"
+                value={fontFamily || "default"}
+                onChange={(e) => setFontFamily(e.target.value)}
+              >
+                {fontOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

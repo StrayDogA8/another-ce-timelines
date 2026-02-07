@@ -10,6 +10,9 @@ import {
   saveTimelineToFile,
   chooseTimelinesDir,
   chooseNotesDir,
+  chooseFontsDir,
+  listFonts,
+  openFontsFolder,
   renameNote,
   renameTimeline,
 } from "./utils/electronApi";
@@ -46,6 +49,9 @@ function App() {
   const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
+  const [fontStorageDir, setFontStorageDir] = useState("");
+  const [appFontFamily, setAppFontFamily] = useState("Inter");
+  const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
   const [filterScope, setFilterScope] = useState({
@@ -146,6 +152,16 @@ function App() {
 
     loadUserThemes();
   }, []);
+
+  useEffect(() => {
+    const loadFonts = async () => {
+      const result = await listFonts();
+      if (!result?.success) return;
+      setAvailableFonts(result.fonts || []);
+    };
+
+    loadFonts();
+  }, [fontStorageDir]);
 
   useEffect(() => {
     const resolvedDefault = getInitialThemeKey(themeConfig);
@@ -524,6 +540,7 @@ function App() {
     negID,
     posID,
     theme,
+    font,
     startLabel,
     endLabel,
     useMonths,
@@ -557,6 +574,7 @@ function App() {
         negID,
         posID,
         theme,
+        font,
         startLabel,
         endLabel,
         useMonths,
@@ -571,6 +589,7 @@ function App() {
       if (!breaks || breaks.length === 0) delete nextFile.breaks;
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
+      if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {
         ...prevData,
@@ -743,6 +762,20 @@ function App() {
     return match || fallback;
   };
 
+  const resolveFontStack = (family) => {
+    const fallback =
+      '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    if (!family) return fallback;
+    const normalized = String(family);
+    const lower = normalized.toLowerCase();
+    if (lower === "default") return fallback;
+    if (lower === "system") {
+      return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    }
+    const safeName = normalized.replace(/"/g, '\\"');
+    return `"${safeName}", ${fallback}`;
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -752,8 +785,12 @@ function App() {
       setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
+      const storedFontsDir = settings?.fontStorageDir ?? "";
+      const storedFontFamily = settings?.appFontFamily ?? "Inter";
       setTimelineStorageDir(storedTimelineDir);
       setNotesStorageDir(storedNotesDir);
+      setFontStorageDir(storedFontsDir);
+      setAppFontFamily(storedFontFamily);
     };
 
     loadAppSettings();
@@ -778,6 +815,41 @@ function App() {
   }, [themeKey, themeConfig]);
 
   useEffect(() => {
+    const styleId = "user-fonts";
+    const style =
+      document.getElementById(styleId) || document.createElement("style");
+    style.id = styleId;
+    const css = (availableFonts || [])
+      .map((font) => {
+        const name = String(font.name || "").replace(/"/g, '\\"');
+        if (!name || !font.fileUrl) return "";
+        const isItalic = /italic/i.test(name);
+        return `@font-face{font-family:"${name}";src:url("${font.fileUrl}") format("${font.format}");font-weight:normal;font-style:${isItalic ? "italic" : "normal"};font-display:swap;}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+    style.textContent = css;
+    if (!style.parentNode) {
+      document.head.appendChild(style);
+    }
+  }, [availableFonts]);
+
+  useEffect(() => {
+    const timelineFont = timelineData?.file?.font;
+    const shouldUseAppFont =
+      !timelineFont || String(timelineFont).toLowerCase() === "default";
+    const family = timelineData
+      ? shouldUseAppFont
+        ? appFontFamily || "Inter"
+        : timelineFont
+      : appFontFamily || "Inter";
+    document.documentElement.style.setProperty(
+      "--app-font-family",
+      resolveFontStack(family)
+    );
+  }, [appFontFamily, timelineData, timelineData?.file?.font]);
+
+  useEffect(() => {
     if (timelineData?.file) {
       setThemeKey(resolveThemeKey(timelineData.file.theme, appThemeKey));
       return;
@@ -793,6 +865,8 @@ function App() {
       theme: nextThemeKey,
       timelineStorageDir,
       notesStorageDir,
+      fontStorageDir,
+      appFontFamily,
     });
   };
 
@@ -802,6 +876,8 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir: nextDir || "",
       notesStorageDir,
+      fontStorageDir,
+      appFontFamily,
     });
   };
 
@@ -811,6 +887,30 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir: nextDir || "",
+      fontStorageDir,
+      appFontFamily,
+    });
+  };
+
+  const handleFontStorageDirChange = async (nextDir) => {
+    setFontStorageDir(nextDir || "");
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      fontStorageDir: nextDir || "",
+      appFontFamily,
+    });
+  };
+
+  const handleAppFontChange = async (nextFont) => {
+    setAppFontFamily(nextFont);
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      fontStorageDir,
+      appFontFamily: nextFont,
     });
   };
 
@@ -826,6 +926,17 @@ function App() {
     if (result?.success && result.path) {
       await handleNotesStorageDirChange(result.path);
     }
+  };
+
+  const handlePickFontsDir = async () => {
+    const result = await chooseFontsDir();
+    if (result?.success && result.path) {
+      await handleFontStorageDirChange(result.path);
+    }
+  };
+
+  const handleOpenFontsFolder = async () => {
+    await openFontsFolder();
   };
 
   const filteredElements = useMemo(() => {
@@ -886,12 +997,19 @@ function App() {
             appThemeKey={appThemeKey}
             themes={themeConfig.themes}
             onAppThemeChange={handleAppThemeChange}
+            appFontFamily={appFontFamily}
+            fonts={availableFonts}
             timelineStorageDir={timelineStorageDir}
             notesStorageDir={notesStorageDir}
+            fontStorageDir={fontStorageDir}
             onTimelineStorageDirChange={handleTimelineStorageDirChange}
             onNotesStorageDirChange={handleNotesStorageDirChange}
+            onFontStorageDirChange={handleFontStorageDirChange}
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
+            onPickFontsDir={handlePickFontsDir}
+            onOpenFontsFolder={handleOpenFontsFolder}
+            onAppFontChange={handleAppFontChange}
           />
         </div>
       </>
@@ -986,6 +1104,7 @@ function App() {
         themeKey={themeKey}
         defaultThemeKey={defaultThemeKey}
         themes={themeConfig.themes}
+        fonts={availableFonts}
         onThemeChange={setThemeKey}
       />
 

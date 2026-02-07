@@ -59,6 +59,11 @@ function TimelineView({
   const lastSliderUpdateTimeRef = useRef(0);
   const lastSliderValueRef = useRef(0);
   const sliderInputRef = useRef(false);
+  const lastViewportYearRef = useRef(null);
+  const lastSliderLabelRef = useRef("");
+  const sliderRafRef = useRef(null);
+  const pendingSliderValueRef = useRef(null);
+  const sliderValueRef = useRef(0);
   const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
   const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
 
@@ -430,11 +435,16 @@ function TimelineView({
     const rawYear = decompressYear(clampedCompressed);
     const showMonths = file.useMonths === true;
     const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
-    onViewportYearChange?.(snappedYear);
+    if (snappedYear !== lastViewportYearRef.current) {
+      lastViewportYearRef.current = snappedYear;
+      onViewportYearChange?.(snappedYear);
+    }
     const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-    setSliderYearLabel(
-      formatYear(displayYear, file.negID, file.posID, showMonths)
-    );
+    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths);
+    if (nextLabel !== lastSliderLabelRef.current) {
+      lastSliderLabelRef.current = nextLabel;
+      setSliderYearLabel(nextLabel);
+    }
   }, [
     sliderValue,
     currentScale,
@@ -456,6 +466,22 @@ function TimelineView({
     const scale = scaleRef.current;
     timelineEl.style.transformOrigin = "0 0";
     timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+
+  const queueSliderValue = (nextValue) => {
+    pendingSliderValueRef.current = nextValue;
+    if (sliderRafRef.current) return;
+    sliderRafRef.current = requestAnimationFrame(() => {
+      sliderRafRef.current = null;
+      const value = pendingSliderValueRef.current;
+      pendingSliderValueRef.current = null;
+      if (typeof value === "number") {
+        const delta = Math.abs(value - sliderValueRef.current);
+        if (delta >= 0.01) {
+          setSliderValue(value);
+        }
+      }
+    });
   };
 
   const getPanBounds = (container) => {
@@ -613,7 +639,7 @@ function TimelineView({
 
         if (!isPlaying && range > 0) {
           const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-          setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+          queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
         }
 
         return;
@@ -657,7 +683,7 @@ function TimelineView({
       // Update slider when panning horizontally
       if (!isPlaying && range > 0) {
         const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-        setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+        queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
       }
     };
 
@@ -748,7 +774,7 @@ function TimelineView({
 
         if (range > 0) {
           const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-          setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+          queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
         }
       }
 
@@ -854,7 +880,10 @@ function TimelineView({
   };
 
   const handleSliderChange = (e) => {
+    if (e?.nativeEvent && e.nativeEvent.isTrusted === false) return;
     const value = parseFloat(e.target.value);
+    if (!Number.isFinite(value)) return;
+    if (Math.abs(value - sliderValueRef.current) < 0.01) return;
     sliderInputRef.current = true;
     setSliderValue(value);
 
@@ -917,7 +946,7 @@ function TimelineView({
       if (timeSinceUpdate >= 33 || delta >= 0.2) {
         lastSliderUpdateTimeRef.current = time;
         lastSliderValueRef.current = clampedPercentage;
-        setSliderValue(clampedPercentage);
+        queueSliderValue(clampedPercentage);
       }
 
       if (nextX <= minX + 0.5) {
@@ -963,13 +992,13 @@ function TimelineView({
     const { maxX, range } = getPanBounds(container);
 
     if (range <= 0) {
-      setSliderValue(0);
+      queueSliderValue(0);
       return;
     }
 
     // Calculate current pan percentage (translateRef.x is negative when panned right)
     const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-    setSliderValue(Math.min(100, Math.max(0, panPercentage)));
+    queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
   }, [currentScale, isPlaying, timelineWidth]);
 
   // Trigger PNG download when requested from outside (e.g., Sidebar)
@@ -978,6 +1007,20 @@ function TimelineView({
       handleDownloadPNG();
     }
   }, [downloadPngTrigger]);
+
+  useEffect(() => {
+    sliderValueRef.current = sliderValue;
+  }, [sliderValue]);
+
+  useEffect(() => {
+    return () => {
+      if (sliderRafRef.current) {
+        cancelAnimationFrame(sliderRafRef.current);
+        sliderRafRef.current = null;
+      }
+      pendingSliderValueRef.current = null;
+    };
+  }, []);
 
   return (
     <div

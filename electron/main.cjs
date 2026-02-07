@@ -9,6 +9,7 @@ let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 const defaultTimelinesDir = () => path.join(app.getPath('userData'), 'timelines');
 const userThemesDir = () => path.join(app.getPath('userData'), 'themes');
+const defaultFontsDir = () => path.join(app.getPath('userData'), 'fonts');
 
 const safeName = (value) => String(value || '')
   .trim()
@@ -62,6 +63,16 @@ const getNotesDir = async (timelineId) => {
   const baseDir = await getNotesBaseDir();
   const safeTimelineId = safeName(timelineId) || 'timeline';
   return path.join(baseDir, safeTimelineId);
+};
+
+const getFontsDir = async () => {
+  const settings = await readAppSettings();
+  const customDir = settings?.fontStorageDir;
+  if (customDir && typeof customDir === 'string') {
+    const trimmed = customDir.trim();
+    if (trimmed) return trimmed;
+  }
+  return defaultFontsDir();
 };
 
 async function getStartupBackgroundColor() {
@@ -528,6 +539,23 @@ ipcMain.handle('choose-notes-dir', async () => {
   }
 });
 
+ipcMain.handle('choose-fonts-dir', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+
+    if (canceled || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, path: filePaths[0] };
+  } catch (error) {
+    console.error('Error choosing fonts directory:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('open-themes-folder', async () => {
   try {
     const dir = userThemesDir();
@@ -536,6 +564,18 @@ ipcMain.handle('open-themes-folder', async () => {
     return { success: true, path: dir };
   } catch (error) {
     console.error('Error opening themes folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-fonts-folder', async () => {
+  try {
+    const dir = await getFontsDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    console.error('Error opening fonts folder:', error);
     return { success: false, error: error.message };
   }
 });
@@ -574,5 +614,34 @@ ipcMain.handle('list-themes', async () => {
   } catch (error) {
     console.error('Error listing themes:', error);
     return {};
+  }
+});
+
+ipcMain.handle('list-fonts', async () => {
+  try {
+    const dir = await getFontsDir();
+    await fs.mkdir(dir, { recursive: true });
+    const files = await fs.readdir(dir);
+    const allowed = new Set(['.ttf', '.otf', '.woff', '.woff2']);
+
+    const fonts = files
+      .filter((file) => allowed.has(path.extname(file).toLowerCase()))
+      .map((file) => {
+        const ext = path.extname(file).toLowerCase();
+        const name = path.basename(file, ext);
+        const fullPath = path.join(dir, file);
+        const fileUrl = pathToFileURL(fullPath).toString();
+        const format = ext === '.otf'
+          ? 'opentype'
+          : ext === '.ttf'
+            ? 'truetype'
+            : ext.slice(1);
+        return { name, path: fullPath, fileUrl, format };
+      });
+
+    return fonts;
+  } catch (error) {
+    console.error('Error listing fonts:', error);
+    return [];
   }
 });

@@ -214,3 +214,46 @@ export async function chooseNotesDir() {
     return { success: false, error: error.message };
   }
 }
+
+export async function chooseFontsDir() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.chooseFontsDir();
+  } catch (error) {
+    console.error('Error choosing fonts directory:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function openFontsFolder() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.openFontsFolder();
+  } catch (error) {
+    console.error('Error opening fonts folder:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function listFonts() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, fonts: [] };
+  }
+
+  try {
+    const fonts = await window.electron.listFonts();
+    return { success: true, fonts: Array.isArray(fonts) ? fonts : [] };
+  } catch (error) {
+    console.error('Error listing fonts:', error);
+    return { success: false, fonts: [], error: error.message };
+  }
+}

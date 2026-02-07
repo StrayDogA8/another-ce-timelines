@@ -1,11 +1,11 @@
 {
   "name": "Dark",
   "colors": {
-    "dark-bg": "#C8CDD2",
-    "element-bg": "#828283",
-    "active-bg": "#C9C9C9",
-    "secondary-bg": "#050505",
-    "tertiary-bg": "#1C1F23",
+    "dark-bg": "#F5F5F5",
+    "element-bg": "#666666",
+    "active-bg": "#252525",
+    "secondary-bg": "#0C0C0C",
+    "tertiary-bg": "#050505",
     "primary-bg": "#030303",
     "gray-1": "#B7BCC1",
     "gray-2": "#8E9398",
@@ -19,6 +19,7 @@
     "light-bg": "#2A2D31",
     "hover-bg": "#24272B",
     "border-color": "#3B3F45",
-    "secondary-text": "#B0B5BA"
+    "secondary-text": "#B0B5BA",
+    "highlight-color": "#6A5A00"
   }
 }

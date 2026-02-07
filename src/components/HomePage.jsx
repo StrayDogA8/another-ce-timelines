@@ -1,21 +1,30 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/02-homepage.css";
 import "../styles/07-modals-menus.css";
+import themeConfig from "../config/theme.json";
+import { loadThemeConfig } from "../utils/themeLoader";
 
 export default function HomePage({
   onSelectTimeline,
   onCreateTimeline,
   appThemeKey,
+  appFontFamily,
+  fonts,
   themes,
   onAppThemeChange,
+  onAppFontChange,
   timelineStorageDir,
   notesStorageDir,
+  fontStorageDir,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
+  onFontStorageDirChange,
   onPickTimelinesDir,
   onPickNotesDir,
+  onPickFontsDir,
+  onOpenFontsFolder,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +33,63 @@ export default function HomePage({
   const [view, setView] = useState("home");
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
+  const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
+  const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
+  const bundledKeys = useMemo(
+    () => new Set(Object.keys(bundledThemes || {}).map((key) => key.toLowerCase())),
+    [bundledThemes]
+  );
+
+  const appThemes = useMemo(() => {
+    const entries = Object.entries(themes || {}).filter(([key]) =>
+      bundledKeys.has(key.toLowerCase())
+    );
+    return entries.sort(([aKey], [bKey]) => {
+      const aLower = aKey.toLowerCase();
+      const bLower = bKey.toLowerCase();
+      if (aLower === "parchment" && bLower !== "parchment") return -1;
+      if (aLower !== "parchment" && bLower === "parchment") return 1;
+      const aIsDefault = aLower === defaultThemeKey;
+      const bIsDefault = bLower === defaultThemeKey;
+      if (aIsDefault && !bIsDefault) return -1;
+      if (!aIsDefault && bIsDefault) return 1;
+      return aKey.localeCompare(bKey);
+    });
+  }, [themes, bundledKeys, defaultThemeKey]);
+
+  const userThemes = useMemo(() => {
+    const entries = Object.entries(themes || {}).filter(
+      ([key]) => !bundledKeys.has(key.toLowerCase())
+    );
+    return entries.sort(([aKey], [bKey]) => aKey.localeCompare(bKey));
+  }, [themes, bundledKeys]);
+
+  const availableFonts = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    (fonts || []).forEach((font) => {
+      const name = font?.name?.trim();
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      list.push(name);
+    });
+    return list.sort((a, b) => a.localeCompare(b));
+  }, [fonts]);
+
+  const fontOptions = useMemo(() => {
+    const options = [{ value: "Inter", label: "Inter (Default)" }];
+    availableFonts.forEach((name) => {
+      options.push({ value: name, label: name });
+    });
+    const values = new Set(options.map((option) => option.value));
+    if (appFontFamily && !values.has(appFontFamily)) {
+      options.unshift({
+        value: appFontFamily,
+        label: `${appFontFamily} (Missing)`,
+      });
+    }
+    return options;
+  }, [availableFonts, appFontFamily]);
 
   const getPathIssue = (value) => {
     if (!value) return null;
@@ -48,6 +114,7 @@ export default function HomePage({
 
   const timelinePathIssue = getPathIssue(timelineStorageDir);
   const notesPathIssue = getPathIssue(notesStorageDir);
+  const fontPathIssue = getPathIssue(fontStorageDir);
 
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -263,7 +330,16 @@ export default function HomePage({
                       value={appThemeKey || ""}
                       onChange={(e) => onAppThemeChange?.(e.target.value)}
                     >
-                      {Object.entries(themes || {}).map(([key, theme]) => (
+                      {appThemes.map(([key, theme]) => {
+                        const isDefault = key.toLowerCase() === "parchment";
+                        const label = `${theme?.name || key}${isDefault ? " (Default)" : ""}`;
+                        return (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                      {userThemes.map(([key, theme]) => (
                         <option key={key} value={key}>
                           {theme?.name || key}
                         </option>
@@ -276,6 +352,38 @@ export default function HomePage({
                         onClick={() => window.electron?.openThemesFolder?.()}
                       >
                         Open Theme Folder
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">App Font</div>
+                  <div className="settings-row-description">
+                    Sets the UI font. Add custom fonts in the font folder.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <select
+                      className="settings-select"
+                      value={appFontFamily || "Inter"}
+                      onChange={(e) => onAppFontChange?.(e.target.value)}
+                    >
+                      {fontOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onOpenFontsFolder?.()}
+                      >
+                        Open Font Folder
                       </button>
                     </div>
                   </div>
@@ -348,6 +456,43 @@ export default function HomePage({
                         className="settings-folder-button"
                         type="button"
                         onClick={() => onNotesStorageDirChange?.("")}
+                      >
+                        Use Default
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Font Folder</div>
+                  <div className="settings-row-description">
+                    Where custom font files are stored. Leave blank to use the default app folder.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <div className="settings-path-pill" title={fontStorageDir || "Default app storage"}>
+                      <Folder className="settings-path-icon" size={14} />
+                      <span className="settings-path-text">
+                        {fontStorageDir || "Default app storage"}
+                      </span>
+                    </div>
+                    {fontPathIssue && (
+                      <div className="settings-path-error">{fontPathIssue}</div>
+                    )}
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onPickFontsDir?.()}
+                      >
+                        Choose...
+                      </button>
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onFontStorageDirChange?.("")}
                       >
                         Use Default
                       </button>

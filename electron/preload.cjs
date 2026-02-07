@@ -17,9 +17,12 @@ contextBridge.exposeInMainWorld('electron', {
   setAppSettings: (settings) => ipcRenderer.invoke('set-app-settings', settings),
   chooseTimelinesDir: () => ipcRenderer.invoke('choose-timelines-dir'),
   chooseNotesDir: () => ipcRenderer.invoke('choose-notes-dir'),
+  chooseFontsDir: () => ipcRenderer.invoke('choose-fonts-dir'),
   openThemesFolder: () => ipcRenderer.invoke('open-themes-folder'),
+  openFontsFolder: () => ipcRenderer.invoke('open-fonts-folder'),
   getNotesBaseDir: () => ipcRenderer.invoke('get-notes-base-dir'),
   listThemes: () => ipcRenderer.invoke('list-themes'),
+  listFonts: () => ipcRenderer.invoke('list-fonts'),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
