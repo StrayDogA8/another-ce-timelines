@@ -56,14 +56,15 @@ function TimelineView({
   const filterButtonRef = useRef(null);
   const animationFrameRef = useRef(null);
   const lastPlayTimeRef = useRef(null);
-  const lastSliderUpdateTimeRef = useRef(0);
-  const lastSliderValueRef = useRef(0);
   const sliderInputRef = useRef(false);
   const lastViewportYearRef = useRef(null);
   const lastSliderLabelRef = useRef("");
   const sliderRafRef = useRef(null);
   const pendingSliderValueRef = useRef(null);
   const sliderValueRef = useRef(0);
+  const sliderElementRef = useRef(null);
+  const yearLabelRef = useRef(null);
+  const viewportIndicatorRef = useRef(null);
   const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
   const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
 
@@ -418,6 +419,9 @@ function TimelineView({
   }, [calculatedHeight, onHeightChange]);
 
   useEffect(() => {
+    // Skip during animation - year label is updated directly via DOM
+    if (isPlaying) return;
+
     const container = containerRef.current;
     if (!container) return;
     const scale = scaleRef.current;
@@ -447,6 +451,7 @@ function TimelineView({
     }
   }, [
     sliderValue,
+    isPlaying,
     currentScale,
     timelineWidth,
     PX_PER_YEAR,
@@ -898,7 +903,33 @@ function TimelineView({
   };
 
   const handlePlayPause = () => {
+    if (isPlaying) {
+      // Sync React state with current DOM values when pausing
+      setSliderValue(sliderValueRef.current);
+      if (yearLabelRef.current) {
+        setSliderYearLabel(yearLabelRef.current.textContent || "");
+      }
+      if (lastViewportYearRef.current !== null) {
+        onViewportYearChange?.(lastViewportYearRef.current);
+      }
+    }
     setIsPlaying(!isPlaying);
+  };
+
+  // Stop animation and select an element
+  const handleSelect = (id) => {
+    if (isPlaying) {
+      // Stop animation and sync state
+      setSliderValue(sliderValueRef.current);
+      if (yearLabelRef.current) {
+        setSliderYearLabel(yearLabelRef.current.textContent || "");
+      }
+      if (lastViewportYearRef.current !== null) {
+        onViewportYearChange?.(lastViewportYearRef.current);
+      }
+      setIsPlaying(false);
+    }
+    onSelect?.(id);
   };
 
   // Animation effect
@@ -911,6 +942,15 @@ function TimelineView({
       lastPlayTimeRef.current = null;
       return;
     }
+
+    // Capture values at animation start to avoid dependency issues
+    const capturedPxPerYear = PX_PER_YEAR;
+    const capturedPadding = TIMELINE_PADDING;
+    const capturedMin = compressedMin;
+    const capturedMax = compressedMax;
+    const capturedDecompress = decompressYear;
+    const capturedFile = file;
+    const capturedTimelineWidth = timelineWidth;
 
     const animate = (time) => {
       const container = containerRef.current;
@@ -940,16 +980,53 @@ function TimelineView({
 
       const panPercentage = ((maxX - nextX) / range) * 100;
       const clampedPercentage = Math.min(100, Math.max(0, panPercentage));
-      const timeSinceUpdate = time - lastSliderUpdateTimeRef.current;
-      const delta = Math.abs(clampedPercentage - lastSliderValueRef.current);
 
-      if (timeSinceUpdate >= 33 || delta >= 0.2) {
-        lastSliderUpdateTimeRef.current = time;
-        lastSliderValueRef.current = clampedPercentage;
-        queueSliderValue(clampedPercentage);
+      // Update slider directly via DOM during animation
+      if (sliderElementRef.current) {
+        sliderElementRef.current.value = clampedPercentage;
+      }
+      sliderValueRef.current = clampedPercentage;
+
+      // Update viewport indicator position directly via DOM
+      if (viewportIndicatorRef.current) {
+        const scale = scaleRef.current;
+        const viewportWidth = container.clientWidth;
+        const scaledTimelineWidth = capturedTimelineWidth * scale;
+        const extra = Math.max(0, viewportWidth / 2 - capturedPadding * scale);
+        const totalScrollable = scaledTimelineWidth + extra * 2;
+        const viewportWidthPercent = Math.min(100, (viewportWidth / totalScrollable) * 100);
+        const halfWidth = viewportWidthPercent / 2;
+        const safeRange = 100 - viewportWidthPercent;
+        const mappedPosition = halfWidth + (clampedPercentage / 100) * safeRange;
+        viewportIndicatorRef.current.style.left = `${mappedPosition}%`;
       }
 
+      // Update year label directly via DOM during animation
+      const scale = scaleRef.current;
+      const viewportWidth = container.clientWidth;
+      const centerPx = -nextX + viewportWidth / 2;
+      const timelineX = centerPx / scale;
+      const compressedYear = (timelineX - capturedPadding) / capturedPxPerYear + capturedMin;
+      const clampedCompressed = Math.min(Math.max(compressedYear, capturedMin), capturedMax);
+      const rawYear = capturedDecompress(clampedCompressed);
+      const showMonths = capturedFile.useMonths === true;
+      const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
+      const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
+      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths);
+
+      if (yearLabelRef.current && nextLabel !== lastSliderLabelRef.current) {
+        lastSliderLabelRef.current = nextLabel;
+        yearLabelRef.current.textContent = nextLabel;
+      }
+
+      // Track viewport year for sync when animation ends (don't call during animation to avoid jitter)
+      lastViewportYearRef.current = snappedYear;
+
       if (nextX <= minX + 0.5) {
+        // Sync React state when animation ends
+        setSliderValue(clampedPercentage);
+        setSliderYearLabel(nextLabel);
+        onViewportYearChange?.(snappedYear);
         setIsPlaying(false);
         return;
       }
@@ -1008,9 +1085,13 @@ function TimelineView({
     }
   }, [downloadPngTrigger]);
 
+  // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
     sliderValueRef.current = sliderValue;
-  }, [sliderValue]);
+    if (sliderElementRef.current && !isPlaying) {
+      sliderElementRef.current.value = sliderValue;
+    }
+  }, [sliderValue, isPlaying]);
 
   useEffect(() => {
     return () => {
@@ -1026,7 +1107,7 @@ function TimelineView({
     <div
       ref={containerRef}
       className="timeline-scroll"
-      onClick={() => onSelect?.(null)} // clear selection on background click
+      onClick={() => handleSelect(null)} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
       <div
@@ -1123,7 +1204,7 @@ function TimelineView({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect?.(era.id);
+                  handleSelect(era.id);
                 }}
               >
                 <span
@@ -1231,7 +1312,7 @@ function TimelineView({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect?.(span.id);
+                  handleSelect(span.id);
                 }}
               >
                 <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
@@ -1340,7 +1421,7 @@ function TimelineView({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect?.(event.id);
+                  handleSelect(event.id);
                 }}
               >
                 <div className="event-title">{event.title}</div>
@@ -1597,15 +1678,17 @@ function TimelineView({
         </button>
         <div className="slider-track">
           <input
+            ref={sliderElementRef}
             type="range"
             min="0"
             max="100"
             step="0.1"
-            value={sliderValue}
+            defaultValue={0}
             onChange={handleSliderChange}
             className="timeline-slider"
           />
           <div
+            ref={viewportIndicatorRef}
             className="slider-viewport-indicator"
             style={{
               left: (() => {
@@ -1635,7 +1718,7 @@ function TimelineView({
             }}
           />
         </div>
-        <div className="slider-year">{sliderYearLabel}</div>
+        <div ref={yearLabelRef} className="slider-year">{sliderYearLabel}</div>
       </div>
     </div>
   );
