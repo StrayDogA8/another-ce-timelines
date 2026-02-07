@@ -3,7 +3,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
 const fsSync = require('fs');
-const themeConfig = require('../src/config/theme.json');
+const DEFAULT_THEME_KEY = 'parchment';
 
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
@@ -79,7 +79,7 @@ async function getStartupBackgroundColor() {
   const fallback = '#FFFAF4';
   try {
     const settings = await readAppSettings();
-    const themeKey = settings?.theme || themeConfig.activeTheme;
+    const themeKey = settings?.theme || DEFAULT_THEME_KEY;
     const themesDir = userThemesDir();
 
     if (!fsSync.existsSync(themesDir)) {
@@ -123,7 +123,11 @@ async function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
+    const debugProd = process.env.TIMELINES_DEBUG === 'true';
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    if (debugProd) {
+      mainWindow.webContents.openDevTools();
+    }
   }
 
   mainWindow.webContents.on('context-menu', (event, params) => {

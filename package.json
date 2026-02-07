@@ -26,7 +26,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "public/favicon/favicon.svg"
+      "icon": "public/favicon/favicon.ico"
     },
     "mac": {
       "target": [

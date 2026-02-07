@@ -16,5 +16,6 @@ const timelinePlugin = {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [react(), timelinePlugin],
 })
