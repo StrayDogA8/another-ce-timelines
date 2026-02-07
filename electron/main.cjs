@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, protocol, net } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
@@ -150,7 +150,36 @@ async function initializeUserData() {
   }
 }
 
+// Register custom protocol for serving local fonts
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-font', privileges: { bypassCSP: true, supportFetchAPI: true, standard: true } }
+]);
+
 app.whenReady().then(async () => {
+  // Register protocol handler for local fonts
+  protocol.handle('local-font', async (request) => {
+    try {
+      // URL format: local-font://font/encoded-path
+      const url = new URL(request.url);
+      const encodedPath = url.pathname.slice(1); // Remove leading /
+      const fontPath = decodeURIComponent(encodedPath);
+
+      // Verify the file exists and is in the fonts directory
+      const fontsDir = await getFontsDir();
+      const normalizedFontPath = path.normalize(fontPath);
+      const normalizedFontsDir = path.normalize(fontsDir);
+
+      if (!normalizedFontPath.startsWith(normalizedFontsDir)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+
+      return net.fetch(pathToFileURL(fontPath).toString());
+    } catch (error) {
+      console.error('Error serving font:', error);
+      return new Response('Not found', { status: 404 });
+    }
+  });
+
   await initializeUserData();
   await createWindow();
 
@@ -617,6 +646,42 @@ ipcMain.handle('list-themes', async () => {
   }
 });
 
+ipcMain.handle('save-user-theme', async (event, { id, content }) => {
+  try {
+    if (!id || !content) {
+      return { success: false, error: 'Missing id or content' };
+    }
+    const dir = userThemesDir();
+    await fs.mkdir(dir, { recursive: true });
+    const safeId = sanitizeId(id, 'theme');
+    const filePath = path.join(dir, `${safeId}.json`);
+    await fs.writeFile(filePath, content, 'utf8');
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('Error saving user theme:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-user-theme', async (event, { id }) => {
+  try {
+    if (!id) {
+      return { success: false, error: 'Missing id' };
+    }
+    const dir = userThemesDir();
+    const safeId = sanitizeId(id, 'theme');
+    const filePath = path.join(dir, `${safeId}.json`);
+    await fs.unlink(filePath);
+    return { success: true };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return { success: false, error: 'NOT_FOUND' };
+    }
+    console.error('Error deleting user theme:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('list-fonts', async () => {
   try {
     const dir = await getFontsDir();
@@ -630,7 +695,8 @@ ipcMain.handle('list-fonts', async () => {
         const ext = path.extname(file).toLowerCase();
         const name = path.basename(file, ext);
         const fullPath = path.join(dir, file);
-        const fileUrl = pathToFileURL(fullPath).toString();
+        // Use custom protocol instead of file:// for security
+        const fileUrl = `local-font://font/${encodeURIComponent(fullPath)}`;
         const format = ext === '.otf'
           ? 'opentype'
           : ext === '.ttf'

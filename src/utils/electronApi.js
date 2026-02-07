@@ -257,3 +257,31 @@ export async function listFonts() {
     return { success: false, fonts: [], error: error.message };
   }
 }
+
+export async function saveUserTheme({ id, content }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.saveUserTheme({ id, content });
+  } catch (error) {
+    console.error('Error saving user theme:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteUserTheme({ id }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.deleteUserTheme({ id });
+  } catch (error) {
+    console.error('Error deleting user theme:', error);
+    return { success: false, error: error.message };
+  }
+}

@@ -132,25 +132,25 @@ function App() {
     };
   }, [selectedId, timelineData]);
 
-  useEffect(() => {
-    const loadUserThemes = async () => {
-      if (!window.electron?.listThemes) return;
-      try {
-        const userThemes = await window.electron.listThemes();
-        if (!userThemes || Object.keys(userThemes).length === 0) return;
-        setThemeConfig((prev) => ({
-          ...prev,
-          themes: {
-            ...prev.themes,
-            ...userThemes,
-          },
-        }));
-      } catch (error) {
-        console.error('Failed to load user themes:', error);
-      }
-    };
+  const refreshUserThemes = async () => {
+    if (!window.electron?.listThemes) return;
+    try {
+      const bundledThemes = loadThemeConfig().themes || {};
+      const userThemes = await window.electron.listThemes();
+      setThemeConfig((prev) => ({
+        ...prev,
+        themes: {
+          ...bundledThemes,
+          ...(userThemes || {}),
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to load user themes:', error);
+    }
+  };
 
-    loadUserThemes();
+  useEffect(() => {
+    refreshUserThemes();
   }, []);
 
   useEffect(() => {
@@ -776,6 +776,34 @@ function App() {
     return `"${safeName}", ${fallback}`;
   };
 
+  const getThemeFont = (themeKeyValue) => {
+    const theme = themeConfig.themes?.[themeKeyValue];
+    if (!theme?.font?.family) return null;
+    return {
+      family: theme.font.family,
+      cssUrl: theme.font.cssUrl,
+    };
+  };
+
+  const resolveFontChoice = (setting, themeFont) => {
+    const normalized = String(setting || "").trim();
+    const lower = normalized.toLowerCase();
+    if (!normalized || lower === "default") {
+      if (themeFont?.family) {
+        return {
+          family: themeFont.family,
+          source: "theme",
+          cssUrl: themeFont.cssUrl,
+        };
+      }
+      return { family: "Inter", source: "inter" };
+    }
+    if (lower === "system") {
+      return { family: "system", source: "system" };
+    }
+    return { family: normalized, source: "user" };
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -835,19 +863,45 @@ function App() {
   }, [availableFonts]);
 
   useEffect(() => {
-    const timelineFont = timelineData?.file?.font;
-    const shouldUseAppFont =
-      !timelineFont || String(timelineFont).toLowerCase() === "default";
-    const family = timelineData
-      ? shouldUseAppFont
-        ? appFontFamily || "Inter"
-        : timelineFont
-      : appFontFamily || "Inter";
+    const themeFont = getThemeFont(themeKey);
+    const appChoice = resolveFontChoice(appFontFamily, themeFont);
+    const timelineSetting = timelineData?.file?.font;
+    const useAppFont =
+      !timelineSetting || String(timelineSetting).toLowerCase() === "default";
+    const timelineChoice = useAppFont
+      ? appChoice
+      : resolveFontChoice(timelineSetting, null);
+    const finalChoice = timelineData ? timelineChoice : appChoice;
+
     document.documentElement.style.setProperty(
       "--app-font-family",
-      resolveFontStack(family)
+      resolveFontStack(finalChoice.family)
     );
-  }, [appFontFamily, timelineData, timelineData?.file?.font]);
+
+    const linkId = "theme-font-css";
+    const existing = document.getElementById(linkId);
+    if (finalChoice.source === "theme" && finalChoice.cssUrl) {
+      if (existing) {
+        if (existing.getAttribute("href") !== finalChoice.cssUrl) {
+          existing.setAttribute("href", finalChoice.cssUrl);
+        }
+      } else {
+        const link = document.createElement("link");
+        link.id = linkId;
+        link.rel = "stylesheet";
+        link.href = finalChoice.cssUrl;
+        document.head.appendChild(link);
+      }
+    } else if (existing) {
+      existing.remove();
+    }
+  }, [
+    appFontFamily,
+    timelineData,
+    timelineData?.file?.font,
+    themeKey,
+    themeConfig,
+  ]);
 
   useEffect(() => {
     if (timelineData?.file) {
@@ -1010,6 +1064,7 @@ function App() {
             onPickFontsDir={handlePickFontsDir}
             onOpenFontsFolder={handleOpenFontsFolder}
             onAppFontChange={handleAppFontChange}
+            onRefreshThemes={refreshUserThemes}
           />
         </div>
       </>

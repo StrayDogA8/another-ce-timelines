@@ -22,7 +22,23 @@ export default function TopBar({ title = "Timelines" }) {
   return (
     <div className="custom-title-bar">
       <div className="title-bar-drag-region">
-        <img src="/favicon/favicon-light-96x96.png" alt="" className="title-bar-icon" />
+        <svg
+          className="title-bar-icon"
+          width="67"
+          height="25"
+          viewBox="0 0 67 25"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <rect y="8.89844" width="28.2656" height="6.80469" fill="currentColor" />
+          <rect x="35.0703" width="31.9297" height="7.32812" fill="currentColor" />
+          <rect x="35.0703" y="16.75" width="31.9297" height="7.32812" fill="currentColor" />
+          <path
+            d="M28.2656 5C28.2656 2.23858 30.5042 0 33.2656 0H35.0703V24.0781H33.2656C30.5042 24.0781 28.2656 21.8395 28.2656 19.0781V5Z"
+            fill="currentColor"
+          />
+        </svg>
         <span className="title-bar-title">{title}</span>
       </div>
       <div className="title-bar-controls">

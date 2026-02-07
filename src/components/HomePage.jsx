@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/02-homepage.css";
 import "../styles/07-modals-menus.css";
 import themeConfig from "../config/theme.json";
 import { loadThemeConfig } from "../utils/themeLoader";
+import { deleteUserTheme, saveUserTheme } from "../utils/electronApi";
 
 export default function HomePage({
   onSelectTimeline,
@@ -25,6 +26,7 @@ export default function HomePage({
   onPickNotesDir,
   onPickFontsDir,
   onOpenFontsFolder,
+  onRefreshThemes,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +34,13 @@ export default function HomePage({
   const [contextMenu, setContextMenu] = useState(null);
   const [view, setView] = useState("home");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
+  const [marketplaceThemes, setMarketplaceThemes] = useState([]);
+  const [marketplaceError, setMarketplaceError] = useState("");
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [marketplaceBusyId, setMarketplaceBusyId] = useState("");
+  const [installedThemeIds, setInstalledThemeIds] = useState(new Set());
+  const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
@@ -64,6 +73,11 @@ export default function HomePage({
     return entries.sort(([aKey], [bKey]) => aKey.localeCompare(bKey));
   }, [themes, bundledKeys]);
 
+  const userThemeIds = useMemo(
+    () => new Set(userThemes.map(([key]) => key.toLowerCase())),
+    [userThemes]
+  );
+
   const availableFonts = useMemo(() => {
     const seen = new Set();
     const list = [];
@@ -77,7 +91,10 @@ export default function HomePage({
   }, [fonts]);
 
   const fontOptions = useMemo(() => {
-    const options = [{ value: "Inter", label: "Inter (Default)" }];
+    const options = [
+      { value: "default", label: "Default (Theme)" },
+      { value: "Inter", label: "Inter" },
+    ];
     availableFonts.forEach((name) => {
       options.push({ value: name, label: name });
     });
@@ -90,6 +107,40 @@ export default function HomePage({
     }
     return options;
   }, [availableFonts, appFontFamily]);
+
+  const MARKETPLACE_BASE =
+    "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/refs/heads/main/";
+
+  const loadInstalledThemes = async () => {
+    if (!window.electron?.listThemes) return;
+    try {
+      const themes = await window.electron.listThemes();
+      const ids = new Set(Object.keys(themes || {}).map((key) => key.toLowerCase()));
+      setInstalledThemeIds(ids);
+    } catch (error) {
+      console.error("Failed to load installed themes:", error);
+    }
+  };
+
+  const loadMarketplace = async () => {
+    setMarketplaceLoading(true);
+    setMarketplaceError("");
+    try {
+      const response = await fetch(`${MARKETPLACE_BASE}index.json`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to load marketplace (${response.status})`);
+      }
+      const data = await response.json();
+      const themes = Array.isArray(data?.themes) ? data.themes : [];
+      setMarketplaceThemes(themes);
+    } catch (error) {
+      console.error("Failed to load marketplace:", error);
+      setMarketplaceError("Failed to load marketplace themes.");
+      setMarketplaceThemes([]);
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
 
   const getPathIssue = (value) => {
     if (!value) return null;
@@ -171,6 +222,62 @@ export default function HomePage({
   const handleMenuAction = (action) => {
     setContextMenu(null);
     if (action) action();
+  };
+
+  const handleOpenMarketplace = () => {
+    setIsMarketplaceOpen(true);
+    setMarketplaceSearch("");
+    loadMarketplace();
+    loadInstalledThemes();
+  };
+
+  const handleCloseMarketplace = () => {
+    setIsMarketplaceOpen(false);
+    setMarketplaceThemes([]);
+    setMarketplaceError("");
+  };
+
+  const handleDownloadTheme = async (theme) => {
+    if (!theme?.id || !theme?.paths?.theme) return;
+    setMarketplaceBusyId(theme.id);
+    try {
+      const response = await fetch(`${MARKETPLACE_BASE}${theme.paths.theme}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to download theme (${response.status})`);
+      }
+      const content = await response.text();
+      const result = await saveUserTheme({ id: theme.id, content });
+      if (!result?.success) {
+        throw new Error(result?.error || "Failed to save theme");
+      }
+      await onRefreshThemes?.();
+      await loadInstalledThemes();
+    } catch (error) {
+      console.error("Failed to download theme:", error);
+      setMarketplaceError("Failed to download theme.");
+    } finally {
+      setMarketplaceBusyId("");
+    }
+  };
+
+  const handleDeleteTheme = async (theme) => {
+    if (!theme?.id) return;
+    setMarketplaceBusyId(theme.id);
+    try {
+      const result = await deleteUserTheme({ id: theme.id });
+      if (!result?.success && result?.error !== "NOT_FOUND") {
+        throw new Error(result?.error || "Failed to delete theme");
+      }
+      await onRefreshThemes?.();
+      await loadInstalledThemes();
+    } catch (error) {
+      console.error("Failed to delete theme:", error);
+      setMarketplaceError("Failed to delete theme.");
+    } finally {
+      setMarketplaceBusyId("");
+    }
   };
 
   const handleDuplicate = async (file) => {
@@ -261,10 +368,17 @@ export default function HomePage({
             />
             <button
               className="homepage-settings-icon"
+              onClick={handleOpenMarketplace}
+              aria-label="Marketplace"
+            >
+              <Store size={26} />
+            </button>
+            <button
+              className="homepage-settings-icon"
               onClick={() => setView("settings")}
               aria-label="App Settings"
             >
-              <Settings size={22} />
+              <Settings size={26} />
             </button>
           </div>
         </div>
@@ -540,6 +654,130 @@ export default function HomePage({
             <Trash2 size={16} />
             <span>Delete</span>
           </button>
+        </div>
+      )}
+
+      {isMarketplaceOpen && (
+        <div className="settings-backdrop" onClick={handleCloseMarketplace}>
+          <div className="marketplace-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="marketplace-header">
+              <button
+                className="settings-back-button"
+                onClick={handleCloseMarketplace}
+                aria-label="Close marketplace"
+              >
+                <ArrowLeft size={18} strokeWidth={2} />
+              </button>
+              <h2 className="settings-title">MARKETPLACE</h2>
+            </div>
+
+            <div className="marketplace-search-row">
+              <input
+                className="marketplace-search"
+                type="text"
+                placeholder="Search themes..."
+                value={marketplaceSearch}
+                onChange={(e) => setMarketplaceSearch(e.target.value)}
+                aria-label="Search marketplace themes"
+              />
+            </div>
+
+            {marketplaceError && (
+              <div className="marketplace-error">{marketplaceError}</div>
+            )}
+
+            {marketplaceLoading ? (
+              <div className="marketplace-loading">Loading themes...</div>
+            ) : (
+              <div className="marketplace-grid">
+                {marketplaceThemes
+                  .filter((theme) => {
+                    const query = marketplaceSearch.trim().toLowerCase();
+                    if (!query) return true;
+                    const haystack = [
+                      theme?.name,
+                      theme?.id,
+                      theme?.author,
+                      theme?.description,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                      .toLowerCase();
+                    return haystack.includes(query);
+                  })
+                  .map((theme) => {
+                  const themeId = String(theme.id || "").toLowerCase();
+                  const isInstalled =
+                    installedThemeIds.has(themeId) || userThemeIds.has(themeId);
+                  const isActive =
+                    String(appThemeKey || "").toLowerCase() === themeId;
+                  const isBusy = marketplaceBusyId === theme.id;
+                  const thumbnailUrl = theme?.paths?.thumbnail
+                    ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}`
+                    : "";
+                  return (
+                    <div key={theme.id} className="marketplace-card">
+                      <div className="marketplace-thumbnail">
+                        {thumbnailUrl ? (
+                          <img src={thumbnailUrl} alt={`${theme.name} preview`} />
+                        ) : (
+                          <div className="marketplace-thumbnail-empty">No preview</div>
+                        )}
+                      </div>
+                      <div className="marketplace-card-body">
+                        <div className="marketplace-card-title">
+                          {theme.name || theme.id}
+                        </div>
+                        <div className="marketplace-card-author">
+                          {theme.author ? `by ${theme.author}` : ""}
+                        </div>
+                        <div className="marketplace-card-description">
+                          {theme.description}
+                        </div>
+                      </div>
+                      <div className="marketplace-card-actions">
+                        {isInstalled ? (
+                          <>
+                            <button
+                              className="marketplace-button"
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() =>
+                                onAppThemeChange?.(
+                                  isActive ? defaultThemeKey || "parchment" : theme.id
+                                )
+                              }
+                            >
+                              {isActive ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              className="marketplace-icon-button marketplace-button-danger"
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleDeleteTheme(theme)}
+                              aria-label="Delete theme"
+                              title="Delete theme"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="marketplace-button"
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleDownloadTheme(theme)}
+                          >
+                            {isBusy ? "Downloading..." : "Download"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
