@@ -660,8 +660,25 @@ function TimelineView({
 
     // Pan with mouse drag
     const handleMouseDown = (e) => {
-      // Only pan with middle mouse or space+left mouse
-      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      const isMiddleClick = e.button === 1;
+      const isLeftClick = e.button === 0;
+      const isShiftPan = isLeftClick && e.shiftKey;
+      const interactiveSelector = [
+        ".event",
+        ".span-item",
+        ".era-item",
+        ".timeline-canvas-bar",
+        ".timeline-canvas-button",
+        ".timeline-slider",
+        ".timeline-slider-container",
+        ".timeline-context-menu",
+      ].join(", ");
+      const clickedInteractive = e.target.closest(interactiveSelector);
+      const clickedFormControl = e.target.closest("input, textarea, button, select, a");
+      const allowLeftDrag = isLeftClick && !clickedInteractive && !clickedFormControl;
+
+      // Allow middle mouse, shift+left, or left-drag on empty canvas.
+      if (isMiddleClick || isShiftPan || allowLeftDrag) {
         e.preventDefault();
         isPanningRef.current = true;
         lastPanPositionRef.current = { x: e.clientX, y: e.clientY };

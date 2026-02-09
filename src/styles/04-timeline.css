@@ -25,7 +25,7 @@
   right: 0;
   height: 3px;
   background: var(--dark-bg);
-  z-index: 0;
+  z-index: 2;
 }
 
 .timeline-line-segments {
@@ -33,6 +33,7 @@
   left: 0;
   right: 0;
   height: 3px;
+  z-index: 2;
 }
 
 .timeline-line-segment {
@@ -96,10 +97,10 @@
   inset: 0;
 }
 
-.event-lines-layer { position: relative; z-index: 1; }
-.connectors-layer { position: relative; z-index: 2; }
-.spans-layer { position: relative; z-index: 3; }
-.events-layer { position: relative; z-index: 3; }
+.event-lines-layer { position: relative; z-index: 3; }
+.connectors-layer { position: relative; z-index: 4; }
+.spans-layer { position: relative; z-index: 5; }
+.events-layer { position: relative; z-index: 5; }
 
 .span-item {
   position: absolute;
