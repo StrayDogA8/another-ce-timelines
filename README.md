@@ -13,7 +13,7 @@
 
 A free app that allows users to create and share customized timelines for use in historical chronologies, world-building, and project management. 
 
-![Demo](docs/timelines_demo_gif_v3.gif)
+<img src="docs/timelines_demo_gif_v3.gif" width="100%" />
 
 ![Default View](docs/default-view.png)
 
