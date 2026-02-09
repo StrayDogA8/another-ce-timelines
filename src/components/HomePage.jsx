@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X } from "lucide-react";
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/02-homepage.css";
 import "../styles/07-modals-menus.css";
@@ -41,6 +41,8 @@ export default function HomePage({
   const [marketplaceBusyId, setMarketplaceBusyId] = useState("");
   const [installedThemeIds, setInstalledThemeIds] = useState(new Set());
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
+  const [deleteDialogFile, setDeleteDialogFile] = useState(null);
+  const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
@@ -316,12 +318,20 @@ export default function HomePage({
   };
 
   const handleDelete = async (file) => {
-    const confirmed = confirm(`Are you sure you want to delete "${file.name}"? This cannot be undone.`);
-    if (!confirmed) return;
+    setDeleteDialogFile(file);
+    setDeleteDialogWithAssets(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    const file = deleteDialogFile;
+    if (!file) return;
 
     try {
       if (window.electron?.deleteTimeline) {
-        await window.electron.deleteTimeline(file.id);
+        await window.electron.deleteTimeline({
+          id: file.id,
+          deleteAssets: deleteDialogWithAssets,
+        });
 
         // Reload timeline list
         const files = await window.electron.listTimelines();
@@ -332,6 +342,8 @@ export default function HomePage({
     } catch (error) {
       console.error('Failed to delete timeline:', error);
       alert(`Failed to delete timeline: ${error.message}`);
+    } finally {
+      setDeleteDialogFile(null);
     }
   };
 
@@ -619,7 +631,7 @@ export default function HomePage({
                 <div className="settings-row-left">
                   <div className="settings-row-label">Documentation</div>
                   <div className="settings-row-description">
-                    Timelines 0.1.0 (Alpha)
+                    Timelines 0.2.0 (Alpha)
                   </div>
                 </div>
                 <div className="settings-row-right">
@@ -640,6 +652,59 @@ export default function HomePage({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteDialogFile && (
+        <div
+          className="settings-backdrop"
+          onClick={() => setDeleteDialogFile(null)}
+        >
+          <div
+            className="settings-modal confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-header">
+              <h2 className="settings-title">DELETE TIMELINE</h2>
+              <button
+                className="settings-back-button"
+                onClick={() => setDeleteDialogFile(null)}
+                aria-label="Close delete dialog"
+              >
+                <X size={18} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="confirm-content">
+              <p className="confirm-text">
+                Are you sure you want to delete "{deleteDialogFile.name}"? This cannot be
+                undone.
+              </p>
+              <label className="confirm-checkbox">
+                <input
+                  type="checkbox"
+                  checked={deleteDialogWithAssets}
+                  onChange={(e) => setDeleteDialogWithAssets(e.target.checked)}
+                />
+                Also delete notes/assets for this timeline
+              </label>
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                className="settings-folder-button"
+                onClick={() => setDeleteDialogFile(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-folder-button confirm-delete-button"
+                onClick={handleConfirmDelete}
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>

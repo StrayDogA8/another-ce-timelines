@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
   loadTimeline: (filename) => ipcRenderer.invoke('load-timeline', filename),
   exportTimeline: (data, suggestedName) => ipcRenderer.invoke('export-timeline', { data, suggestedName }),
   importTimeline: () => ipcRenderer.invoke('import-timeline'),
-  deleteTimeline: (filename) => ipcRenderer.invoke('delete-timeline', filename),
+  deleteTimeline: (payload) => ipcRenderer.invoke('delete-timeline', payload),
   createNote: (payload) => ipcRenderer.invoke('create-note', payload),
   readNote: (payload) => ipcRenderer.invoke('read-note', payload),
   writeNote: (payload) => ipcRenderer.invoke('write-note', payload),

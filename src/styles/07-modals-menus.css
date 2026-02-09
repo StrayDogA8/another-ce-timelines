@@ -157,6 +157,36 @@
   animation: modalSlideIn 0.2s ease-out;
 }
 
+.confirm-modal {
+  max-width: 420px;
+}
+
+.confirm-content {
+  padding: 0 24px 16px;
+  color: var(--dark-bg);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.confirm-text {
+  margin: 0 0 12px;
+}
+
+.confirm-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dark-bg);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 24px 20px;
+}
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;

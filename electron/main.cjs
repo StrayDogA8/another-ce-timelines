@@ -349,14 +349,22 @@ ipcMain.handle('import-timeline', async () => {
   }
 });
 
-ipcMain.handle('delete-timeline', async (event, filename) => {
+ipcMain.handle('delete-timeline', async (event, payload) => {
   try {
+    const request = payload && typeof payload === 'object' ? payload : { id: payload };
+    const deleteAssets = Boolean(request.deleteAssets);
+    const filename = request.id ?? request.filename ?? request.timelineId;
     const userDataDir = await getTimelinesDir();
     const safeFilename = sanitizeTimelineId(filename);
     const filePath = path.join(userDataDir, `${safeFilename}.timeline`);
 
     await fs.unlink(filePath);
     console.log(`Deleted timeline: ${filename}`);
+
+    if (deleteAssets) {
+      const notesDir = await getNotesDir(safeFilename);
+      await fs.rm(notesDir, { recursive: true, force: true });
+    }
 
     return {
       success: true,
