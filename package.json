@@ -33,13 +33,13 @@
       "target": [
         "dmg"
       ],
-      "icon": "public/favicon/favicon.svg"
+      "icon": "public/icons.icns"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
-      "icon": "public/favicon/favicon.svg"
+      "icon": "public/icon.png"
     }
   },
   "dependencies": {
