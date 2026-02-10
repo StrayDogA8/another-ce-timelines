@@ -18,9 +18,12 @@ export default function HomePage({
   onAppFontChange,
   timelineStorageDir,
   notesStorageDir,
+  notesSubfolder,
   fontStorageDir,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
+  onNotesSubfolderChange,
+  onPickNotesSubfolder,
   onFontStorageDirChange,
   onPickTimelinesDir,
   onPickNotesDir,
@@ -167,6 +170,17 @@ export default function HomePage({
 
   const timelinePathIssue = getPathIssue(timelineStorageDir);
   const notesPathIssue = getPathIssue(notesStorageDir);
+  const notesSubfolderIssue = useMemo(() => {
+    const value = String(notesSubfolder || "").trim();
+    if (!value) return null;
+    if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\")) {
+      return "Subfolder must be relative to the Notes Folder.";
+    }
+    if (value.split(/[\\/]+/).includes("..")) {
+      return "Subfolder cannot include ..";
+    }
+    return null;
+  }, [notesSubfolder]);
   const fontPathIssue = getPathIssue(fontStorageDir);
 
   useEffect(() => {
@@ -582,6 +596,43 @@ export default function HomePage({
                         className="settings-folder-button"
                         type="button"
                         onClick={() => onNotesStorageDirChange?.("")}
+                      >
+                        Use Default
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Default Notes Subfolder</div>
+                  <div className="settings-row-description">
+                    Optional subfolder inside the Notes Folder used for new notes.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <div className="settings-folder settings-folder-column">
+                    <div className="settings-path-pill" title={notesSubfolder || "Default (none)"}>
+                      <Folder className="settings-path-icon" size={14} />
+                      <span className="settings-path-text">
+                        {notesSubfolder || "Default (none)"}
+                      </span>
+                    </div>
+                    {notesSubfolderIssue && (
+                      <div className="settings-path-error">{notesSubfolderIssue}</div>
+                    )}
+                    <div className="settings-folder-actions">
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onPickNotesSubfolder?.()}
+                      >
+                        Choose...
+                      </button>
+                      <button
+                        className="settings-folder-button"
+                        type="button"
+                        onClick={() => onNotesSubfolderChange?.("")}
                       >
                         Use Default
                       </button>

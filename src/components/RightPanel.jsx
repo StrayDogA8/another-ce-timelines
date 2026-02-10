@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2 } from "lucide-react";
+import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { createNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
+import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
@@ -38,6 +38,7 @@ export default function RightPanel({
   const [tagQuery, setTagQuery] = useState("");
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const tagMenuTimeoutRef = useRef(null);
+  const panelRef = useRef(null);
   const TAG_MAX_LENGTH = 32;
   const ID_MAX_LENGTH = 60;
 
@@ -143,6 +144,28 @@ export default function RightPanel({
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const handleOutsideClick = (event) => {
+      const panel = panelRef.current;
+      if (!panel || panel.contains(event.target)) {
+        return;
+      }
+      if (formData) {
+        commitDraft(formData);
+        if (formData.noteFile) {
+          handleNoteSave();
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick, true);
+    };
+  }, [isEditMode, formData, noteContent]);
 
   // Cleanup all menu timeouts on unmount
   useEffect(() => {
@@ -498,6 +521,25 @@ export default function RightPanel({
     setNoteContent(result?.content ?? `# ${formData.title}\n\n`);
   };
 
+  const handleAddExistingNote = async () => {
+    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
+    if (!timelineId) return;
+    const result = await addExistingNote({ timelineId });
+    if (!result?.success) {
+      if (result?.error === "OUTSIDE_NOTES_DIR") {
+        window.alert("That note is outside your Notes Folder. Choose a note inside the Notes Folder or change the Notes Folder in App Settings.");
+      } else if (!result?.cancelled) {
+        console.error('Failed to add existing note:', result?.error);
+      }
+      return;
+    }
+    const next = { ...formData, noteFile: result.filename };
+    setFormData(next);
+    onUpdate?.(next);
+    setNoteContent(result?.content ?? "");
+    setNoteExists(true);
+  };
+
   const handleNoteSave = async () => {
     if (!formData?.noteFile) return;
     const timelineId = timelineData?.file?.id?.replace('-timeline', '');
@@ -531,6 +573,16 @@ export default function RightPanel({
     delete next.noteFile;
     setFormData(next);
     setNoteContent("");
+    onUpdate?.(next);
+  };
+
+  const handleUnlinkNote = () => {
+    if (!formData?.noteFile) return;
+    const next = { ...formData };
+    delete next.noteFile;
+    setFormData(next);
+    setNoteContent("");
+    setNoteExists(false);
     onUpdate?.(next);
   };
 
@@ -795,7 +847,10 @@ export default function RightPanel({
   }
 
   return (
-    <div className={`right-panel ${isMaximized ? "is-maximized" : ""}`}>
+    <div
+      ref={panelRef}
+      className={`right-panel ${isMaximized ? "is-maximized" : ""}`}
+    >
       <div className="right-panel-header">
         <div>
           <h2>{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</h2>
@@ -1379,9 +1434,18 @@ export default function RightPanel({
 
             <div className="form-group note-form-group">
               {!formData.noteFile ? (
-                <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
-                  Add Note
-                </button>
+                <div className="note-add-actions">
+                  <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
+                    Create Note
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-note"
+                    onClick={handleAddExistingNote}
+                  >
+                    Add Existing Note
+                  </button>
+                </div>
               ) : (
                 <div className="note-editor">
                   <div className="note-toolbar">
@@ -1417,6 +1481,9 @@ export default function RightPanel({
                     {noteExists && (
                       <>
                         <div className="note-toolbar-divider" />
+                        <button type="button" onClick={handleUnlinkNote} title="Unlink Note">
+                          <Unlink size={14} />
+                        </button>
                         <button type="button" onClick={handleDeleteNote} title="Delete Note">
                           <Trash2 size={14} />
                         </button>

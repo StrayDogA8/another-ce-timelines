@@ -180,6 +180,13 @@
   color: var(--dark-bg);
 }
 
+.settings-subfolder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .confirm-actions {
   display: flex;
   justify-content: flex-end;

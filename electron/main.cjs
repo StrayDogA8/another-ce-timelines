@@ -30,6 +30,51 @@ const sanitizeNoteFilename = (value) => {
   return `${cleaned}.md`;
 };
 
+const resolveNotePath = async (timelineId, notePath) => {
+  const notesRootDir = await getNotesRootDir();
+  const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
+  const rawPath = String(notePath || '').trim();
+  if (!rawPath) {
+    throw new Error('Missing note path');
+  }
+
+  const usesRelativePath = rawPath.includes('/') || rawPath.includes('\\');
+  const base = usesRelativePath ? notesRootDir : notesDir;
+  const relativePath = usesRelativePath ? rawPath : sanitizeNoteFilename(rawPath);
+
+  const resolvedBase = path.resolve(base);
+  const resolvedPath = path.resolve(base, relativePath);
+
+  if (resolvedPath === resolvedBase) {
+    throw new Error('Invalid note path');
+  }
+
+  const relative = path.relative(resolvedBase, resolvedPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Note path outside notes folder');
+  }
+
+  return resolvedPath;
+};
+const ensureUniqueNoteFilename = async (notesDir, desiredFilename) => {
+  const base = String(desiredFilename || '').replace(/\.md$/i, '');
+  const cleaned = sanitizeId(base, 'note');
+  let candidate = `${cleaned}.md`;
+  let counter = 2;
+  while (true) {
+    try {
+      await fs.access(path.join(notesDir, candidate));
+      candidate = `${cleaned}-${counter}.md`;
+      counter += 1;
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return candidate;
+      }
+      throw error;
+    }
+  }
+};
+
 const readAppSettings = async () => {
   try {
     const content = await fs.readFile(appSettingsPath(), 'utf8');
@@ -50,6 +95,22 @@ const getTimelinesDir = async () => {
 };
 
 const getNotesBaseDir = async () => {
+  const baseDir = await getNotesRootDir();
+  const settings = await readAppSettings();
+  const subfolderValue = String(settings?.notesSubfolder || '').trim();
+  const normalizeSubfolder = (value) => {
+    if (!value) return '';
+    if (path.isAbsolute(value)) return '';
+    const normalized = path.normalize(value);
+    const parts = normalized.split(path.sep).filter(Boolean);
+    if (parts.some((part) => part === '..')) return '';
+    return parts.join(path.sep);
+  };
+  const subfolder = normalizeSubfolder(subfolderValue);
+  return subfolder ? path.join(baseDir, subfolder) : baseDir;
+};
+
+const getNotesRootDir = async () => {
   const settings = await readAppSettings();
   const customDir = settings?.notesStorageDir;
   if (customDir && typeof customDir === 'string') {
@@ -405,15 +466,47 @@ ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) =>
   }
 });
 
+ipcMain.handle('add-existing-note', async (event, { timelineId } = {}) => {
+  try {
+    if (!timelineId) {
+      return { success: false, error: 'Missing timelineId' };
+    }
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+
+    if (result.canceled || !result.filePaths?.length) {
+      return { success: false, cancelled: true };
+    }
+
+    const sourcePath = result.filePaths[0];
+    const baseDir = await getNotesRootDir();
+    const resolvedBase = path.resolve(baseDir);
+    const resolvedSource = path.resolve(sourcePath);
+    const relative = path.relative(resolvedBase, resolvedSource);
+
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { success: false, error: 'OUTSIDE_NOTES_DIR' };
+    }
+
+    const normalizedRelative = relative.split(path.sep).join('/');
+    const content = await fs.readFile(sourcePath, 'utf8');
+
+    return { success: true, filename: normalizedRelative, content };
+  } catch (error) {
+    console.error('Error adding existing note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
   try {
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const filePath = path.join(
-      await getNotesDir(sanitizeTimelineId(timelineId)),
-      sanitizeNoteFilename(filename)
-    );
+    const filePath = await resolveNotePath(timelineId, filename);
     const content = await fs.readFile(filePath, 'utf8');
     return { success: true, content };
   } catch (error) {
@@ -432,7 +525,7 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     }
     const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
     await fs.mkdir(notesDir, { recursive: true });
-    const filePath = path.join(notesDir, sanitizeNoteFilename(filename));
+    const filePath = await resolveNotePath(timelineId, filename);
     await fs.writeFile(filePath, content ?? '', 'utf8');
     return { success: true };
   } catch (error) {
@@ -446,9 +539,8 @@ ipcMain.handle('rename-note', async (event, { timelineId, oldFilename, newFilena
     if (!timelineId || !oldFilename || !newFilename) {
       return { success: false, error: 'Missing timelineId or filenames' };
     }
-    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
-    const oldPath = path.join(notesDir, sanitizeNoteFilename(oldFilename));
-    const nextPath = path.join(notesDir, sanitizeNoteFilename(newFilename));
+    const oldPath = await resolveNotePath(timelineId, oldFilename);
+    const nextPath = await resolveNotePath(timelineId, newFilename);
     try {
       await fs.rename(oldPath, nextPath);
     } catch (error) {
@@ -508,10 +600,7 @@ ipcMain.handle('delete-note', async (event, { timelineId, filename }) => {
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const filePath = path.join(
-      await getNotesDir(sanitizeTimelineId(timelineId)),
-      sanitizeNoteFilename(filename)
-    );
+    const filePath = await resolveNotePath(timelineId, filename);
     await fs.unlink(filePath);
     return { success: true };
   } catch (error) {
@@ -576,6 +665,35 @@ ipcMain.handle('choose-notes-dir', async () => {
     return { success: true, path: filePaths[0] };
   } catch (error) {
     console.error('Error choosing notes directory:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('choose-notes-subfolder', async () => {
+  try {
+    const rootDir = await getNotesRootDir();
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: rootDir,
+    });
+
+    if (canceled || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const selectedPath = filePaths[0];
+    const resolvedRoot = path.resolve(rootDir);
+    const resolvedSelected = path.resolve(selectedPath);
+    const relative = path.relative(resolvedRoot, resolvedSelected);
+
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { success: false, error: 'OUTSIDE_NOTES_DIR' };
+    }
+
+    const normalizedRelative = relative.split(path.sep).join('/');
+    return { success: true, subfolder: normalizedRelative };
+  } catch (error) {
+    console.error('Error choosing notes subfolder:', error);
     return { success: false, error: error.message };
   }
 });

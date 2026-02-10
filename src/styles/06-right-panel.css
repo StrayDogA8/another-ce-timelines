@@ -658,6 +658,12 @@
   text-align: center;
 }
 
+.note-add-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .note-editor {
   margin-top: 8px;
 }

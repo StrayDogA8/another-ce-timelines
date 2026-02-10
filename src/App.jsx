@@ -10,10 +10,12 @@ import {
   saveTimelineToFile,
   chooseTimelinesDir,
   chooseNotesDir,
+  chooseNotesSubfolder,
   chooseFontsDir,
   listFonts,
   openFontsFolder,
   renameNote,
+  deleteNote,
   renameTimeline,
 } from "./utils/electronApi";
 import { updateElementWithNewId, makeUniqueId, generateIdFromTitle } from "./utils/idUtils";
@@ -38,6 +40,8 @@ function App() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [deleteElementDialog, setDeleteElementDialog] = useState(null);
+  const [deleteElementWithNotes, setDeleteElementWithNotes] = useState(false);
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
@@ -49,6 +53,7 @@ function App() {
   const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
+  const [notesSubfolder, setNotesSubfolder] = useState("");
   const [fontStorageDir, setFontStorageDir] = useState("");
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [availableFonts, setAvailableFonts] = useState([]);
@@ -117,11 +122,7 @@ function App() {
         const element = timelineData.elements.find(el => el.id === selectedId);
         if (!element) return;
 
-        const confirmMessage = `Are you sure you want to delete this ${element.type}?\n\nTitle: ${element.title}\nID: ${element.id}\n\nThis action cannot be undone.`;
-
-        if (window.confirm(confirmMessage)) {
-          handleDelete(selectedId);
-        }
+        handleRequestDelete(element.id);
       }
     }
 
@@ -312,6 +313,28 @@ function App() {
   const handleEditElement = (id) => {
     setSelectedId(id);
     setEditRequestId(id);
+  };
+
+  const handleRequestDelete = (elementId) => {
+    if (!timelineData?.elements) return;
+    const element = timelineData.elements.find((el) => el.id === elementId);
+    if (!element) return;
+    setDeleteElementDialog(element);
+    setDeleteElementWithNotes(false);
+  };
+
+  const handleConfirmDeleteElement = async () => {
+    const element = deleteElementDialog;
+    if (!element) return;
+    if (deleteElementWithNotes && element.noteFile) {
+      const timelineId = timelineData?.file?.id?.replace('-timeline', '') || 'timeline';
+      await deleteNote({ timelineId, filename: element.noteFile }).catch(console.error);
+    }
+    handleDelete(element.id);
+    if (selectedId === element.id) {
+      setSelectedId(null);
+    }
+    setDeleteElementDialog(null);
   };
 
   const handleUpdate = async (updatedElement) => {
@@ -814,10 +837,12 @@ function App() {
       setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
+      const storedNotesSubfolder = settings?.notesSubfolder ?? "";
       const storedFontsDir = settings?.fontStorageDir ?? "";
       const storedFontFamily = settings?.appFontFamily ?? "Inter";
       setTimelineStorageDir(storedTimelineDir);
       setNotesStorageDir(storedNotesDir);
+      setNotesSubfolder(storedNotesSubfolder);
       setFontStorageDir(storedFontsDir);
       setAppFontFamily(storedFontFamily);
     };
@@ -920,6 +945,7 @@ function App() {
       theme: nextThemeKey,
       timelineStorageDir,
       notesStorageDir,
+      notesSubfolder,
       fontStorageDir,
       appFontFamily,
     });
@@ -931,6 +957,7 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir: nextDir || "",
       notesStorageDir,
+      notesSubfolder,
       fontStorageDir,
       appFontFamily,
     });
@@ -942,6 +969,20 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir: nextDir || "",
+      notesSubfolder,
+      fontStorageDir,
+      appFontFamily,
+    });
+  };
+
+  const handleNotesSubfolderChange = async (nextValue) => {
+    const next = nextValue || "";
+    setNotesSubfolder(next);
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      notesSubfolder: next,
       fontStorageDir,
       appFontFamily,
     });
@@ -953,6 +994,7 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
+      notesSubfolder,
       fontStorageDir: nextDir || "",
       appFontFamily,
     });
@@ -964,6 +1006,7 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
+      notesSubfolder,
       fontStorageDir,
       appFontFamily: nextFont,
     });
@@ -980,6 +1023,13 @@ function App() {
     const result = await chooseNotesDir();
     if (result?.success && result.path) {
       await handleNotesStorageDirChange(result.path);
+    }
+  };
+
+  const handlePickNotesSubfolder = async () => {
+    const result = await chooseNotesSubfolder();
+    if (result?.success && result.subfolder) {
+      await handleNotesSubfolderChange(result.subfolder);
     }
   };
 
@@ -1056,9 +1106,12 @@ function App() {
             fonts={availableFonts}
             timelineStorageDir={timelineStorageDir}
             notesStorageDir={notesStorageDir}
+            notesSubfolder={notesSubfolder}
             fontStorageDir={fontStorageDir}
             onTimelineStorageDirChange={handleTimelineStorageDirChange}
             onNotesStorageDirChange={handleNotesStorageDirChange}
+            onNotesSubfolderChange={handleNotesSubfolderChange}
+            onPickNotesSubfolder={handlePickNotesSubfolder}
             onFontStorageDirChange={handleFontStorageDirChange}
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
@@ -1104,7 +1157,7 @@ function App() {
           onNewTimeline={handleNewTimeline}
           onDuplicateTimeline={handleDuplicateTimeline}
           onBackToHome={handleBackToHome}
-          onDelete={handleDelete}
+          onDelete={handleRequestDelete}
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
         />
@@ -1134,7 +1187,7 @@ function App() {
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          onDelete={handleDelete}
+          onDelete={handleRequestDelete}
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
           downloadPngTrigger={downloadPngTrigger}
@@ -1201,6 +1254,60 @@ function App() {
             />
           </aside>
         </>
+      )}
+
+      {deleteElementDialog && (
+        <div
+          className="settings-backdrop"
+          onClick={() => setDeleteElementDialog(null)}
+        >
+          <div
+            className="settings-modal confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-header">
+              <h2 className="settings-title">DELETE {deleteElementDialog.type?.toUpperCase()}</h2>
+              <button
+                className="settings-back-button"
+                onClick={() => setDeleteElementDialog(null)}
+                aria-label="Close delete dialog"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="confirm-content">
+              <p className="confirm-text">
+                Are you sure you want to delete "{deleteElementDialog.title}"? This cannot be
+                undone.
+              </p>
+              <label className="confirm-checkbox">
+                <input
+                  type="checkbox"
+                  checked={deleteElementWithNotes}
+                  disabled={!deleteElementDialog.noteFile}
+                  onChange={(e) => setDeleteElementWithNotes(e.target.checked)}
+                />
+                Also delete linked note file
+              </label>
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                className="settings-folder-button"
+                onClick={() => setDeleteElementDialog(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-folder-button confirm-delete-button"
+                onClick={handleConfirmDeleteElement}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <NewTimelineModal

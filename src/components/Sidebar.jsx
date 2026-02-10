@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
 import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2 } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
@@ -49,6 +49,8 @@ export default function Sidebar({
   const submenuCloseTimer = useRef(null);
   const filterMenuRef = useRef(null);
   const filterButtonRef = useRef(null);
+  const listRef = useRef(null);
+  const lastScrollTopRef = useRef(0);
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -231,6 +233,11 @@ export default function Sidebar({
     };
   }, [filterMenu]);
 
+  useLayoutEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = lastScrollTopRef.current;
+  }, [selectedId]);
+
   const handleOpenSubmenu = (e, submenuType) => {
     e.stopPropagation();
     // Clear any pending close timer
@@ -269,7 +276,17 @@ export default function Sidebar({
       <button
         className={`sb-row ${isSelected ? "is-selected" : ""}`}
         style={{ paddingLeft: 16 + level * 16 }}
-        onClick={() => onSelect?.(item.id)}
+        onClick={() => {
+          if (listRef.current) {
+            lastScrollTopRef.current = listRef.current.scrollTop;
+          }
+          onSelect?.(item.id);
+          requestAnimationFrame(() => {
+            if (listRef.current) {
+              listRef.current.scrollTop = lastScrollTopRef.current;
+            }
+          });
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -486,7 +503,7 @@ export default function Sidebar({
       )}
 
       {!isCollapsed && (
-        <div className="sidebar-content">
+        <div className="sidebar-content" ref={listRef}>
           {/* ERAS */}
           <div className="sb-section">
             <button

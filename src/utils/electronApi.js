@@ -103,6 +103,20 @@ export async function createNote({ timelineId, title, elementId }) {
   }
 }
 
+export async function addExistingNote({ timelineId }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.addExistingNote({ timelineId });
+  } catch (error) {
+    console.error('Error adding existing note:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function readNote({ timelineId, filename }) {
   if (!isElectron()) {
     console.warn('Not running in Electron');
@@ -211,6 +225,20 @@ export async function chooseNotesDir() {
     return await window.electron.chooseNotesDir();
   } catch (error) {
     console.error('Error choosing notes directory:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function chooseNotesSubfolder() {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.chooseNotesSubfolder();
+  } catch (error) {
+    console.error('Error choosing notes subfolder:', error);
     return { success: false, error: error.message };
   }
 }
