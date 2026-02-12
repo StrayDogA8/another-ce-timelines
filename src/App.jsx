@@ -11,7 +11,6 @@ import {
   chooseTimelinesDir,
   chooseNotesDir,
   chooseNotesSubfolder,
-  chooseFontsDir,
   listFonts,
   openFontsFolder,
   renameNote,
@@ -54,8 +53,9 @@ function App() {
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
   const [notesSubfolder, setNotesSubfolder] = useState("");
-  const [fontStorageDir, setFontStorageDir] = useState("");
+  const [notesSubfolderEnabled, setNotesSubfolderEnabled] = useState(false);
   const [appFontFamily, setAppFontFamily] = useState("Inter");
+  const [appFontSize, setAppFontSize] = useState(14);
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
@@ -162,7 +162,7 @@ function App() {
     };
 
     loadFonts();
-  }, [fontStorageDir]);
+  }, []);
 
   useEffect(() => {
     const resolvedDefault = getInitialThemeKey(themeConfig);
@@ -838,13 +838,15 @@ function App() {
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
       const storedNotesSubfolder = settings?.notesSubfolder ?? "";
-      const storedFontsDir = settings?.fontStorageDir ?? "";
+      const storedNotesSubfolderEnabled = settings?.notesSubfolderEnabled ?? false;
       const storedFontFamily = settings?.appFontFamily ?? "Inter";
+      const storedFontSize = settings?.appFontSize ?? 14;
       setTimelineStorageDir(storedTimelineDir);
       setNotesStorageDir(storedNotesDir);
       setNotesSubfolder(storedNotesSubfolder);
-      setFontStorageDir(storedFontsDir);
+      setNotesSubfolderEnabled(storedNotesSubfolderEnabled);
       setAppFontFamily(storedFontFamily);
+      setAppFontSize(storedFontSize);
     };
 
     loadAppSettings();
@@ -903,6 +905,14 @@ function App() {
       "--app-font-family",
       resolveFontStack(finalChoice.family)
     );
+    document.documentElement.style.setProperty(
+      "--app-font-size",
+      `${Number(appFontSize) || 14}px`
+    );
+    document.documentElement.style.setProperty(
+      "--app-font-scale",
+      String((Number(appFontSize) || 14) / 14)
+    );
 
     const linkId = "theme-font-css";
     const existing = document.getElementById(linkId);
@@ -923,6 +933,7 @@ function App() {
     }
   }, [
     appFontFamily,
+    appFontSize,
     timelineData,
     timelineData?.file?.font,
     themeKey,
@@ -946,8 +957,9 @@ function App() {
       timelineStorageDir,
       notesStorageDir,
       notesSubfolder,
-      fontStorageDir,
+      notesSubfolderEnabled,
       appFontFamily,
+      appFontSize,
     });
   };
 
@@ -958,8 +970,9 @@ function App() {
       timelineStorageDir: nextDir || "",
       notesStorageDir,
       notesSubfolder,
-      fontStorageDir,
+      notesSubfolderEnabled,
       appFontFamily,
+      appFontSize,
     });
   };
 
@@ -970,8 +983,9 @@ function App() {
       timelineStorageDir,
       notesStorageDir: nextDir || "",
       notesSubfolder,
-      fontStorageDir,
+      notesSubfolderEnabled,
       appFontFamily,
+      appFontSize,
     });
   };
 
@@ -983,20 +997,36 @@ function App() {
       timelineStorageDir,
       notesStorageDir,
       notesSubfolder: next,
-      fontStorageDir,
+      notesSubfolderEnabled,
       appFontFamily,
+      appFontSize,
     });
   };
 
-  const handleFontStorageDirChange = async (nextDir) => {
-    setFontStorageDir(nextDir || "");
+  const handleNotesSubfolderEnabledChange = async (nextEnabled) => {
+    setNotesSubfolderEnabled(nextEnabled);
     await saveAppSettings({
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
       notesSubfolder,
-      fontStorageDir: nextDir || "",
+      notesSubfolderEnabled: nextEnabled,
       appFontFamily,
+      appFontSize,
+    });
+  };
+
+  const handleAppFontSizeChange = async (nextSize) => {
+    const next = Number(nextSize) || 14;
+    setAppFontSize(next);
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      notesSubfolder,
+      notesSubfolderEnabled,
+      appFontFamily,
+      appFontSize: next,
     });
   };
 
@@ -1007,8 +1037,9 @@ function App() {
       timelineStorageDir,
       notesStorageDir,
       notesSubfolder,
-      fontStorageDir,
+      notesSubfolderEnabled,
       appFontFamily: nextFont,
+      appFontSize,
     });
   };
 
@@ -1030,13 +1061,6 @@ function App() {
     const result = await chooseNotesSubfolder();
     if (result?.success && result.subfolder) {
       await handleNotesSubfolderChange(result.subfolder);
-    }
-  };
-
-  const handlePickFontsDir = async () => {
-    const result = await chooseFontsDir();
-    if (result?.success && result.path) {
-      await handleFontStorageDirChange(result.path);
     }
   };
 
@@ -1103,21 +1127,22 @@ function App() {
             themes={themeConfig.themes}
             onAppThemeChange={handleAppThemeChange}
             appFontFamily={appFontFamily}
+            appFontSize={appFontSize}
             fonts={availableFonts}
             timelineStorageDir={timelineStorageDir}
             notesStorageDir={notesStorageDir}
             notesSubfolder={notesSubfolder}
-            fontStorageDir={fontStorageDir}
+            notesSubfolderEnabled={notesSubfolderEnabled}
             onTimelineStorageDirChange={handleTimelineStorageDirChange}
             onNotesStorageDirChange={handleNotesStorageDirChange}
             onNotesSubfolderChange={handleNotesSubfolderChange}
+            onNotesSubfolderEnabledChange={handleNotesSubfolderEnabledChange}
             onPickNotesSubfolder={handlePickNotesSubfolder}
-            onFontStorageDirChange={handleFontStorageDirChange}
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
-            onPickFontsDir={handlePickFontsDir}
             onOpenFontsFolder={handleOpenFontsFolder}
             onAppFontChange={handleAppFontChange}
+            onAppFontSizeChange={handleAppFontSizeChange}
             onRefreshThemes={refreshUserThemes}
           />
         </div>

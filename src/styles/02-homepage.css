@@ -38,7 +38,7 @@
 }
 
 .homepage-title {
-  font-size: 42px;
+  font-size: var(--text-3xl);
   font-weight: 700;
   color: var(--dark-bg);
   margin: 0;
@@ -47,7 +47,7 @@
 }
 
 .homepage-subtitle {
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 500;
   color: var(--gray-2);
   margin: 0 0 40px 0;
@@ -63,7 +63,7 @@
   background: var(--primary-bg);
   color: var(--dark-bg);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   outline: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -106,9 +106,10 @@
 }
 
 .marketplace-modal {
-  width: min(960px, 92vw);
-  height: 72vh;
-  max-height: 900px;
+  width: 90%;
+  max-width: 910px;
+  height: 65vh;
+  max-height: 85vh;
   background: var(--primary-bg);
   border: 1px solid var(--active-bg);
   border-radius: 16px;
@@ -139,7 +140,7 @@
   background: var(--primary-bg);
   color: var(--dark-bg);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   outline: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -156,21 +157,22 @@
 }
 
 .marketplace-loading {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--gray-2);
 }
 
 .marketplace-error {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: #b42318;
 }
 
 .marketplace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   overflow: auto;
   padding-right: 6px;
+  justify-content: stretch;
 }
 
 .marketplace-grid::-webkit-scrollbar {
@@ -193,12 +195,13 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 248px;
+  border-radius: 12px;
 }
 
 .marketplace-thumbnail {
   background: var(--primary-bg);
-  aspect-ratio: 410 / 160;
-  height: 88px;
+  width: 100%;
+  aspect-ratio: 820 / 300;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,12 +211,12 @@
 .marketplace-thumbnail img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
 }
 
 .marketplace-thumbnail-empty {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--gray-2);
 }
 
@@ -226,18 +229,18 @@
 }
 
 .marketplace-card-title {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--dark-bg);
 }
 
 .marketplace-card-author {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   color: var(--gray-2);
 }
 
 .marketplace-card-description {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--gray-1);
   white-space: pre-line;
   line-height: 1.35;
@@ -252,7 +255,7 @@
 
 .marketplace-button {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   border-radius: 8px;
   border: 1px solid var(--active-bg);
@@ -325,7 +328,7 @@
   background: var(--secondary-bg);
   color: var(--dark-bg);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -374,13 +377,13 @@
 }
 
 .settings-path-pill {
-  width: 225px;
+  width: 100%;
   padding: 0;
   border-radius: 0;
   border: none;
   background: transparent;
-  color: var(--gray-2);
-  font-size: 12px;
+  color: var(--element-bg);
+  font-size: var(--text-xs);
   font-weight: 500;
   line-height: 1.4;
   display: flex;
@@ -394,7 +397,7 @@
 
 .settings-path-icon {
   flex: 0 0 auto;
-  color: var(--gray-2);
+  color: var(--element-bg);
 }
 
 .settings-path-text {
@@ -405,8 +408,8 @@
 }
 
 .settings-path-error {
-  width: 225px;
-  font-size: 11px;
+  width: 100%;
+  font-size: var(--text-2xs);
   color: #b42318;
   text-align: left;
 }
@@ -414,7 +417,7 @@
 .settings-folder-button {
   padding: 8px 12px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   border-radius: 6px;
   border: 1px solid var(--active-bg);
@@ -466,7 +469,7 @@
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--dark-bg);
   text-align: center;
@@ -516,5 +519,6 @@
   text-align: center;
   padding: 40px;
   color: var(--gray-2);
-  font-size: 14px;
+  font-size: var(--text-base);
 }
+

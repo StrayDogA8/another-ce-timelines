@@ -97,7 +97,8 @@ const getTimelinesDir = async () => {
 const getNotesBaseDir = async () => {
   const baseDir = await getNotesRootDir();
   const settings = await readAppSettings();
-  const subfolderValue = String(settings?.notesSubfolder || '').trim();
+  const useSubfolder = settings?.notesSubfolderEnabled === true;
+  const subfolderValue = useSubfolder ? String(settings?.notesSubfolder || '').trim() : '';
   const normalizeSubfolder = (value) => {
     if (!value) return '';
     if (path.isAbsolute(value)) return '';
@@ -126,15 +127,7 @@ const getNotesDir = async (timelineId) => {
   return path.join(baseDir, safeTimelineId);
 };
 
-const getFontsDir = async () => {
-  const settings = await readAppSettings();
-  const customDir = settings?.fontStorageDir;
-  if (customDir && typeof customDir === 'string') {
-    const trimmed = customDir.trim();
-    if (trimmed) return trimmed;
-  }
-  return defaultFontsDir();
-};
+const getFontsDir = async () => defaultFontsDir();
 
 async function getStartupBackgroundColor() {
   const fallback = '#FFFAF4';
@@ -694,23 +687,6 @@ ipcMain.handle('choose-notes-subfolder', async () => {
     return { success: true, subfolder: normalizedRelative };
   } catch (error) {
     console.error('Error choosing notes subfolder:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('choose-fonts-dir', async () => {
-  try {
-    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory'],
-    });
-
-    if (canceled || filePaths.length === 0) {
-      return { success: false, canceled: true };
-    }
-
-    return { success: true, path: filePaths[0] };
-  } catch (error) {
-    console.error('Error choosing fonts directory:', error);
     return { success: false, error: error.message };
   }
 });

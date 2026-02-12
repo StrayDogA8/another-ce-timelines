@@ -250,7 +250,7 @@
 
 .slider-year {
   min-width: 64px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--dark-bg);
   text-align: right;
@@ -360,3 +360,4 @@
   background: var(--active-bg);
   margin: 2px 4px;
 }
+

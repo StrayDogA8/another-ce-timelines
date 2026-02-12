@@ -243,20 +243,6 @@ export async function chooseNotesSubfolder() {
   }
 }
 
-export async function chooseFontsDir() {
-  if (!isElectron()) {
-    console.warn('Not running in Electron');
-    return { success: false, error: 'Not in Electron environment' };
-  }
-
-  try {
-    return await window.electron.chooseFontsDir();
-  } catch (error) {
-    console.error('Error choosing fonts directory:', error);
-    return { success: false, error: error.message };
-  }
-}
-
 export async function openFontsFolder() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

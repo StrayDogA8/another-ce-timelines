@@ -26,7 +26,7 @@
 .timeline-title {
   margin: 0;       
   margin-right: 5px;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--dark-bg);
   text-align: center;
@@ -83,7 +83,7 @@
   color: var(--element-bg);
   font-family: inherit;
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: 0.01em;
   text-transform: uppercase;
   cursor: pointer;
@@ -91,7 +91,7 @@
 
 .sidebar-info-title {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--gray-1);
   font-family: var(--app-font-family, "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
@@ -141,7 +141,7 @@
 }
 
 .sb-row-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 440;
   color: var(--dark-bg);
   
@@ -151,7 +151,7 @@
 }
 
 .sb-row-right {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--element-bg);
 
@@ -213,3 +213,4 @@
 .sidebar-add-button:active {
   color: color-mix(in srgb, var(--dark-bg), black 15%);
 }
+

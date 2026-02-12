@@ -12,22 +12,23 @@ export default function HomePage({
   onCreateTimeline,
   appThemeKey,
   appFontFamily,
+  appFontSize,
   fonts,
   themes,
   onAppThemeChange,
   onAppFontChange,
+  onAppFontSizeChange,
   timelineStorageDir,
   notesStorageDir,
   notesSubfolder,
-  fontStorageDir,
+  notesSubfolderEnabled,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
   onNotesSubfolderChange,
+  onNotesSubfolderEnabledChange,
   onPickNotesSubfolder,
-  onFontStorageDirChange,
   onPickTimelinesDir,
   onPickNotesDir,
-  onPickFontsDir,
   onOpenFontsFolder,
   onRefreshThemes,
 }) {
@@ -46,6 +47,7 @@ export default function HomePage({
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("general");
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
@@ -181,7 +183,6 @@ export default function HomePage({
     }
     return null;
   }, [notesSubfolder]);
-  const fontPathIssue = getPathIssue(fontStorageDir);
 
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -455,253 +456,313 @@ export default function HomePage({
               <h2 className="settings-title settings-title-right">APP SETTINGS</h2>
             </div>
 
-            <div className="settings-content">
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">App Theme</div>
-                  <div className="settings-row-description">
-                    Used on the homepage and as the default theme for timelines.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <select
-                      className="settings-select"
-                      value={appThemeKey || ""}
-                      onChange={(e) => onAppThemeChange?.(e.target.value)}
-                    >
-                      {appThemes.map(([key, theme]) => {
-                        const isDefault = key.toLowerCase() === "parchment";
-                        const label = `${theme?.name || key}${isDefault ? " (Default)" : ""}`;
-                        return (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                      {userThemes.map(([key, theme]) => (
-                        <option key={key} value={key}>
-                          {theme?.name || key}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => window.electron?.openThemesFolder?.()}
-                      >
-                        Open Theme Folder
-                      </button>
-                    </div>
-                  </div>
-                </div>
+            <div className="settings-layout">
+              <div className="settings-sidebar">
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "general" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("general")}
+                >
+                  General
+                </button>
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "appearance" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("appearance")}
+                >
+                  Appearance
+                </button>
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "files" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("files")}
+                >
+                  Files
+                </button>
               </div>
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">App Font</div>
-                  <div className="settings-row-description">
-                    Sets the UI font. Add custom fonts in the font folder.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <select
-                      className="settings-select"
-                      value={appFontFamily || "Inter"}
-                      onChange={(e) => onAppFontChange?.(e.target.value)}
-                    >
-                      {fontOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onOpenFontsFolder?.()}
-                      >
-                        Open Font Folder
-                      </button>
+              <div className="settings-content">
+                {settingsSection === "general" && (
+                  <>
+                    <div className="settings-row settings-row-docs">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Documentation</div>
+                        <div className="settings-row-description">
+                          Timelines 0.2.0 (Alpha)
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() =>
+                                window.electron?.openExternal?.({
+                                  url: "https://github.com/sreegjl/timelines",
+                                })
+                              }
+                            >
+                              Open Docs
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Timeline Folder</div>
-                  <div className="settings-row-description">
-                    Where .timeline files are stored. Leave blank to use the default app folder.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <div className="settings-path-pill" title={timelineStorageDir || "Default app storage"}>
-                      <Folder className="settings-path-icon" size={14} />
-                      <span className="settings-path-text">
-                        {timelineStorageDir || "Default app storage"}
-                      </span>
-                    </div>
-                    {timelinePathIssue && (
-                      <div className="settings-path-error">{timelinePathIssue}</div>
-                    )}
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onPickTimelinesDir?.()}
-                      >
-                        Choose...
-                      </button>
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onTimelineStorageDirChange?.("")}
-                      >
-                        Use Default
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="settings-row">
-                  <div className="settings-row-left">
-                    <div className="settings-row-label">Notes Folder</div>
-                    <div className="settings-row-description">
-                      Where .md notes are stored. Notes are saved under a folder per timeline.
-                    </div>
-                  </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <div className="settings-path-pill" title={notesStorageDir || "Default app storage"}>
-                      <Folder className="settings-path-icon" size={14} />
-                      <span className="settings-path-text">
-                        {notesStorageDir || "Default app storage"}
-                      </span>
-                    </div>
-                    {notesPathIssue && (
-                      <div className="settings-path-error">{notesPathIssue}</div>
-                    )}
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onPickNotesDir?.()}
-                      >
-                        Choose...
-                      </button>
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onNotesStorageDirChange?.("")}
-                      >
-                        Use Default
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Default Notes Subfolder</div>
-                  <div className="settings-row-description">
-                    Optional subfolder inside the Notes Folder used for new notes.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <div className="settings-path-pill" title={notesSubfolder || "Default (none)"}>
-                      <Folder className="settings-path-icon" size={14} />
-                      <span className="settings-path-text">
-                        {notesSubfolder || "Default (none)"}
-                      </span>
-                    </div>
-                    {notesSubfolderIssue && (
-                      <div className="settings-path-error">{notesSubfolderIssue}</div>
-                    )}
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onPickNotesSubfolder?.()}
-                      >
-                        Choose...
-                      </button>
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onNotesSubfolderChange?.("")}
-                      >
-                        Use Default
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Font Folder</div>
-                  <div className="settings-row-description">
-                    Where custom font files are stored. Leave blank to use the default app folder.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <div className="settings-path-pill" title={fontStorageDir || "Default app storage"}>
-                      <Folder className="settings-path-icon" size={14} />
-                      <span className="settings-path-text">
-                        {fontStorageDir || "Default app storage"}
-                      </span>
-                    </div>
-                    {fontPathIssue && (
-                      <div className="settings-path-error">{fontPathIssue}</div>
-                    )}
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onPickFontsDir?.()}
-                      >
-                        Choose...
-                      </button>
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() => onFontStorageDirChange?.("")}
-                      >
-                        Use Default
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  </>
+                )}
 
-              <div className="settings-row settings-row-docs">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Documentation</div>
-                  <div className="settings-row-description">
-                    Timelines 0.2.0 (Alpha)
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <div className="settings-folder settings-folder-column">
-                    <div className="settings-folder-actions">
-                      <button
-                        className="settings-folder-button"
-                        type="button"
-                        onClick={() =>
-                          window.electron?.openExternal?.({
-                            url: "https://github.com/sreegjl/timelines",
-                          })
-                        }
-                      >
-                        Open Docs
-                      </button>
+                {settingsSection === "appearance" && (
+                  <>
+                    <div className="settings-row no-border-bottom">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">App Theme</div>
+                        <div className="settings-row-description">
+                          Used as the default theme for timelines.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-select-row">
+                            <button
+                              className="settings-select-icon-button"
+                              type="button"
+                              onClick={() => window.electron?.openThemesFolder?.()}
+                              aria-label="Open theme folder"
+                            >
+                              <Folder className="settings-select-icon" size={18} />
+                            </button>
+                            <select
+                              className="settings-select"
+                              value={appThemeKey || ""}
+                              onChange={(e) => onAppThemeChange?.(e.target.value)}
+                            >
+                              {appThemes.map(([key, theme]) => {
+                                const isDefault = key.toLowerCase() === "parchment";
+                                const label = `${theme?.name || key}${isDefault ? " (Default)" : ""}`;
+                                return (
+                                  <option key={key} value={key}>
+                                    {label}
+                                  </option>
+                                );
+                              })}
+                              {userThemes.map(([key, theme]) => (
+                                <option key={key} value={key}>
+                                  {theme?.name || key}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                    <div className="settings-row settings-row-section">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Font</div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">App Font</div>
+                        <div className="settings-row-description">
+                          Sets the UI font. Add custom fonts in the font folder.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-select-row">
+                            <button
+                              className="settings-select-icon-button"
+                              type="button"
+                              onClick={() => onOpenFontsFolder?.()}
+                              aria-label="Open font folder"
+                            >
+                              <Folder className="settings-select-icon" size={18} />
+                            </button>
+                            <select
+                              className="settings-select"
+                              value={appFontFamily || "Inter"}
+                              onChange={(e) => onAppFontChange?.(e.target.value)}
+                            >
+                              {fontOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">App Font Size</div>
+                        <div className="settings-row-description">
+                          Controls the base UI font size.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-font-size">
+                          <input
+                            className="settings-slider"
+                            type="range"
+                            min={12}
+                            max={18}
+                            step={1}
+                            value={appFontSize || 14}
+                            onChange={(e) => onAppFontSizeChange?.(e.target.value)}
+                            aria-label="App font size"
+                          />
+                          <div
+                            className="settings-slider-tooltip"
+                            style={{
+                              left: `${(((appFontSize || 14) - 12) / 6) * 100}%`,
+                            }}
+                          >
+                            {appFontSize || 14}px
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {settingsSection === "files" && (
+                  <>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Notes Folder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={notesStorageDir || "Default app storage"}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {notesStorageDir || "Default app storage"}
+                          </span>
+                        </div>
+                        {notesPathIssue && (
+                          <div className="settings-path-error">{notesPathIssue}</div>
+                        )}
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickNotesDir?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onNotesStorageDirChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Timeline Folder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={timelineStorageDir || "Default app storage"}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {timelineStorageDir || "Default app storage"}
+                          </span>
+                        </div>
+                        {timelinePathIssue && (
+                          <div className="settings-path-error">{timelinePathIssue}</div>
+                        )}
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickTimelinesDir?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onTimelineStorageDirChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Use Subfolder For New Files</div>
+                        <div className="settings-row-description">
+                          When enabled, new notes are placed under the default subfolder.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <label className="settings-toggle">
+                          <input
+                            type="checkbox"
+                            checked={notesSubfolderEnabled}
+                            onChange={(e) =>
+                              onNotesSubfolderEnabledChange?.(e.target.checked)
+                            }
+                          />
+                          <span className="settings-toggle-slider" />
+                        </label>
+                      </div>
+                    </div>
+                    {notesSubfolderEnabled && (
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Default Notes Subfolder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={notesSubfolder || "Default (none)"}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {notesSubfolder || "Default (none)"}
+                          </span>
+                        </div>
+                        {notesSubfolderIssue && (
+                          <div className="settings-path-error">{notesSubfolderIssue}</div>
+                        )}
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickNotesSubfolder?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onNotesSubfolderChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
