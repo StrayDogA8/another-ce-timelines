@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
 import SettingsModal from "./components/SettingsModal";
 import NewTimelineModal from "./components/NewTimelineModal";
+import ExportPngModal from "./components/ExportPngModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
 import {
@@ -45,6 +46,8 @@ function App() {
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
+  const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
+  const [exportPngOptions, setExportPngOptions] = useState(null);
   const [editRequestId, setEditRequestId] = useState(null);
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
@@ -72,6 +75,7 @@ function App() {
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
+  const timelineViewRef = useRef(null);
 
   useEffect(() => {
     function handleMouseMove(e) {
@@ -644,7 +648,12 @@ function App() {
   };
 
   const handleDownloadPNG = () => {
-    // Trigger the PNG download in TimelineView
+    // Open the export PNG modal
+    setIsExportPngModalOpen(true);
+  };
+
+  const handleExportPng = (options) => {
+    setExportPngOptions(options);
     setDownloadPngTrigger(prev => prev + 1);
   };
 
@@ -1205,6 +1214,7 @@ function App() {
         style={{ display: isRightMaximized ? "none" : "block" }}
       >
         <TimelineView
+          ref={timelineViewRef}
           selectedId={selectedId}
           onSelect={handleSelect}
           timelineData={filteredTimelineData}
@@ -1216,6 +1226,8 @@ function App() {
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
           downloadPngTrigger={downloadPngTrigger}
+          exportPngOptions={exportPngOptions}
+          onExportPng={handleDownloadPNG}
           rightPanelWidth={rightWidth}
           isRightPanelOpen={Boolean(selectedId)}
           leftPanelWidth={currentLeftWidth}
@@ -1339,6 +1351,14 @@ function App() {
         isOpen={isNewTimelineModalOpen}
         onClose={() => setIsNewTimelineModalOpen(false)}
         onCreate={handleCreateTimeline}
+      />
+
+      <ExportPngModal
+        isOpen={isExportPngModalOpen}
+        onClose={() => setIsExportPngModalOpen(false)}
+        onExport={handleExportPng}
+        timelineData={timelineData}
+        timelineViewRef={timelineViewRef}
       />
       </div>
     </>

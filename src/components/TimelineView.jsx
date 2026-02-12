@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -14,7 +14,7 @@ import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, Squa
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
-function TimelineView({
+const TimelineView = forwardRef(function TimelineView({
   selectedId,
   onSelect,
   timelineData,
@@ -28,6 +28,8 @@ function TimelineView({
   onDuplicateElement,
   onEditElement,
   downloadPngTrigger,
+  exportPngOptions,
+  onExportPng,
   rightPanelWidth = 0,
   isRightPanelOpen = false,
   leftPanelWidth = 0,
@@ -39,7 +41,7 @@ function TimelineView({
   onToggleTag,
   onClearTags,
   onViewportYearChange,
-}) {
+}, ref) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
   const scaleRef = useRef(1);
@@ -870,32 +872,78 @@ function TimelineView({
       const currentTransform = timelineEl.style.transform;
       const currentTransformOrigin = timelineEl.style.transformOrigin;
 
+      const root = document.documentElement;
+      const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--primary-bg').trim();
+
       // Temporarily remove transform
       timelineEl.style.transform = 'none';
       timelineEl.style.transformOrigin = '';
 
+      // Set --primary-bg to transparent if requested
+      if (exportPngOptions?.transparentBg) {
+        root.style.setProperty('--primary-bg', 'transparent');
+      }
+
       const canvas = await html2canvas(timelineEl, {
-        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim(),
+        backgroundColor: exportPngOptions?.transparentBg ? null : originalPrimaryBg,
         scale: 2, // Higher quality
         logging: false,
         height: calculatedHeight + 100,
         windowHeight: calculatedHeight + 100,
       });
 
-      // Restore the transform
+      if (exportPngOptions?.transparentBg) {
+        root.style.setProperty('--primary-bg', originalPrimaryBg);
+      }
+
       timelineEl.style.transform = currentTransform;
       timelineEl.style.transformOrigin = currentTransformOrigin;
 
-      canvas.toBlob((blob) => {
+      let finalCanvas = canvas;
+      const hasCrop = exportPngOptions?.cropLeft != null &&
+                      exportPngOptions?.cropRight != null;
+
+      if (hasCrop) {
+        const srcX = (exportPngOptions.cropLeft / 100) * canvas.width;
+        const srcWidth = ((exportPngOptions.cropRight - exportPngOptions.cropLeft) / 100) * canvas.width;
+
+        const cropWidth = Math.max(1, srcWidth);
+        const cropHeight = canvas.height;
+
+        // Create a new canvas with the cropped region
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = cropWidth;
+        croppedCanvas.height = cropHeight;
+        const ctx = croppedCanvas.getContext('2d');
+
+        // If transparent background, clear with transparent; otherwise fill with bg color
+        if (exportPngOptions.transparentBg) {
+          ctx.clearRect(0, 0, cropWidth, cropHeight);
+        } else {
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim();
+          ctx.fillRect(0, 0, cropWidth, cropHeight);
+        }
+
+        // Draw the cropped region (horizontal only, full height)
+        ctx.drawImage(
+          canvas,
+          srcX, 0, srcWidth, cropHeight,
+          0, 0, cropWidth, cropHeight
+        );
+        finalCanvas = croppedCanvas;
+      }
+
+      finalCanvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${file?.id || 'timeline'}.png`;
+        const exportFilename = exportPngOptions?.filename || file?.id || 'timeline';
+        link.download = `${exportFilename}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-      });
+      }, 'image/png');
     } catch (error) {
       console.error('Error generating PNG:', error);
     }
@@ -1101,6 +1149,73 @@ function TimelineView({
       handleDownloadPNG();
     }
   }, [downloadPngTrigger]);
+
+  useImperativeHandle(ref, () => ({
+    generatePreview: async (options) => {
+      const timelineEl = timelineRef.current;
+      if (!timelineEl) return null;
+
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+
+        const currentTransform = timelineEl.style.transform;
+        const currentTransformOrigin = timelineEl.style.transformOrigin;
+
+        // Store original --primary-bg and set to transparent if needed
+        const root = document.documentElement;
+        const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--primary-bg').trim();
+
+        timelineEl.style.transform = 'none';
+        timelineEl.style.transformOrigin = '';
+
+        if (options?.transparentBg) {
+          root.style.setProperty('--primary-bg', 'transparent');
+        }
+
+        const canvas = await html2canvas(timelineEl, {
+          backgroundColor: options?.transparentBg ? null : originalPrimaryBg,
+          scale: 1, // Lower scale for preview (faster)
+          logging: false,
+          height: calculatedHeight + 100,
+          windowHeight: calculatedHeight + 100,
+        });
+
+        // Restore original --primary-bg
+        if (options?.transparentBg) {
+          root.style.setProperty('--primary-bg', originalPrimaryBg);
+        }
+
+        timelineEl.style.transform = currentTransform;
+        timelineEl.style.transformOrigin = currentTransformOrigin;
+
+        const minYear = file?.start ?? 0;
+        const maxYear = file?.end ?? 2024;
+
+        return {
+          imageUrl: canvas.toDataURL('image/png'),
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          timelineWidth,
+          minYear,
+          maxYear,
+          yearToPercent: (year) => {
+            const px = yearToPx(year);
+            return (px / canvas.width) * 100;
+          },
+          percentToYear: (percent) => {
+            const px = (percent / 100) * canvas.width;
+            // Inverse of yearToPx: px = TIMELINE_PADDING + (year - minYear) * PX_PER_YEAR
+            // year = (px - TIMELINE_PADDING) / PX_PER_YEAR + minYear
+            const year = (px - TIMELINE_PADDING) / PX_PER_YEAR + minYear;
+            return Math.round(year * 100) / 100; // Round to 2 decimal places
+          },
+        };
+      } catch (error) {
+        console.error('Error generating preview:', error);
+        return null;
+      }
+    }
+  }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR]);
 
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
@@ -1543,7 +1658,7 @@ function TimelineView({
           </button>
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(handleDownloadPNG)}
+            onClick={() => handleMenuAction(() => onExportPng?.())}
           >
             <Image size={16} />
             <span>Download .png</span>
@@ -1739,6 +1854,6 @@ function TimelineView({
       </div>
     </div>
   );
-}
+});
 
 export default TimelineView;

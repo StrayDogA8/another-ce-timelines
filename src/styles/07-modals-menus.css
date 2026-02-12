@@ -199,6 +199,176 @@
   max-width: 420px;
 }
 
+.export-png-modal {
+  max-width: 640px;
+  height: auto;
+  max-height: 85vh;
+}
+
+.export-preview-container {
+  background: var(--primary-bg);
+  border: 1px solid var(--active-bg);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  min-height: 120px;
+  max-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.export-preview-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 208px;
+}
+
+.export-preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 208px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.export-preview-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.export-preview-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.export-preview-button:hover {
+  background: var(--active-bg);
+  border-color: var(--element-bg);
+}
+
+.export-preview-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-preview-transparent {
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #fff;
+}
+
+/* Crop overlay */
+.export-crop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.export-crop-mask {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.export-crop-border {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px dashed var(--element-bg);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.export-crop-handle {
+  position: absolute;
+  background: var(--element-bg);
+  pointer-events: auto;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.export-crop-handle:hover {
+  opacity: 1;
+}
+
+/* Left and right handles (vertical bars) */
+.export-crop-handle-left,
+.export-crop-handle-right {
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.export-crop-handle-left {
+  transform: translateX(-100%);
+  border-radius: 4px 0 0 4px;
+}
+
+.export-crop-handle-right {
+  border-radius: 0 4px 4px 0;
+}
+
+/* Handle grip indicators */
+.export-crop-handle-left::after,
+.export-crop-handle-right::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  background: var(--secondary-bg);
+  border-radius: 1px;
+}
+
+.export-preview-loading,
+.export-preview-placeholder {
+  color: var(--element-bg);
+  font-size: var(--text-sm);
+}
+
+.export-filename-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.export-filename-input .settings-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.export-filename-ext {
+  color: var(--element-bg);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
 .confirm-content {
   padding: 0 24px 16px;
   color: var(--dark-bg);
