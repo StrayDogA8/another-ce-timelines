@@ -14,6 +14,7 @@ export default function SettingsModal({
   themes,
   fonts,
   onThemeChange,
+  layoutOptions = [],
 }) {
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("");
@@ -161,6 +162,12 @@ export default function SettingsModal({
       }
     }
   }, [timelineData]);
+
+  useEffect(() => {
+    if (!layoutOptions.some((option) => option.value === layout)) {
+      setLayout("Horizontal");
+    }
+  }, [layoutOptions, layout]);
 
   // Debounced auto-save whenever values change (but not on initial load)
   useEffect(() => {
@@ -539,7 +546,9 @@ export default function SettingsModal({
           <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Layout</div>
-              <div className="settings-row-description">More layouts will be available soon!</div>
+              <div className="settings-row-description">
+                More layouts will be available soon!
+              </div>
             </div>
             <div className="settings-row-right">
               <select
@@ -547,7 +556,11 @@ export default function SettingsModal({
                 value={layout}
                 onChange={(e) => setLayout(e.target.value)}
               >
-                <option value="Horizontal">Horizontal</option>
+                {layoutOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

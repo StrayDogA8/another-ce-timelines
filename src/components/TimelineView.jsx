@@ -10,7 +10,7 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Play, Pause, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter } from "lucide-react";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 

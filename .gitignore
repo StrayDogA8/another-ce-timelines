@@ -25,4 +25,4 @@ release
 *.sw?
 
 # Private Notes
-APP_OVERVIEW.md
+docs/private

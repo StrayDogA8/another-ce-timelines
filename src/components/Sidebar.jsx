@@ -1,10 +1,9 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2 } from "lucide-react";
+import { PanelLeft, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2 } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
 export default function Sidebar({
-  isCollapsed,
   onToggle,
   selectedId,
   onSelect,
@@ -28,6 +27,8 @@ export default function Sidebar({
   onDelete,
   onDuplicateElement,
   onEditElement,
+  pluginActions = [],
+  pluginApi,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -306,31 +307,22 @@ export default function Sidebar({
   return (
     <div className="sidebar-root">
       <div className="sidebar-header">
-        {!isCollapsed && (
-          <>
-            <h2 className="timeline-title">{displayName}</h2>
-            <ChevronDown
-              className="sidebar-menu"
-              size={16}
-              color="var(--dark-bg)"
-              strokeWidth={2}
-              onClick={handleTimelineMenuClick}
-              style={{ cursor: 'pointer' }}
-            />
-          </>
-        )}
-
+        <h2 className="timeline-title">{displayName}</h2>
+        <ChevronDown
+          className="sidebar-menu"
+          size={16}
+          color="var(--dark-bg)"
+          strokeWidth={2}
+          onClick={handleTimelineMenuClick}
+          style={{ cursor: 'pointer' }}
+        />
         <button
           className="sidebar-toggle"
           onClick={onToggle}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={isCollapsed ? "Expand" : "Collapse"}
+          aria-label="Collapse sidebar"
+          title="Collapse"
         >
-          {isCollapsed ? (
-            <PanelRight size={18} color="var(--dark-bg)" strokeWidth={2} />
-          ) : (
-            <PanelLeft size={18} color="var(--dark-bg)" strokeWidth={2} />
-          )}
+          <PanelLeft size={18} color="var(--dark-bg)" strokeWidth={2} />
         </button>
       </div>
 
@@ -447,15 +439,14 @@ export default function Sidebar({
         </div>
       )}
 
-      {!isCollapsed && file && (
+      {file && (
         <div className="sidebar-info">
           <h3 className="sidebar-info-title">{file.title}</h3>
         </div>
       )}
 
-      {!isCollapsed && (
-        <div className="sidebar-add-container">
-          <div className="sidebar-add-buttons">
+      <div className="sidebar-add-container">
+        <div className="sidebar-add-buttons">
             <button
               className="sidebar-add-button"
               onClick={onAddEvent}
@@ -498,12 +489,24 @@ export default function Sidebar({
             >
               <ListFilter size={17} strokeWidth={2} />
             </button>
+            {pluginActions.map((action) => {
+              const IconComponent = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  className="sidebar-add-button"
+                  type="button"
+                  title={action.label || action.id}
+                  onClick={() => action.onClick?.(pluginApi)}
+                >
+                  <IconComponent size={17} />
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
 
-      {!isCollapsed && (
-        <div className="sidebar-content" ref={listRef}>
+      <div className="sidebar-content" ref={listRef}>
           {/* ERAS */}
           <div className="sb-section">
             <button
@@ -583,7 +586,6 @@ export default function Sidebar({
             )}
           </div>
         </div>
-      )}
 
       {filterMenu && (
         <div

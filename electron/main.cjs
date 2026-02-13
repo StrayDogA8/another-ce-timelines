@@ -662,6 +662,97 @@ ipcMain.handle('choose-notes-dir', async () => {
   }
 });
 
+ipcMain.handle('choose-plugins-dir', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+
+    if (canceled || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, path: filePaths[0] };
+  } catch (error) {
+    console.error('Error choosing plugins directory:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+const pluginsRootDir = () => path.join(app.getPath('userData'), 'plugins');
+
+ipcMain.handle('open-plugins-folder', async (event, payload) => {
+  try {
+    const dir = payload?.path || pluginsRootDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    console.error('Error opening plugins folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-plugins', async (event, payload) => {
+  try {
+    const dir = payload?.path || pluginsRootDir();
+    await fs.mkdir(dir, { recursive: true });
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const plugins = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const pluginDir = path.join(dir, entry.name);
+      const manifestPath = path.join(pluginDir, 'manifest.json');
+      try {
+        const raw = await fs.readFile(manifestPath, 'utf8');
+        const manifest = JSON.parse(raw);
+        if (!manifest?.id || !manifest?.name) continue;
+        const mainFile = manifest.main || 'main.js';
+        const entryPath = path.join(pluginDir, mainFile);
+        plugins.push({
+          id: manifest.id,
+          name: manifest.name,
+          version: manifest.version || '0.0.0',
+          description: manifest.description || '',
+          main: mainFile,
+          dir: pluginDir,
+          entryPath,
+        });
+      } catch (error) {
+        console.warn('Failed to load plugin manifest:', manifestPath, error.message);
+      }
+    }
+
+    return { success: true, root: dir, plugins };
+  } catch (error) {
+    console.error('Error listing plugins:', error);
+    return { success: false, error: error.message, plugins: [] };
+  }
+});
+
+ipcMain.handle('read-plugin-module', async (event, payload) => {
+  try {
+    const entryPath = String(payload?.entryPath || '');
+    if (!entryPath) {
+      return { success: false, error: 'MISSING_ENTRY_PATH' };
+    }
+
+    const root = path.resolve(pluginsRootDir());
+    const resolved = path.resolve(entryPath);
+    const relative = path.relative(root, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { success: false, error: 'PLUGIN_PATH_OUTSIDE_ROOT' };
+    }
+
+    const code = await fs.readFile(resolved, 'utf8');
+    return { success: true, code, entryPath: resolved };
+  } catch (error) {
+    console.error('Error reading plugin module:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('choose-notes-subfolder', async () => {
   try {
     const rootDir = await getNotesRootDir();

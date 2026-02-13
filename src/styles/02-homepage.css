@@ -414,6 +414,43 @@
   text-align: left;
 }
 
+.settings-plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.settings-plugin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--active-bg);
+}
+
+.settings-plugin-item:last-child {
+  border-bottom: none;
+}
+
+.settings-plugin-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-plugin-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--dark-bg);
+}
+
+.settings-plugin-description {
+  font-size: var(--text-xs);
+  color: var(--element-bg);
+}
+
 .settings-folder-button {
   padding: 8px 12px;
   font-family: inherit;
