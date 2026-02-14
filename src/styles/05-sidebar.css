@@ -117,11 +117,12 @@
 }
 
 .sb-row {
-  width: 95%;
+  width: calc(100% - 10px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 5px 15px;
+  box-sizing: border-box;
   border-radius: 8px;
   background: transparent;
   border: none;

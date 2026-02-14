@@ -8,6 +8,8 @@ import { loadThemeConfig } from "../utils/themeLoader";
 import { deleteUserTheme, saveUserTheme } from "../utils/electronApi";
 
 export default function HomePage({
+  settingsOnly = false,
+  reuseExistingBackdrop = false,
   onSelectTimeline,
   onCreateTimeline,
   appThemeKey,
@@ -22,6 +24,11 @@ export default function HomePage({
   notesStorageDir,
   notesSubfolder,
   notesSubfolderEnabled,
+  pluginsRoot,
+  builtinPlugins,
+  enabledBuiltinPlugins,
+  installedPlugins,
+  enabledPlugins,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
   onNotesSubfolderChange,
@@ -29,14 +36,19 @@ export default function HomePage({
   onPickNotesSubfolder,
   onPickTimelinesDir,
   onPickNotesDir,
+  onToggleBuiltinPlugin,
+  onTogglePlugin,
+  onOpenPluginsFolder,
   onOpenFontsFolder,
   onRefreshThemes,
+  openSettingsSignal = 0,
+  onAppSettingsClosed,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [marketplaceThemes, setMarketplaceThemes] = useState([]);
@@ -48,6 +60,7 @@ export default function HomePage({
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
+  const previousViewRef = useRef("home");
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
@@ -172,6 +185,7 @@ export default function HomePage({
 
   const timelinePathIssue = getPathIssue(timelineStorageDir);
   const notesPathIssue = getPathIssue(notesStorageDir);
+  const pluginFolderLabel = pluginsRoot || "Default plugin folder";
   const notesSubfolderIssue = useMemo(() => {
     const value = String(notesSubfolder || "").trim();
     if (!value) return null;
@@ -183,6 +197,27 @@ export default function HomePage({
     }
     return null;
   }, [notesSubfolder]);
+
+  useEffect(() => {
+    if (openSettingsSignal > 0) {
+      setView("settings");
+      setSettingsSection("general");
+    }
+  }, [openSettingsSignal]);
+
+  useEffect(() => {
+    if (settingsOnly) {
+      setView("settings");
+      setSettingsSection("general");
+    }
+  }, [settingsOnly]);
+
+  useEffect(() => {
+    if (previousViewRef.current === "settings" && view !== "settings") {
+      onAppSettingsClosed?.();
+    }
+    previousViewRef.current = view;
+  }, [view, onAppSettingsClosed]);
 
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -367,7 +402,7 @@ export default function HomePage({
     ? timelineFiles.filter((file) => file.name.toLowerCase().includes(normalizedQuery))
     : timelineFiles;
 
-  if (loading) {
+  if (loading && !settingsOnly) {
     return (
       <div className="homepage">
         <div className="homepage-container">
@@ -377,9 +412,19 @@ export default function HomePage({
     );
   }
 
+  const closeSettings = () => {
+    if (settingsOnly) {
+      onAppSettingsClosed?.();
+      return;
+    }
+    setView("home");
+  };
+
   return (
-    <div className="homepage">
-      <div className="homepage-container">
+    <div className={`homepage${settingsOnly ? " homepage-settings-only" : ""}`}>
+      {!settingsOnly && (
+        <>
+          <div className="homepage-container">
         <div className="homepage-header">
           <div className="homepage-header-left">
             <h1 className="homepage-title">timelines</h1>
@@ -434,21 +479,26 @@ export default function HomePage({
             <p>No timelines found. Create a new one to get started.</p>
           </div>
         )}
-      </div>
+          </div>
 
-      <NewTimelineModal
-        isOpen={isNewTimelineModalOpen}
-        onClose={() => setIsNewTimelineModalOpen(false)}
-        onCreate={handleCreateTimeline}
-      />
+          <NewTimelineModal
+            isOpen={isNewTimelineModalOpen}
+            onClose={() => setIsNewTimelineModalOpen(false)}
+            onCreate={handleCreateTimeline}
+          />
+        </>
+      )}
 
       {view === "settings" && (
-        <div className="settings-backdrop" onClick={() => setView("home")}>
+        <div
+          className={`settings-backdrop${reuseExistingBackdrop ? " settings-backdrop-pass-through" : ""}`}
+          onClick={closeSettings}
+        >
           <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
             <div className="settings-header">
               <button
                 className="settings-back-button"
-                onClick={() => setView("home")}
+                onClick={closeSettings}
                 aria-label="Close settings"
               >
                 <ArrowLeft size={18} strokeWidth={2} />
@@ -467,17 +517,17 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
-                  className={`settings-sidebar-item${settingsSection === "appearance" ? " is-active" : ""}`}
-                  onClick={() => setSettingsSection("appearance")}
-                >
-                  Appearance
-                </button>
-                <button
-                  type="button"
                   className={`settings-sidebar-item${settingsSection === "files" ? " is-active" : ""}`}
                   onClick={() => setSettingsSection("files")}
                 >
                   Files
+                </button>
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "plugins" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("plugins")}
+                >
+                  Plugins
                 </button>
               </div>
               <div className="settings-content">
@@ -508,12 +558,7 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
-
-                {settingsSection === "appearance" && (
-                  <>
-                    <div className="settings-row no-border-bottom">
+                    <div className="settings-row">
                       <div className="settings-row-left">
                         <div className="settings-row-label">App Theme</div>
                         <div className="settings-row-description">
@@ -553,11 +598,6 @@ export default function HomePage({
                             </select>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="settings-row settings-row-section">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Font</div>
                       </div>
                     </div>
                     <div className="settings-row">
@@ -630,43 +670,6 @@ export default function HomePage({
                   <>
                     <div className="settings-row">
                       <div className="settings-row-left">
-                        <div className="settings-row-label">Notes Folder</div>
-                        <div
-                          className="settings-path-pill"
-                          title={notesStorageDir || "Default app storage"}
-                        >
-                          <Folder className="settings-path-icon" size={14} />
-                          <span className="settings-path-text">
-                            {notesStorageDir || "Default app storage"}
-                          </span>
-                        </div>
-                        {notesPathIssue && (
-                          <div className="settings-path-error">{notesPathIssue}</div>
-                        )}
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-folder settings-folder-column">
-                          <div className="settings-folder-actions">
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onPickNotesDir?.()}
-                            >
-                              Choose...
-                            </button>
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onNotesStorageDirChange?.("")}
-                            >
-                              Use Default
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
                         <div className="settings-row-label">Timeline Folder</div>
                         <div
                           className="settings-path-pill"
@@ -695,6 +698,43 @@ export default function HomePage({
                               className="settings-folder-button"
                               type="button"
                               onClick={() => onTimelineStorageDirChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Notes Folder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={notesStorageDir || "Default app storage"}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {notesStorageDir || "Default app storage"}
+                          </span>
+                        </div>
+                        {notesPathIssue && (
+                          <div className="settings-path-error">{notesPathIssue}</div>
+                        )}
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickNotesDir?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onNotesStorageDirChange?.("")}
                             >
                               Use Default
                             </button>
@@ -761,6 +801,96 @@ export default function HomePage({
                       </div>
                     </div>
                     )}
+                  </>
+                )}
+
+                {settingsSection === "plugins" && (
+                  <>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Plugin Folder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={pluginFolderLabel}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {pluginFolderLabel}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onOpenPluginsFolder?.()}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {(builtinPlugins || []).map((plugin) => (
+                      <div key={plugin.id} className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">{plugin.name}</div>
+                          {plugin.description && (
+                            <div className="settings-row-description">
+                              {plugin.description}
+                            </div>
+                          )}
+                        </div>
+                        <div className="settings-row-right">
+                          <label className="settings-toggle">
+                            <input
+                              type="checkbox"
+                              checked={enabledBuiltinPlugins?.[plugin.id] ?? true}
+                              onChange={(e) =>
+                                onToggleBuiltinPlugin?.(plugin.id, e.target.checked)
+                              }
+                            />
+                            <span className="settings-toggle-slider" />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                    {(installedPlugins || []).map((plugin) => (
+                      <div key={plugin.id} className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">{plugin.name}</div>
+                          {plugin.description && (
+                            <div className="settings-row-description">
+                              {plugin.description}
+                            </div>
+                          )}
+                        </div>
+                        <div className="settings-row-right">
+                          <label className="settings-toggle">
+                            <input
+                              type="checkbox"
+                              checked={enabledPlugins?.[plugin.id] !== false}
+                              onChange={(e) =>
+                                onTogglePlugin?.(plugin.id, e.target.checked)
+                              }
+                            />
+                            <span className="settings-toggle-slider" />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                    {(!builtinPlugins || builtinPlugins.length === 0) &&
+                      (!installedPlugins || installedPlugins.length === 0) && (
+                        <div className="settings-row">
+                          <div className="settings-row-left">
+                            <div className="settings-row-description">
+                              No plugins found.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                   </>
                 )}
               </div>

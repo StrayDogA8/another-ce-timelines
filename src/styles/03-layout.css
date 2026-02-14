@@ -13,6 +13,9 @@
 .app-content {
   background: var(--primary-bg);
   overflow: hidden;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
 }
 
 .app-right {
@@ -69,7 +72,55 @@
   z-index: 0;
 }
 
+/* Activity Bar */
+.activity-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  background: var(--secondary-bg);
+  border-right: 1px solid var(--active-bg);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
 
+.activity-bar-top,
+.activity-bar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.activity-bar-icon {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--element-bg);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.activity-bar-icon:hover {
+  background: var(--active-bg);
+  color: var(--dark-bg);
+}
+
+.activity-bar-icon.active {
+  color: var(--dark-bg);
+  background: var(--active-bg);
+}
 
 
 

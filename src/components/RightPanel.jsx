@@ -18,6 +18,7 @@ export default function RightPanel({
   onFilterByTag,
   activeTags = [],
   onToggleTag,
+  pluginFields = [],
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -1023,6 +1024,15 @@ export default function RightPanel({
               )}
             </div>
 
+            {pluginFields
+              .filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type))
+              .map((field) => (
+                <div className="view-group" key={field.id}>
+                  <label>{field.label}</label>
+                  <div className="view-separator" />
+                  <p>{formData[field.id] ?? field.defaultValue ?? ""}</p>
+                </div>
+              ))}
 
             {formData.noteFile && (
               <>
@@ -1433,6 +1443,76 @@ export default function RightPanel({
                     </div>
                   </div>
                 </div>
+              </>
+            )}
+
+            {pluginFields.filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type)).length > 0 && (
+              <>
+                <div className="edit-section-label">Custom</div>
+                {pluginFields
+                  .filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type))
+                  .map((field) => {
+                    const fieldType = field.type || "text";
+                    const value = formData[field.id] ?? field.defaultValue ?? "";
+                    return (
+                      <div className="form-group" key={field.id}>
+                        <div className="edit-row">
+                          <label htmlFor={`plugin-field-${field.id}`}>{field.label}</label>
+                          <div className="edit-separator" />
+                          {fieldType === "select" ? (
+                            <div className="edit-select-wrap">
+                              <select
+                                id={`plugin-field-${field.id}`}
+                                className="edit-select"
+                                value={value}
+                                onChange={(e) => {
+                                  handleChange(field.id, e.target.value);
+                                  commitDraft({ ...formData, [field.id]: e.target.value });
+                                }}
+                              >
+                                {(field.options || []).map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label || opt.value}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : fieldType === "color" ? (
+                            <div className="edit-color-wrap">
+                              <input
+                                id={`plugin-field-${field.id}`}
+                                type="color"
+                                value={value || "#000000"}
+                                onChange={(e) => {
+                                  handleChange(field.id, e.target.value);
+                                  commitDraft({ ...formData, [field.id]: e.target.value });
+                                }}
+                                className="edit-color-picker"
+                              />
+                              <input
+                                type="text"
+                                value={value}
+                                onChange={(e) => handleChange(field.id, e.target.value)}
+                                onBlur={(e) => commitDraft({ ...formData, [field.id]: e.target.value })}
+                                className="edit-color-text"
+                                maxLength={7}
+                                placeholder="#000000"
+                              />
+                            </div>
+                          ) : (
+                            <input
+                              id={`plugin-field-${field.id}`}
+                              type={fieldType}
+                              value={value}
+                              onChange={(e) => handleChange(field.id, e.target.value)}
+                              onBlur={(e) => commitDraft({ ...formData, [field.id]: e.target.value })}
+                              className="edit-input"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </>
             )}
 

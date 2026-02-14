@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2 } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -28,6 +28,8 @@ export default function Sidebar({
   onDelete,
   onDuplicateElement,
   onEditElement,
+  pluginActions = [],
+  pluginApi,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -40,6 +42,7 @@ export default function Sidebar({
   const [timelineMenu, setTimelineMenu] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const [filterMenu, setFilterMenu] = useState(null);
+  const [newElementMenu, setNewElementMenu] = useState(null);
   const [elementMenu, setElementMenu] = useState(null);
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [submenuPosition, setSubmenuPosition] = useState(null);
@@ -49,6 +52,8 @@ export default function Sidebar({
   const submenuCloseTimer = useRef(null);
   const filterMenuRef = useRef(null);
   const filterButtonRef = useRef(null);
+  const newElementMenuRef = useRef(null);
+  const newElementButtonRef = useRef(null);
   const listRef = useRef(null);
   const lastScrollTopRef = useRef(0);
 
@@ -150,6 +155,24 @@ export default function Sidebar({
     });
   };
 
+  const handleToggleNewElementMenu = (e) => {
+    e.stopPropagation();
+    if (newElementMenu) {
+      setNewElementMenu(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setNewElementMenu({
+      x: rect.left,
+      y: rect.bottom + 6,
+    });
+  };
+
+  const handleNewElementAction = (action) => {
+    setNewElementMenu(null);
+    if (action) action();
+  };
+
   // Fetch timeline files on mount
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -233,6 +256,23 @@ export default function Sidebar({
     };
   }, [filterMenu]);
 
+  useEffect(() => {
+    if (!newElementMenu) return;
+
+    const handleClickOutside = (e) => {
+      const clickedInsideMenu = newElementMenuRef.current?.contains(e.target);
+      const clickedButton = newElementButtonRef.current?.contains(e.target);
+      if (!clickedInsideMenu && !clickedButton) {
+        setNewElementMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [newElementMenu]);
+
   useLayoutEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = lastScrollTopRef.current;
@@ -271,11 +311,15 @@ export default function Sidebar({
 
   const Row = ({ item, rightText, level = 0 }) => {
     const isSelected = selectedId && selectedId === item.id;
+    const leftIndent = 16 + level * 16;
 
     return (
       <button
         className={`sb-row ${isSelected ? "is-selected" : ""}`}
-        style={{ paddingLeft: 16 + level * 16 }}
+        style={{
+          marginLeft: "5px",
+          paddingLeft: `${Math.max(0, leftIndent - 5)}px`,
+        }}
         onClick={() => {
           if (listRef.current) {
             lastScrollTopRef.current = listRef.current.scrollTop;
@@ -319,7 +363,6 @@ export default function Sidebar({
             />
           </>
         )}
-
         <button
           className="sidebar-toggle"
           onClick={onToggle}
@@ -454,28 +497,16 @@ export default function Sidebar({
       )}
 
       {!isCollapsed && (
+        <>
         <div className="sidebar-add-container">
-          <div className="sidebar-add-buttons">
+        <div className="sidebar-add-buttons">
             <button
               className="sidebar-add-button"
-              onClick={onAddEvent}
-              title="Add Event"
+              onClick={handleToggleNewElementMenu}
+              title="New Element"
+              ref={newElementButtonRef}
             >
-              <RectangleHorizontal size={17} />
-            </button>
-            <button
-              className="sidebar-add-button"
-              onClick={onAddSpan}
-              title="Add Span"
-            >
-              <RectangleEllipsis size={17} />
-            </button>
-            <button
-              className="sidebar-add-button"
-              onClick={onAddEra}
-              title="Add Era"
-            >
-              <SquareSplitHorizontal size={17} />
+              <SquarePlus size={17} strokeWidth={2} />
             </button>
             <button
               className="sidebar-add-button"
@@ -498,12 +529,30 @@ export default function Sidebar({
             >
               <ListFilter size={17} strokeWidth={2} />
             </button>
+            {pluginActions.map((action) => {
+              const IconComponent = action.icon;
+              let icon;
+              try {
+                icon = <IconComponent size={17} />;
+              } catch {
+                icon = <span style={{ fontSize: 11 }}>?</span>;
+              }
+              return (
+                <button
+                  key={action.id}
+                  className="sidebar-add-button"
+                  type="button"
+                  title={action.label || action.id}
+                  onClick={() => { try { action.onClick?.(pluginApi); } catch (e) { console.error("Plugin action error:", action.id, e); } }}
+                >
+                  {icon}
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
 
-      {!isCollapsed && (
-        <div className="sidebar-content" ref={listRef}>
+      <div className="sidebar-content" ref={listRef}>
           {/* ERAS */}
           <div className="sb-section">
             <button
@@ -583,6 +632,7 @@ export default function Sidebar({
             )}
           </div>
         </div>
+        </>
       )}
 
       {filterMenu && (
@@ -637,6 +687,40 @@ export default function Sidebar({
             onClick={() => onClearTags?.()}
           >
             Clear
+          </button>
+        </div>
+      )}
+
+      {newElementMenu && (
+        <div
+          ref={newElementMenuRef}
+          className="timeline-context-menu"
+          style={{
+            position: "fixed",
+            left: `${newElementMenu.x}px`,
+            top: `${newElementMenu.y}px`,
+          }}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleNewElementAction(() => onAddEvent?.())}
+          >
+            <RectangleHorizontal size={16} />
+            <span>Add Event</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleNewElementAction(() => onAddSpan?.())}
+          >
+            <RectangleEllipsis size={16} />
+            <span>Add Span</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleNewElementAction(() => onAddEra?.())}
+          >
+            <SquareSplitHorizontal size={16} />
+            <span>Add Era</span>
           </button>
         </div>
       )}
