@@ -342,6 +342,13 @@ export default function SettingsModal({
             >
               Appearance
             </button>
+            <button
+              type="button"
+              className={`settings-sidebar-item${settingsSection === "advanced" ? " is-active" : ""}`}
+              onClick={() => setSettingsSection("advanced")}
+            >
+              Advanced
+            </button>
           </div>
 
           <div className="settings-content">
@@ -536,102 +543,7 @@ export default function SettingsModal({
             </div>
           </div>
           
-          {/* Timeline Layout */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Timeline Layout</div>
-              <div className="settings-row-description">
-                More layouts will be available soon!
-              </div>
-            </div>
-            <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={layout}
-                onChange={(e) => setLayout(e.target.value)}
-              >
-                {layoutOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          {/* Branch Ordering */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Branch Ordering</div>
-              <div className="settings-row-description">
-                Choose whether later-starting branches stay closer to the parent.
-              </div>
-            </div>
-            <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={branchOrdering}
-                onChange={(e) => setBranchOrdering(e.target.value)}
-              >
-                <option value="later-first">Later starts closer</option>
-                <option value="original">Follow branch list order</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Show Months on Ticks */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Show Months on Ticks</div>
-              <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
-            </div>
-            <div className="settings-row-right">
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={useMonths}
-                  onChange={(e) => setUseMonths(e.target.checked)}
-                />
-                <span className="settings-toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-
-          {/* Negative Era */}
-          <div className="settings-row no-border-bottom">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Negative Era</div>
-              <div className="settings-row-description">Optional label for negative years (e.g., BCE).</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                className="settings-input settings-input-small"
-                value={negID}
-                onChange={(e) => setNegID(e.target.value)}
-                placeholder="e.g., BCE"
-                maxLength={10}
-              />
-            </div>
-          </div>
-
-          {/* Positive Era */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Positive Era</div>
-              <div className="settings-row-description">Optional label for positive years (e.g., CE).</div>
-            </div>
-            <div className="settings-row-right">
-              <input
-                type="text"
-                className="settings-input settings-input-small"
-                value={posID}
-                onChange={(e) => setPosID(e.target.value)}
-                placeholder="e.g., CE"
-                maxLength={10}
-              />
-            </div>
-          </div>
             </>
           )}
 
@@ -678,6 +590,84 @@ export default function SettingsModal({
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+            </>
+          )}
+
+          {settingsSection === "advanced" && (
+            <>
+              {/* Branch Ordering */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Branch Ordering</div>
+                  <div className="settings-row-description">
+                    Choose whether later-starting branches stay closer to the parent.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={branchOrdering}
+                    onChange={(e) => setBranchOrdering(e.target.value)}
+                  >
+                    <option value="later-first">Later starts closer</option>
+                    <option value="original">Follow branch list order</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Show Months on Ticks */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Show Months on Ticks</div>
+                  <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useMonths}
+                      onChange={(e) => setUseMonths(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Negative Era */}
+              <div className="settings-row no-border-bottom">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Negative Era</div>
+                  <div className="settings-row-description">Optional label for negative years (e.g., BCE).</div>
+                </div>
+                <div className="settings-row-right">
+                  <input
+                    type="text"
+                    className="settings-input settings-input-small"
+                    value={negID}
+                    onChange={(e) => setNegID(e.target.value)}
+                    placeholder="e.g., BCE"
+                    maxLength={10}
+                  />
+                </div>
+              </div>
+
+              {/* Positive Era */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Positive Era</div>
+                  <div className="settings-row-description">Optional label for positive years (e.g., CE).</div>
+                </div>
+                <div className="settings-row-right">
+                  <input
+                    type="text"
+                    className="settings-input settings-input-small"
+                    value={posID}
+                    onChange={(e) => setPosID(e.target.value)}
+                    placeholder="e.g., CE"
+                    maxLength={10}
+                  />
                 </div>
               </div>
             </>

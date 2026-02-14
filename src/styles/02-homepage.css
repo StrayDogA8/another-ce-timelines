@@ -450,6 +450,10 @@
   width: 100%;
 }
 
+.settings-plugin-list-full {
+  padding: 0 24px 16px;
+}
+
 .settings-plugin-item {
   display: flex;
   align-items: center;

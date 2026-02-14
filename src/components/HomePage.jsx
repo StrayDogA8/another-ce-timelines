@@ -517,13 +517,6 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
-                  className={`settings-sidebar-item${settingsSection === "appearance" ? " is-active" : ""}`}
-                  onClick={() => setSettingsSection("appearance")}
-                >
-                  Appearance
-                </button>
-                <button
-                  type="button"
                   className={`settings-sidebar-item${settingsSection === "files" ? " is-active" : ""}`}
                   onClick={() => setSettingsSection("files")}
                 >
@@ -565,12 +558,7 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
-
-                {settingsSection === "appearance" && (
-                  <>
-                    <div className="settings-row no-border-bottom">
+                    <div className="settings-row">
                       <div className="settings-row-left">
                         <div className="settings-row-label">App Theme</div>
                         <div className="settings-row-description">
@@ -610,11 +598,6 @@ export default function HomePage({
                             </select>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="settings-row settings-row-section">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Font</div>
                       </div>
                     </div>
                     <div className="settings-row">
@@ -687,43 +670,6 @@ export default function HomePage({
                   <>
                     <div className="settings-row">
                       <div className="settings-row-left">
-                        <div className="settings-row-label">Notes Folder</div>
-                        <div
-                          className="settings-path-pill"
-                          title={notesStorageDir || "Default app storage"}
-                        >
-                          <Folder className="settings-path-icon" size={14} />
-                          <span className="settings-path-text">
-                            {notesStorageDir || "Default app storage"}
-                          </span>
-                        </div>
-                        {notesPathIssue && (
-                          <div className="settings-path-error">{notesPathIssue}</div>
-                        )}
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-folder settings-folder-column">
-                          <div className="settings-folder-actions">
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onPickNotesDir?.()}
-                            >
-                              Choose...
-                            </button>
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onNotesStorageDirChange?.("")}
-                            >
-                              Use Default
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
                         <div className="settings-row-label">Timeline Folder</div>
                         <div
                           className="settings-path-pill"
@@ -752,6 +698,43 @@ export default function HomePage({
                               className="settings-folder-button"
                               type="button"
                               onClick={() => onTimelineStorageDirChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Notes Folder</div>
+                        <div
+                          className="settings-path-pill"
+                          title={notesStorageDir || "Default app storage"}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {notesStorageDir || "Default app storage"}
+                          </span>
+                        </div>
+                        {notesPathIssue && (
+                          <div className="settings-path-error">{notesPathIssue}</div>
+                        )}
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickNotesDir?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onNotesStorageDirChange?.("")}
                             >
                               Use Default
                             </button>
@@ -826,9 +809,6 @@ export default function HomePage({
                     <div className="settings-row">
                       <div className="settings-row-left">
                         <div className="settings-row-label">Plugin Folder</div>
-                        <div className="settings-row-description">
-                          Folder scanned for user-installed plugins.
-                        </div>
                         <div
                           className="settings-path-pill"
                           title={pluginFolderLabel}
@@ -853,94 +833,64 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
-                    <div className="settings-row settings-row-section">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Built-in Plugins</div>
-                        <div className="settings-row-description">
-                          Enable or disable bundled features.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Bundled</div>
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-plugin-list">
-                          {(builtinPlugins || []).map((plugin) => (
-                            <div key={plugin.id} className="settings-plugin-item">
-                              <div className="settings-plugin-meta">
-                                <div className="settings-plugin-name">{plugin.name}</div>
-                                {plugin.description && (
-                                  <div className="settings-plugin-description">
-                                    {plugin.description}
-                                  </div>
-                                )}
-                              </div>
-                              <label className="settings-toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={enabledBuiltinPlugins?.[plugin.id] ?? true}
-                                  onChange={(e) =>
-                                    onToggleBuiltinPlugin?.(plugin.id, e.target.checked)
-                                  }
-                                />
-                                <span className="settings-toggle-slider" />
-                              </label>
-                            </div>
-                          ))}
-                          {(!builtinPlugins || builtinPlugins.length === 0) && (
+                    {(builtinPlugins || []).map((plugin) => (
+                      <div key={plugin.id} className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">{plugin.name}</div>
+                          {plugin.description && (
                             <div className="settings-row-description">
-                              No built-in plugins found.
+                              {plugin.description}
                             </div>
                           )}
                         </div>
-                      </div>
-                    </div>
-                    <div className="settings-row settings-row-section">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Installed Plugins</div>
-                        <div className="settings-row-description">
-                          Plugins loaded from the plugin folder.
+                        <div className="settings-row-right">
+                          <label className="settings-toggle">
+                            <input
+                              type="checkbox"
+                              checked={enabledBuiltinPlugins?.[plugin.id] ?? true}
+                              onChange={(e) =>
+                                onToggleBuiltinPlugin?.(plugin.id, e.target.checked)
+                              }
+                            />
+                            <span className="settings-toggle-slider" />
+                          </label>
                         </div>
                       </div>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">From Disk</div>
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-plugin-list">
-                          {(installedPlugins || []).map((plugin) => (
-                            <div key={plugin.id} className="settings-plugin-item">
-                              <div className="settings-plugin-meta">
-                                <div className="settings-plugin-name">{plugin.name}</div>
-                                {plugin.description && (
-                                  <div className="settings-plugin-description">
-                                    {plugin.description}
-                                  </div>
-                                )}
-                              </div>
-                              <label className="settings-toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={enabledPlugins?.[plugin.id] !== false}
-                                  onChange={(e) =>
-                                    onTogglePlugin?.(plugin.id, e.target.checked)
-                                  }
-                                />
-                                <span className="settings-toggle-slider" />
-                              </label>
-                            </div>
-                          ))}
-                          {(!installedPlugins || installedPlugins.length === 0) && (
+                    ))}
+                    {(installedPlugins || []).map((plugin) => (
+                      <div key={plugin.id} className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">{plugin.name}</div>
+                          {plugin.description && (
                             <div className="settings-row-description">
-                              No plugins found in the plugin folder.
+                              {plugin.description}
                             </div>
                           )}
                         </div>
+                        <div className="settings-row-right">
+                          <label className="settings-toggle">
+                            <input
+                              type="checkbox"
+                              checked={enabledPlugins?.[plugin.id] !== false}
+                              onChange={(e) =>
+                                onTogglePlugin?.(plugin.id, e.target.checked)
+                              }
+                            />
+                            <span className="settings-toggle-slider" />
+                          </label>
+                        </div>
                       </div>
-                    </div>
+                    ))}
+                    {(!builtinPlugins || builtinPlugins.length === 0) &&
+                      (!installedPlugins || installedPlugins.length === 0) && (
+                        <div className="settings-row">
+                          <div className="settings-row-left">
+                            <div className="settings-row-description">
+                              No plugins found.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                   </>
                 )}
               </div>

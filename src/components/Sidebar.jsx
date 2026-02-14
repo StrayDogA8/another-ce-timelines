@@ -311,11 +311,15 @@ export default function Sidebar({
 
   const Row = ({ item, rightText, level = 0 }) => {
     const isSelected = selectedId && selectedId === item.id;
+    const leftIndent = 16 + level * 16;
 
     return (
       <button
         className={`sb-row ${isSelected ? "is-selected" : ""}`}
-        style={{ paddingLeft: 16 + level * 16 }}
+        style={{
+          marginLeft: "5px",
+          paddingLeft: `${Math.max(0, leftIndent - 5)}px`,
+        }}
         onClick={() => {
           if (listRef.current) {
             lastScrollTopRef.current = listRef.current.scrollTop;
