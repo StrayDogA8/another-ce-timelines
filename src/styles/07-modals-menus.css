@@ -145,6 +145,17 @@
   backdrop-filter: blur(2px);
 }
 
+.settings-backdrop.settings-backdrop-pass-through {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.settings-backdrop.is-covered .settings-modal {
+  opacity: 0;
+  transform: scale(0.99);
+  pointer-events: none;
+}
+
 .settings-modal {
   background: var(--secondary-bg);
   border-radius: 12px;
@@ -705,6 +716,23 @@
 }
 
 .settings-select-icon-button:hover {
+  background: var(--active-bg);
+}
+
+.settings-folder-button {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings-folder-button:hover {
   background: var(--active-bg);
 }
 

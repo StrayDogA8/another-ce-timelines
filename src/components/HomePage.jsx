@@ -8,6 +8,8 @@ import { loadThemeConfig } from "../utils/themeLoader";
 import { deleteUserTheme, saveUserTheme } from "../utils/electronApi";
 
 export default function HomePage({
+  settingsOnly = false,
+  reuseExistingBackdrop = false,
   onSelectTimeline,
   onCreateTimeline,
   appThemeKey,
@@ -39,12 +41,14 @@ export default function HomePage({
   onOpenPluginsFolder,
   onOpenFontsFolder,
   onRefreshThemes,
+  openSettingsSignal = 0,
+  onAppSettingsClosed,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [marketplaceThemes, setMarketplaceThemes] = useState([]);
@@ -56,6 +60,7 @@ export default function HomePage({
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
+  const previousViewRef = useRef("home");
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
@@ -192,6 +197,27 @@ export default function HomePage({
     }
     return null;
   }, [notesSubfolder]);
+
+  useEffect(() => {
+    if (openSettingsSignal > 0) {
+      setView("settings");
+      setSettingsSection("general");
+    }
+  }, [openSettingsSignal]);
+
+  useEffect(() => {
+    if (settingsOnly) {
+      setView("settings");
+      setSettingsSection("general");
+    }
+  }, [settingsOnly]);
+
+  useEffect(() => {
+    if (previousViewRef.current === "settings" && view !== "settings") {
+      onAppSettingsClosed?.();
+    }
+    previousViewRef.current = view;
+  }, [view, onAppSettingsClosed]);
 
   useEffect(() => {
     const loadTimelineList = async () => {
@@ -376,7 +402,7 @@ export default function HomePage({
     ? timelineFiles.filter((file) => file.name.toLowerCase().includes(normalizedQuery))
     : timelineFiles;
 
-  if (loading) {
+  if (loading && !settingsOnly) {
     return (
       <div className="homepage">
         <div className="homepage-container">
@@ -386,9 +412,19 @@ export default function HomePage({
     );
   }
 
+  const closeSettings = () => {
+    if (settingsOnly) {
+      onAppSettingsClosed?.();
+      return;
+    }
+    setView("home");
+  };
+
   return (
-    <div className="homepage">
-      <div className="homepage-container">
+    <div className={`homepage${settingsOnly ? " homepage-settings-only" : ""}`}>
+      {!settingsOnly && (
+        <>
+          <div className="homepage-container">
         <div className="homepage-header">
           <div className="homepage-header-left">
             <h1 className="homepage-title">timelines</h1>
@@ -443,21 +479,26 @@ export default function HomePage({
             <p>No timelines found. Create a new one to get started.</p>
           </div>
         )}
-      </div>
+          </div>
 
-      <NewTimelineModal
-        isOpen={isNewTimelineModalOpen}
-        onClose={() => setIsNewTimelineModalOpen(false)}
-        onCreate={handleCreateTimeline}
-      />
+          <NewTimelineModal
+            isOpen={isNewTimelineModalOpen}
+            onClose={() => setIsNewTimelineModalOpen(false)}
+            onCreate={handleCreateTimeline}
+          />
+        </>
+      )}
 
       {view === "settings" && (
-        <div className="settings-backdrop" onClick={() => setView("home")}>
+        <div
+          className={`settings-backdrop${reuseExistingBackdrop ? " settings-backdrop-pass-through" : ""}`}
+          onClick={closeSettings}
+        >
           <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
             <div className="settings-header">
               <button
                 className="settings-back-button"
-                onClick={() => setView("home")}
+                onClick={closeSettings}
                 aria-label="Close settings"
               >
                 <ArrowLeft size={18} strokeWidth={2} />

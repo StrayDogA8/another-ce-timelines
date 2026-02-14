@@ -7,6 +7,8 @@ import "../styles/07-modals-menus.css";
 export default function SettingsModal({
   isOpen,
   onClose,
+  onOpenAppSettings,
+  isCovered = false,
   timelineData,
   onUpdateTimeline,
   themeKey,
@@ -31,6 +33,7 @@ export default function SettingsModal({
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
+  const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [breakErrors, setBreakErrors] = useState([]);
@@ -297,7 +300,7 @@ export default function SettingsModal({
 
   return (
     <div
-      className="settings-backdrop"
+      className={`settings-backdrop${isCovered ? " is-covered" : ""}`}
       onMouseDown={handleBackdropMouseDown}
       onMouseUp={handleBackdropMouseUp}
     >
@@ -323,9 +326,46 @@ export default function SettingsModal({
           </div>
         )}
 
-        <div className="settings-content">
-          {/* Timeline Name */}
-          <div className="settings-row">
+        <div className="settings-layout">
+          <div className="settings-sidebar">
+            <button
+              type="button"
+              className={`settings-sidebar-item${settingsSection === "general" ? " is-active" : ""}`}
+              onClick={() => setSettingsSection("general")}
+            >
+              General
+            </button>
+            <button
+              type="button"
+              className={`settings-sidebar-item${settingsSection === "appearance" ? " is-active" : ""}`}
+              onClick={() => setSettingsSection("appearance")}
+            >
+              Appearance
+            </button>
+          </div>
+
+          <div className="settings-content">
+          {settingsSection === "general" && (
+            <>
+            <div className="settings-row">
+              <div className="settings-row-left">
+                <div className="settings-row-label">App Settings</div>
+                <div className="settings-row-description">
+                  Open global settings for themes, files, and plugins.
+                </div>
+              </div>
+              <div className="settings-row-right">
+                <button
+                  type="button"
+                  className="settings-folder-button"
+                  onClick={onOpenAppSettings}
+                >
+                  Open App Settings
+                </button>
+              </div>
+            </div>
+            {/* Timeline Name */}
+            <div className="settings-row">
             <div className="settings-row-left">
               <div className="settings-row-label">Timeline Name</div>
               <div className="settings-row-description">Your file will be saved as: {sanitizeTitle(title) || "untitled"}.timeline</div>
@@ -495,53 +535,7 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
-
-          {/* Theme */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Theme</div>
-              <div className="settings-row-description">Choose a color theme for the timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={theme || themeKey || ""}
-                onChange={(e) => {
-                  setTheme(e.target.value);
-                  onThemeChange?.(e.target.value);
-                }}
-              >
-                <option value="default">Default (App Theme)</option>
-                {Object.entries(themes || {}).map(([key, theme]) => (
-                  <option key={key} value={key}>
-                    {theme?.name || key}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Font */}
-          <div className="settings-row">
-            <div className="settings-row-left">
-              <div className="settings-row-label">Font</div>
-              <div className="settings-row-description">Choose a font for this timeline.</div>
-            </div>
-            <div className="settings-row-right">
-              <select
-                className="settings-select"
-                value={fontFamily || "default"}
-                onChange={(e) => setFontFamily(e.target.value)}
-              >
-                {fontOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
+          
           {/* Timeline Layout */}
           <div className="settings-row">
             <div className="settings-row-left">
@@ -637,6 +631,57 @@ export default function SettingsModal({
                 maxLength={10}
               />
             </div>
+          </div>
+            </>
+          )}
+
+          {settingsSection === "appearance" && (
+            <>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Theme</div>
+                  <div className="settings-row-description">Choose a color theme for the timeline.</div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={theme || themeKey || ""}
+                    onChange={(e) => {
+                      setTheme(e.target.value);
+                      onThemeChange?.(e.target.value);
+                    }}
+                  >
+                    <option value="default">Default (App Theme)</option>
+                    {Object.entries(themes || {}).map(([key, theme]) => (
+                      <option key={key} value={key}>
+                        {theme?.name || key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Font</div>
+                  <div className="settings-row-description">Choose a font for this timeline.</div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={fontFamily || "default"}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                  >
+                    {fontOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
           </div>
         </div>
       </div>

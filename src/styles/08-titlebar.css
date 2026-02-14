@@ -70,3 +70,14 @@
   opacity: 0.7;
 }
 
+.title-bar-panel-toggle {
+  width: 36px;
+}
+
+.title-bar-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--active-bg);
+  align-self: center;
+}
+

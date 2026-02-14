@@ -65,13 +65,15 @@ function App() {
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 600;
-  const ACTIVITY_BAR_WIDTH = 44;
+  const COLLAPSED_WIDTH = 44;
+  const ACTIVITY_BAR_WIDTH = 36;
   const DEFAULT_LEFT_WIDTH = 350;
   const DEFAULT_RIGHT_WIDTH = 385;
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isRightMaximized, setIsRightMaximized] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
@@ -111,6 +113,10 @@ function App() {
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
+  const [homeSettingsSignal, setHomeSettingsSignal] = useState(0);
+  const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
+  const [returnToProjectSettings, setReturnToProjectSettings] = useState(false);
+  const [isProjectSettingsCovered, setIsProjectSettingsCovered] = useState(false);
   const [filterScope, setFilterScope] = useState({
     events: true,
     spans: true,
@@ -126,12 +132,19 @@ function App() {
   const leftWidthRef = useRef(DEFAULT_LEFT_WIDTH);
   const rightWidthRef = useRef(DEFAULT_RIGHT_WIDTH);
   const leftCollapsedRef = useRef(false);
+  const rightCollapsedRef = useRef(false);
   const loadedPluginsRef = useRef(new Map());
 
   const isDraggingLeft = useRef(false);
   const isDraggingRight = useRef(false);
+  const rightMaxReachedRef = useRef(false);
+  const rightReversedAfterMaxRef = useRef(false);
+  const rightLastDistanceRef = useRef(null);
   const timelineViewRef = useRef(null);
-  const currentLeftWidth = ACTIVITY_BAR_WIDTH + (isLeftCollapsed ? 0 : sidebarWidth);
+  const showActivityBar = pluginViews.length > 0;
+  const effectiveBarWidth = showActivityBar ? ACTIVITY_BAR_WIDTH : 0;
+  const collapsedLeftWidth = showActivityBar ? 0 : COLLAPSED_WIDTH;
+  const currentLeftWidth = effectiveBarWidth + (isLeftCollapsed ? collapsedLeftWidth : sidebarWidth);
 
   const registerView = useCallback((view) => {
     if (!view?.id || !view?.component) return;
@@ -168,14 +181,6 @@ function App() {
 
   const registerField = useCallback((field) => {
     if (!field?.id || !field?.label) return;
-    if (typeof field.id !== "string" || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(field.id)) {
-      console.warn(`Plugin field id "${field.id}" rejected: must be alphanumeric`);
-      return;
-    }
-    if (RESERVED_FIELD_IDS.has(field.id)) {
-      console.warn(`Plugin field id "${field.id}" rejected: reserved property name`);
-      return;
-    }
     setPluginFields((prev) => {
       const next = prev.filter((item) => item.id !== field.id);
       return [...next, field];
@@ -191,7 +196,7 @@ function App() {
     function handleMouseMove(e) {
       if (isDraggingLeft.current) {
         e.preventDefault();
-        const dragX = e.clientX - ACTIVITY_BAR_WIDTH;
+        const dragX = e.clientX - effectiveBarWidth;
         if (isLeftCollapsed && dragX > 30) {
           setIsLeftCollapsed(false);
           setSidebarWidth(Math.min(Math.max(dragX, MIN_WIDTH), MAX_WIDTH));
@@ -202,13 +207,43 @@ function App() {
         }
       } else if (isDraggingRight.current) {
         e.preventDefault();
+        if (!selectedIdRef.current) return;
         const windowWidth = window.innerWidth;
         const distanceFromRight = windowWidth - e.clientX;
-        const next = Math.min(
-          Math.max(distanceFromRight, MIN_WIDTH),
-          MAX_WIDTH
-        );
-        setRightWidth(next);
+        const maximizeThreshold = MAX_WIDTH + 24;
+        if (!Number.isFinite(rightLastDistanceRef.current)) {
+          rightLastDistanceRef.current = distanceFromRight;
+        }
+        if (isRightCollapsed && distanceFromRight > 30) {
+          const next = Math.min(Math.max(distanceFromRight, MIN_WIDTH), MAX_WIDTH);
+          setIsRightCollapsed(false);
+          setRightWidth(next);
+          setIsRightMaximized(false);
+          rightLastDistanceRef.current = distanceFromRight;
+        } else if (!isRightCollapsed && distanceFromRight < 50) {
+          setIsRightCollapsed(true);
+          setIsRightMaximized(false);
+        } else if (!isRightCollapsed && distanceFromRight > maximizeThreshold) {
+          if (rightMaxReachedRef.current && rightReversedAfterMaxRef.current) {
+            setIsRightMaximized(true);
+          }
+        } else if (!isRightCollapsed) {
+          const lastDistance = rightLastDistanceRef.current;
+          if (
+            rightMaxReachedRef.current &&
+            Number.isFinite(lastDistance) &&
+            distanceFromRight < lastDistance - 4
+          ) {
+            rightReversedAfterMaxRef.current = true;
+          }
+          const next = Math.min(Math.max(distanceFromRight, MIN_WIDTH), MAX_WIDTH);
+          if (isRightMaximized) setIsRightMaximized(false);
+          setRightWidth(next);
+          if (next >= MAX_WIDTH) {
+            rightMaxReachedRef.current = true;
+          }
+          rightLastDistanceRef.current = distanceFromRight;
+        }
       }
     }
 
@@ -216,6 +251,9 @@ function App() {
       if (isDraggingLeft.current || isDraggingRight.current) {
         isDraggingLeft.current = false;
         isDraggingRight.current = false;
+        rightMaxReachedRef.current = false;
+        rightReversedAfterMaxRef.current = false;
+        rightLastDistanceRef.current = null;
         document.body.classList.remove("dragging");
       }
     }
@@ -227,7 +265,7 @@ function App() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isLeftCollapsed]);
+  }, [isLeftCollapsed, isRightCollapsed]);
 
   useEffect(() => {
     timelineDataRef.current = timelineData;
@@ -248,6 +286,10 @@ function App() {
   useEffect(() => {
     leftCollapsedRef.current = isLeftCollapsed;
   }, [isLeftCollapsed]);
+
+  useEffect(() => {
+    rightCollapsedRef.current = isRightCollapsed;
+  }, [isRightCollapsed]);
 
   useEffect(() => {
     function handleKeyDown(e) {
@@ -289,7 +331,7 @@ function App() {
     setSelectedId: (next) => setSelectedId(next),
     getViewportInsets: () => ({
       leftOpen: !leftCollapsedRef.current,
-      rightOpen: Boolean(selectedIdRef.current),
+      rightOpen: Boolean(selectedIdRef.current) && !rightCollapsedRef.current,
       leftWidth: leftWidthRef.current,
       rightWidth: rightWidthRef.current,
     }),
@@ -358,9 +400,10 @@ function App() {
       record.views.forEach((viewId) => unregisterView(viewId));
       if (record.actions) record.actions.forEach((actionId) => unregisterAction(actionId));
       if (record.fields) record.fields.forEach((fieldId) => unregisterField(fieldId));
-      if (record.instance?.onunload) {
+      const onunload = record.instance?.onunload ?? record.module?.onunload;
+      if (typeof onunload === "function") {
         try {
-          await record.instance.onunload();
+          await onunload(pluginApi);
         } catch (error) {
           console.error("Failed to unload plugin:", pluginId, error);
         }
@@ -393,37 +436,52 @@ function App() {
             } finally {
               URL.revokeObjectURL(moduleUrl);
             }
+            const ns = (id) => `${plugin.id}:${id}`;
             const scopedApi = {
               ...pluginApi,
               registerView: (view) => {
                 if (!view?.id || !view?.component) return;
-                const withMeta = { ...view, pluginId: plugin.id };
+                const namespacedId = ns(view.id);
+                const withMeta = { ...view, id: namespacedId, pluginId: plugin.id };
                 registerView(withMeta);
-                views.add(withMeta.id);
+                views.add(namespacedId);
               },
               unregisterView: (viewId) => {
-                unregisterView(viewId);
-                views.delete(viewId);
+                const namespacedId = ns(viewId);
+                unregisterView(namespacedId);
+                views.delete(namespacedId);
               },
               registerAction: (action) => {
                 if (!action?.id || !action?.icon) return;
-                const withMeta = { ...action, pluginId: plugin.id };
+                const namespacedId = ns(action.id);
+                const withMeta = { ...action, id: namespacedId, pluginId: plugin.id };
                 registerAction(withMeta);
-                actions.add(withMeta.id);
+                actions.add(namespacedId);
               },
               unregisterAction: (actionId) => {
-                unregisterAction(actionId);
-                actions.delete(actionId);
+                const namespacedId = ns(actionId);
+                unregisterAction(namespacedId);
+                actions.delete(namespacedId);
               },
               registerField: (field) => {
                 if (!field?.id || !field?.label) return;
-                const withMeta = { ...field, pluginId: plugin.id };
+                if (typeof field.id !== "string" || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(field.id)) {
+                  console.warn(`Plugin field id "${field.id}" rejected: must be alphanumeric`);
+                  return;
+                }
+                if (RESERVED_FIELD_IDS.has(field.id)) {
+                  console.warn(`Plugin field id "${field.id}" rejected: reserved property name`);
+                  return;
+                }
+                const namespacedId = ns(field.id);
+                const withMeta = { ...field, id: namespacedId, pluginId: plugin.id };
                 registerField(withMeta);
-                fields.add(withMeta.id);
+                fields.add(namespacedId);
               },
               unregisterField: (fieldId) => {
-                unregisterField(fieldId);
-                fields.delete(fieldId);
+                const namespacedId = ns(fieldId);
+                unregisterField(namespacedId);
+                fields.delete(namespacedId);
               },
             };
 
@@ -611,13 +669,17 @@ function App() {
 
   const handleSelect = (id) => {
     setSelectedId(id);
+    if (id) setIsRightCollapsed(false);
   };
 
   useEffect(() => {
     if (!selectedId && isRightMaximized) {
       setIsRightMaximized(false);
     }
-  }, [selectedId, isRightMaximized]);
+    if (!selectedId && isRightCollapsed) {
+      setIsRightCollapsed(false);
+    }
+  }, [selectedId, isRightMaximized, isRightCollapsed]);
 
   const handleToggleTag = (tag) => {
     setActiveTags((prev) => {
@@ -1343,6 +1405,21 @@ function App() {
     }
   };
 
+  const handleOpenAppSettingsFromProject = () => {
+    setReturnToProjectSettings(true);
+    setIsProjectSettingsCovered(true);
+    setIsAppSettingsOverlayOpen(true);
+    setIsSettingsOpen(true);
+    setHomeSettingsSignal((value) => value + 1);
+  };
+
+  const handleAppSettingsClosedFromHome = () => {
+    setIsProjectSettingsCovered(false);
+    setIsAppSettingsOverlayOpen(false);
+    setIsSettingsOpen(returnToProjectSettings);
+    setReturnToProjectSettings(false);
+  };
+
   const handleTimelineStorageDirChange = async (nextDir) => {
     setTimelineStorageDir(nextDir || "");
     await saveAppSettings({
@@ -1595,6 +1672,8 @@ function App() {
             onAppFontChange={handleAppFontChange}
             onAppFontSizeChange={handleAppFontSizeChange}
             onRefreshThemes={refreshUserThemes}
+            openSettingsSignal={homeSettingsSignal}
+            onAppSettingsClosed={handleAppSettingsClosedFromHome}
           />
         </div>
       </>
@@ -1605,15 +1684,25 @@ function App() {
 
   return (
     <>
-      <TopBar title={timelineData.file?.title || "Timelines"} />
-      <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
-      <ActivityBar
-        layouts={layoutOptions}
-        activeLayout={layoutValue}
-        onLayoutChange={handleLayoutChange}
-        isCollapsed={isLeftCollapsed}
-        onToggle={() => setIsLeftCollapsed((v) => !v)}
+      <TopBar
+        title={timelineData.file?.title || "Timelines"}
+        isLeftCollapsed={isLeftCollapsed}
+        onToggleLeft={() => setIsLeftCollapsed((v) => !v)}
+        showRightToggle={Boolean(selectedId)}
+        isRightCollapsed={isRightCollapsed}
+        onToggleRight={() => setIsRightCollapsed((v) => !v)}
       />
+      <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
+      {showActivityBar && (
+        <ActivityBar
+          layouts={layoutOptions}
+          activeLayout={layoutValue}
+          onLayoutChange={handleLayoutChange}
+          isCollapsed={isLeftCollapsed}
+          onToggle={() => setIsLeftCollapsed((v) => !v)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      )}
 
       <div
         className="sidebar-resizer overlay-resizer"
@@ -1625,40 +1714,39 @@ function App() {
         }}
       />
 
-      {!isLeftCollapsed && (
-        <aside
-          className="app-sidebar overlay-sidebar"
-          style={{ width: sidebarWidth, left: ACTIVITY_BAR_WIDTH }}
-        >
-          <Sidebar
-            onToggle={() => setIsLeftCollapsed(true)}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            timelineData={filteredTimelineData}
-            allElements={timelineData.elements}
-            activeTags={activeTags}
-            onToggleTag={handleToggleTag}
-            filterScope={filterScope}
-            onToggleFilterScope={handleToggleFilterScope}
-            onClearTags={handleClearTags}
-            onAddEvent={handleAddEvent}
-            onAddSpan={handleAddSpan}
-            onAddEra={handleAddEra}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onDownloadJson={handleDownloadJSON}
-            onDownloadPng={handleDownloadPNG}
-            onLoadTimeline={handleLoadTimeline}
-            onNewTimeline={handleNewTimeline}
-            onDuplicateTimeline={handleDuplicateTimeline}
-            onBackToHome={handleBackToHome}
-            onDelete={handleRequestDelete}
-            onDuplicateElement={handleDuplicateElement}
-            onEditElement={handleEditElement}
-            pluginActions={pluginActions}
-            pluginApi={pluginApi}
-          />
-        </aside>
-      )}
+      <aside
+        className="app-sidebar overlay-sidebar"
+        style={{ width: isLeftCollapsed ? collapsedLeftWidth : sidebarWidth, left: effectiveBarWidth }}
+      >
+        <Sidebar
+          isCollapsed={!showActivityBar && isLeftCollapsed}
+          onToggle={() => setIsLeftCollapsed((v) => !v)}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+          timelineData={filteredTimelineData}
+          allElements={timelineData.elements}
+          activeTags={activeTags}
+          onToggleTag={handleToggleTag}
+          filterScope={filterScope}
+          onToggleFilterScope={handleToggleFilterScope}
+          onClearTags={handleClearTags}
+          onAddEvent={handleAddEvent}
+          onAddSpan={handleAddSpan}
+          onAddEra={handleAddEra}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onDownloadJson={handleDownloadJSON}
+          onDownloadPng={handleDownloadPNG}
+          onLoadTimeline={handleLoadTimeline}
+          onNewTimeline={handleNewTimeline}
+          onDuplicateTimeline={handleDuplicateTimeline}
+          onBackToHome={handleBackToHome}
+          onDelete={handleRequestDelete}
+          onDuplicateElement={handleDuplicateElement}
+          onEditElement={handleEditElement}
+          pluginActions={pluginActions}
+          pluginApi={pluginApi}
+        />
+      </aside>
 
       <main
         className="app-content"
@@ -1675,7 +1763,7 @@ function App() {
               const rightOffset =
                 activePluginView.respectRightPanel === false
                   ? 0
-                  : Boolean(selectedId)
+                  : Boolean(selectedId) && !isRightCollapsed
                     ? rightWidth
                     : 0;
               return (
@@ -1688,7 +1776,7 @@ function App() {
                     rightOffset={rightOffset}
                     viewportInsets={{
                       leftOpen: !isLeftCollapsed,
-                      rightOpen: Boolean(selectedId),
+                      rightOpen: Boolean(selectedId) && !isRightCollapsed,
                       leftWidth: currentLeftWidth,
                       rightWidth,
                     }}
@@ -1704,7 +1792,7 @@ function App() {
                 leftPanelWidth={currentLeftWidth}
                 isLeftPanelOpen={!isLeftCollapsed}
                 rightPanelWidth={rightWidth}
-                isRightPanelOpen={Boolean(selectedId)}
+                isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
               />
             )}
           </>
@@ -1725,7 +1813,7 @@ function App() {
             exportPngOptions={exportPngOptions}
             onExportPng={handleDownloadPNG}
             rightPanelWidth={rightWidth}
-            isRightPanelOpen={Boolean(selectedId)}
+            isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
             leftPanelWidth={currentLeftWidth}
             isLeftPanelOpen={!isLeftCollapsed}
             filterScope={filterScope}
@@ -1742,6 +1830,8 @@ function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onOpenAppSettings={handleOpenAppSettingsFromProject}
+        isCovered={isProjectSettingsCovered}
         timelineData={timelineData}
         onUpdateTimeline={handleUpdateTimeline}
         themeKey={themeKey}
@@ -1752,43 +1842,103 @@ function App() {
         layoutOptions={layoutOptions}
       />
 
+      {isAppSettingsOverlayOpen && (
+        <HomePage
+          settingsOnly
+          reuseExistingBackdrop={returnToProjectSettings}
+          onSelectTimeline={handleLoadTimeline}
+          onCreateTimeline={handleCreateTimeline}
+          appThemeKey={appThemeKey}
+          themes={themeConfig.themes}
+          onAppThemeChange={handleAppThemeChange}
+          appFontFamily={appFontFamily}
+          appFontSize={appFontSize}
+          fonts={availableFonts}
+          timelineStorageDir={timelineStorageDir}
+          notesStorageDir={notesStorageDir}
+          notesSubfolder={notesSubfolder}
+          notesSubfolderEnabled={notesSubfolderEnabled}
+          pluginsRoot={pluginsRoot}
+          builtinPlugins={BUILTIN_PLUGINS}
+          enabledBuiltinPlugins={enabledBuiltinPlugins}
+          installedPlugins={installedPlugins}
+          enabledPlugins={enabledPlugins}
+          onTimelineStorageDirChange={handleTimelineStorageDirChange}
+          onNotesStorageDirChange={handleNotesStorageDirChange}
+          onNotesSubfolderChange={handleNotesSubfolderChange}
+          onNotesSubfolderEnabledChange={handleNotesSubfolderEnabledChange}
+          onPickNotesSubfolder={handlePickNotesSubfolder}
+          onPickTimelinesDir={handlePickTimelinesDir}
+          onPickNotesDir={handlePickNotesDir}
+          onToggleBuiltinPlugin={handleToggleBuiltinPlugin}
+          onTogglePlugin={handleTogglePlugin}
+          onOpenPluginsFolder={handleOpenPluginsFolder}
+          onOpenFontsFolder={handleOpenFontsFolder}
+          onAppFontChange={handleAppFontChange}
+          onAppFontSizeChange={handleAppFontSizeChange}
+          onRefreshThemes={refreshUserThemes}
+          openSettingsSignal={homeSettingsSignal}
+          onAppSettingsClosed={handleAppSettingsClosedFromHome}
+        />
+      )}
+
       {selectedId && (
         <>
-          {!isRightMaximized && (
+          {!isRightMaximized && !isRightCollapsed && (
             <div
               className="right-resizer overlay-resizer"
               style={{ right: `${Math.max(rightWidth, MIN_WIDTH) - 3}px` }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 isDraggingRight.current = true;
+                rightMaxReachedRef.current = false;
+                rightReversedAfterMaxRef.current = false;
+                rightLastDistanceRef.current = null;
                 document.body.classList.add("dragging");
               }}
             />
           )}
 
-          <aside
-            className="app-right overlay-right"
-            style={{
-              width: isRightMaximized
-                ? `calc(100% - ${currentLeftWidth}px)`
-                : rightWidth
-            }}
-          >
-            <RightPanel
-              onSelect={handleSelect}
-              selectedElement={selectedElement}
-              onUpdate={handleUpdate}
-              timelineData={timelineData}
-              editRequestId={editRequestId}
-              onEditRequestHandled={() => setEditRequestId(null)}
-              isMaximized={isRightMaximized}
-              onToggleMaximize={() => setIsRightMaximized((prev) => !prev)}
-              onFilterByTag={handleFilterByTag}
-              activeTags={activeTags}
-              onToggleTag={handleToggleTag}
-              pluginFields={pluginFields}
+          {isRightCollapsed && (
+            <div
+              className="right-resizer overlay-resizer"
+              style={{ right: "-3px" }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                isDraggingRight.current = true;
+                rightMaxReachedRef.current = false;
+                rightReversedAfterMaxRef.current = false;
+                rightLastDistanceRef.current = null;
+                document.body.classList.add("dragging");
+              }}
             />
-          </aside>
+          )}
+
+          {!isRightCollapsed && (
+            <aside
+              className="app-right overlay-right"
+              style={{
+                width: isRightMaximized
+                  ? `calc(100% - ${currentLeftWidth}px)`
+                  : rightWidth
+              }}
+            >
+              <RightPanel
+                onSelect={handleSelect}
+                selectedElement={selectedElement}
+                onUpdate={handleUpdate}
+                timelineData={timelineData}
+                editRequestId={editRequestId}
+                onEditRequestHandled={() => setEditRequestId(null)}
+                isMaximized={isRightMaximized}
+                onToggleMaximize={() => setIsRightMaximized((prev) => !prev)}
+                onFilterByTag={handleFilterByTag}
+                activeTags={activeTags}
+                onToggleTag={handleToggleTag}
+                pluginFields={pluginFields}
+              />
+            </aside>
+          )}
         </>
       )}
 
@@ -1865,3 +2015,5 @@ function App() {
 }
 
 export default App;
+
+

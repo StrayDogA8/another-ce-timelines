@@ -1,6 +1,13 @@
-import { Minus, Square, X } from "lucide-react";
+import { Minus, Square, X, PanelLeft, PanelRight } from "lucide-react";
 
-export default function TopBar({ title = "Timelines" }) {
+export default function TopBar({
+  title = "Timelines",
+  isLeftCollapsed,
+  onToggleLeft,
+  showRightToggle,
+  isRightCollapsed,
+  onToggleRight,
+}) {
   const isElectron = window.electron !== undefined;
 
   const handleMinimize = () => {
@@ -42,6 +49,25 @@ export default function TopBar({ title = "Timelines" }) {
         <span className="title-bar-title">{title}</span>
       </div>
       <div className="title-bar-controls">
+        {onToggleLeft && (
+          <button
+            className="title-bar-button title-bar-panel-toggle"
+            onClick={onToggleLeft}
+            title={isLeftCollapsed ? "Show sidebar" : "Hide sidebar"}
+          >
+            <PanelLeft size={14} />
+          </button>
+        )}
+        {showRightToggle && onToggleRight && (
+          <button
+            className="title-bar-button title-bar-panel-toggle"
+            onClick={onToggleRight}
+            title={isRightCollapsed ? "Show panel" : "Hide panel"}
+          >
+            <PanelRight size={14} />
+          </button>
+        )}
+        <div className="title-bar-separator" />
         <button className="title-bar-button" onClick={handleMinimize} title="Minimize">
           <Minus size={14} />
         </button>

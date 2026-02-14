@@ -1,6 +1,6 @@
 import * as LucideIcons from "lucide-react";
 
-const { LayoutDashboard, Puzzle, PanelLeft, PanelRight } = LucideIcons;
+const { LayoutDashboard, Puzzle, Settings } = LucideIcons;
 
 function resolveIcon(icon, fallback) {
   if (!icon) return fallback;
@@ -16,6 +16,7 @@ export default function ActivityBar({
   onLayoutChange,
   isCollapsed,
   onToggle,
+  onOpenSettings,
 }) {
   return (
     <div className="activity-bar">
@@ -33,7 +34,7 @@ export default function ActivityBar({
               aria-label={layout.label}
               type="button"
             >
-              <IconComponent size={20} strokeWidth={1.8} />
+              <IconComponent size={17} strokeWidth={1.8} />
             </button>
           );
         })}
@@ -41,16 +42,12 @@ export default function ActivityBar({
       <div className="activity-bar-bottom">
         <button
           className="activity-bar-icon"
-          onClick={onToggle}
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onOpenSettings}
+          title="Settings"
+          aria-label="Settings"
           type="button"
         >
-          {isCollapsed ? (
-            <PanelRight size={20} strokeWidth={1.8} />
-          ) : (
-            <PanelLeft size={20} strokeWidth={1.8} />
-          )}
+          <Settings size={17} strokeWidth={1.8} />
         </button>
       </div>
     </div>
