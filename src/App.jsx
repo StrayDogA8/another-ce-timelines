@@ -61,6 +61,13 @@ class PluginErrorBoundary extends ReactRuntime.Component {
 
 const BUILTIN_PLUGINS = [];
 
+const RESERVED_FIELD_IDS = new Set([
+  "id", "type", "title", "date", "dateLabel", "start", "startLabel",
+  "end", "endLabel", "tags", "color", "textColor", "style", "noteFile",
+  "parent", "image", "imageSize", "imagePosition",
+  "__proto__", "constructor", "prototype", "toString", "valueOf",
+]);
+
 function App() {
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
@@ -171,13 +178,6 @@ function App() {
     if (!actionId) return;
     setPluginActions((prev) => prev.filter((item) => item.id !== actionId));
   }, []);
-
-  const RESERVED_FIELD_IDS = new Set([
-    "id", "type", "title", "date", "dateLabel", "start", "startLabel",
-    "end", "endLabel", "tags", "color", "textColor", "style", "noteFile",
-    "parent", "image", "imageSize", "imagePosition",
-    "__proto__", "constructor", "prototype", "toString", "valueOf",
-  ]);
 
   const registerField = useCallback((field) => {
     if (!field?.id || !field?.label) return;
@@ -343,14 +343,7 @@ function App() {
     unregisterField,
   }), [registerView, unregisterView, registerAction, unregisterAction, registerField, unregisterField]);
 
-  useEffect(() => {
-    window.timelinePluginApi = pluginApi;
-    return () => {
-      if (window.timelinePluginApi === pluginApi) {
-        delete window.timelinePluginApi;
-      }
-    };
-  }, [pluginApi]);
+  // pluginApi is passed explicitly to plugins via scopedApi — no global exposure
 
   useEffect(() => {
     window.TimelinesReact = ReactRuntime;
@@ -423,6 +416,7 @@ function App() {
           loaded.set(plugin.id, { instance: null, views, actions, fields });
           try {
             const readResult = await readPluginModule(plugin.entryPath);
+            if (cancelled) { loaded.delete(plugin.id); return; }
             if (!readResult?.success || !readResult.code) {
               throw new Error(readResult?.error || "Failed to read plugin module.");
             }
@@ -436,6 +430,7 @@ function App() {
             } finally {
               URL.revokeObjectURL(moduleUrl);
             }
+            if (cancelled) { loaded.delete(plugin.id); return; }
             const ns = (id) => `${plugin.id}:${id}`;
             const scopedApi = {
               ...pluginApi,
@@ -495,6 +490,14 @@ function App() {
               await module.onload(scopedApi);
             }
 
+            if (cancelled) {
+              views.forEach((viewId) => unregisterView(viewId));
+              actions.forEach((actionId) => unregisterAction(actionId));
+              fields.forEach((fieldId) => unregisterField(fieldId));
+              loaded.delete(plugin.id);
+              return;
+            }
+
             const record = loaded.get(plugin.id);
             if (record) {
               record.instance = instance;
@@ -505,6 +508,9 @@ function App() {
             }
           } catch (error) {
             console.error("Failed to load plugin:", plugin.id, error);
+            views.forEach((viewId) => unregisterView(viewId));
+            actions.forEach((actionId) => unregisterAction(actionId));
+            fields.forEach((fieldId) => unregisterField(fieldId));
             loaded.delete(plugin.id);
           }
         }

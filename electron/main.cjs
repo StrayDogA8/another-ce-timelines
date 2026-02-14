@@ -683,7 +683,12 @@ const pluginsRootDir = () => path.join(app.getPath('userData'), 'plugins');
 
 ipcMain.handle('open-plugins-folder', async (event, payload) => {
   try {
-    const dir = payload?.path || pluginsRootDir();
+    const root = path.resolve(pluginsRootDir());
+    const dir = payload?.path ? path.resolve(payload.path) : root;
+    const relative = path.relative(root, dir);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { success: false, error: 'PATH_OUTSIDE_PLUGINS_ROOT' };
+    }
     await fs.mkdir(dir, { recursive: true });
     await shell.openPath(dir);
     return { success: true, path: dir };
@@ -695,7 +700,12 @@ ipcMain.handle('open-plugins-folder', async (event, payload) => {
 
 ipcMain.handle('list-plugins', async (event, payload) => {
   try {
-    const dir = payload?.path || pluginsRootDir();
+    const root = path.resolve(pluginsRootDir());
+    const dir = payload?.path ? path.resolve(payload.path) : root;
+    const relative = path.relative(root, dir);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { success: false, error: 'PATH_OUTSIDE_PLUGINS_ROOT', plugins: [] };
+    }
     await fs.mkdir(dir, { recursive: true });
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const plugins = [];
