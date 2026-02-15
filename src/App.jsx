@@ -1124,6 +1124,7 @@ function App() {
     setTimelineData(null);
     setCurrentTimelineId(null);
     setSelectedId(null);
+    setIsSettingsOpen(false);
   };
 
   const handleNewTimeline = () => {

@@ -391,7 +391,7 @@ const TimelineView = forwardRef(function TimelineView({
         });
       }
     } else {
-      const startTick = Math.floor(minYear / step) * step;
+      const startTick = Math.ceil(minYear / step) * step;
       for (let y = startTick; y <= maxYear; y += step) {
         if (isYearInBreak(y) || isBreakBoundary(y)) {
           continue;
