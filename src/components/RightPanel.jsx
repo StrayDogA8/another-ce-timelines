@@ -435,8 +435,8 @@ export default function RightPanel({
       if (parsedStart.value >= parsedEnd.value) {
         errors.push("Start must be before End.");
       }
-      if (parsedStart.value < timelineStart || parsedEnd.value > timelineEnd) {
-        errors.push("Span/Era range must be within the timeline bounds.");
+      if (parsedEnd.value <= timelineStart || parsedStart.value >= timelineEnd) {
+        errors.push("Span/Era must overlap with the timeline range.");
       }
     }
 

@@ -138,6 +138,8 @@ export function layoutSpans({
   SPAN_GAP,
   SPAN_VERTICAL_GAP,
   spanChildPlacement,
+  timelineStart,
+  timelineEnd,
 }) {
   const spanLaneEnds = [];
   const spanLaneById = {};
@@ -277,9 +279,13 @@ export function layoutSpans({
     if (processed.has(span.id)) return;
     processed.add(span.id);
 
-    const left = yearToPx(span.start);
-    const width = yearToPx(span.end) - yearToPx(span.start);
-    const right = left + width;
+    const rawLeft = yearToPx(span.start);
+    const rawRight = yearToPx(span.end);
+    const clampedLeft = timelineStart != null ? Math.max(rawLeft, yearToPx(timelineStart)) : rawLeft;
+    const clampedRight = timelineEnd != null ? Math.min(rawRight, yearToPx(timelineEnd)) : rawRight;
+    const left = clampedLeft;
+    const width = clampedRight - clampedLeft;
+    const right = clampedRight;
     const placement = spanChildPlacement[span.id];
 
     let lane;
@@ -403,36 +409,94 @@ export function layoutEvents({
   EVENT_GAP,
   LANE_SPACING,
   BOX_OFFSET,
+  fixedEventHeight,
+  fontFamily,
 }) {
   const laidOut = [...events]
     .sort((a, b) => a.date - b.date)
     .map((ev) => ({ ...ev, _x: yearToPx(ev.date) }));
 
-  const laneEnds = [];
+  // Create an offscreen probe matching .event styling for accurate height measurement
+  const probe = document.createElement("div");
+  probe.className = "event";
+  const probeTitle = document.createElement("div");
+  probeTitle.className = "event-title";
+  const probeDate = document.createElement("div");
+  probeDate.className = "event-date";
+  probeDate.textContent = "0000";
+  probe.appendChild(probeTitle);
+  probe.appendChild(probeDate);
+  Object.assign(probe.style, {
+    position: "absolute",
+    visibility: "hidden",
+    pointerEvents: "none",
+    left: "-9999px",
+  });
+  if (fontFamily) {
+    probe.style.fontFamily = fontFamily;
+  }
+  document.body.appendChild(probe);
+
+  // Measure the fixed single-line height from CSS
+  probeTitle.textContent = "X";
+  const singleLineHeight = probe.offsetHeight;
+
+  let measureEvent;
+  if (fixedEventHeight) {
+    // All events use the fixed single-line height
+    measureEvent = () => ({ boxHeight: singleLineHeight, isMultiLine: false });
+  } else {
+    // Switch to auto-height for measuring multi-line content
+    probe.classList.add("multi-lane");
+    probe.style.height = "auto";
+    const baseContentHeight = probe.offsetHeight;
+
+    measureEvent = (title) => {
+      probeTitle.textContent = title || "X";
+      const naturalHeight = probe.offsetHeight;
+      const isMultiLine = naturalHeight > baseContentHeight;
+      return {
+        boxHeight: isMultiLine ? naturalHeight : singleLineHeight,
+        isMultiLine,
+      };
+    };
+  }
+
+  // Use continuous vertical packing instead of discrete lanes
+  const VERTICAL_GAP = Math.max(0, LANE_SPACING - singleLineHeight);
+  const LANE0_TOP = BASE_LINE_Y - spanBandHeight - BOX_OFFSET;
+  const placed = []; // { xEnd, top, boxHeight }
 
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
+    const { boxHeight, isMultiLine } = measureEvent(event.title);
 
-    function fitsInLane(lane) {
-      const end = laneEnds[lane];
-      return end === undefined || end + EVENT_GAP <= x;
+    // Find placed events that horizontally overlap
+    const conflicts = placed
+      .filter((p) => p.xEnd + EVENT_GAP > x)
+      .sort((a, b) => b.top - a.top); // closest to baseline first
+
+    // Start at the closest-to-baseline position, maintaining the same gap as single-line events
+    const minBottom = LANE0_TOP + singleLineHeight; // bottom edge that single-line events sit at
+    let top = Math.min(LANE0_TOP, minBottom - boxHeight);
+    for (const c of conflicts) {
+      if (top < c.top + c.boxHeight + VERTICAL_GAP &&
+          top + boxHeight + VERTICAL_GAP > c.top) {
+        top = c.top - boxHeight - VERTICAL_GAP;
+      }
     }
 
-    let laneToUse = 0;
-    while (!fitsInLane(laneToUse)) {
-      laneToUse++;
-    }
-
-    laneEnds[laneToUse] = x + EVENT_WIDTH;
-
-    const top =
-      BASE_LINE_Y - spanBandHeight - BOX_OFFSET - laneToUse * LANE_SPACING;
+    placed.push({ xEnd: x + EVENT_WIDTH, top, boxHeight });
 
     return {
       ...event,
       top,
+      _boxHeight: boxHeight,
+      _isMultiLine: isMultiLine,
     };
   });
+
+  document.body.removeChild(probe);
 
   return finalEvents;
 }

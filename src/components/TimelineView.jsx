@@ -261,6 +261,8 @@ const TimelineView = forwardRef(function TimelineView({
       SPAN_GAP,
       SPAN_VERTICAL_GAP,
       spanChildPlacement,
+      timelineStart: file.start,
+      timelineEnd: file.end,
     });
 
     const spanBandHeight = calcSpanBandHeight(
@@ -312,7 +314,20 @@ const TimelineView = forwardRef(function TimelineView({
       SPAN_GAP,
       SPAN_VERTICAL_GAP,
       spanChildPlacement,
+      timelineStart: file.start,
+      timelineEnd: file.end,
     });
+
+    // Resolve the font for event measurement (file.font overrides theme/default)
+    const fileFontSetting = file.font;
+    const fallbackFont = '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    let resolvedFont;
+    if (fileFontSetting && String(fileFontSetting).toLowerCase() !== "default") {
+      const safeName = String(fileFontSetting).replace(/"/g, '\\"');
+      resolvedFont = `"${safeName}", ${fallbackFont}`;
+    } else {
+      resolvedFont = getComputedStyle(document.documentElement).getPropertyValue("--app-font-family").trim() || fallbackFont;
+    }
 
     const finalEvents = layoutEvents({
       events: adjustedEvents,
@@ -323,16 +338,20 @@ const TimelineView = forwardRef(function TimelineView({
       EVENT_GAP,
       LANE_SPACING,
       BOX_OFFSET,
+      fixedEventHeight: Boolean(file.fixedEventHeight),
+      fontFamily: resolvedFont,
     });
 
+    const tlStartPx = yearToPx(file.start);
+    const tlEndPx = yearToPx(file.end);
     const finalEras = adjustedEras.map((era) => {
-      const left = yearToPx(era.start);
-      const width = yearToPx(era.end) - yearToPx(era.start);
+      const clampedLeft = Math.max(yearToPx(era.start), tlStartPx);
+      const clampedRight = Math.min(yearToPx(era.end), tlEndPx);
       const top = BASE_LINE_Y + ERA_OFFSET;
       return {
         ...era,
-        left,
-        width,
+        left: clampedLeft,
+        width: clampedRight - clampedLeft,
         top,
       };
     });
@@ -1470,8 +1489,7 @@ const TimelineView = forwardRef(function TimelineView({
             const fallbackTargetY = BASE_LINE_Y;
             const targetY = parentSpan ? parentSpan.top : fallbackTargetY;
 
-            const EVENT_BOX_HEIGHT = 29;
-            const eventBottom = event.top + EVENT_BOX_HEIGHT;
+            const eventBottom = event.top + (event._boxHeight || 29);
 
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
@@ -1488,6 +1506,7 @@ const TimelineView = forwardRef(function TimelineView({
                   left: `${event._x}px`,
                   top: `${eventBottom}px`,
                   pointerEvents: 'none',
+                  zIndex: Math.round(event.top),
                 }}
               >
                 <div
@@ -1539,17 +1558,17 @@ const TimelineView = forwardRef(function TimelineView({
               eventBorderStyle === "none"
                 ? "none"
                 : `2px ${eventBorderStyle} ${borderColor}`;
-
             return (
               <div
                 key={event.id}
                 data-id={event.id}
-                className={`event ${isSelected ? "is-selected" : ""}`}
+                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}`}
                 style={{
                   left: `${event._x}px`,
                   top: `${event.top}px`,
                   position: "absolute",
                   border: borderValue,
+                  height: event._isMultiLine ? "auto" : undefined,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1746,23 +1765,6 @@ const TimelineView = forwardRef(function TimelineView({
             e.stopPropagation();
           }}
         >
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.events ?? true}
-              onChange={() => onToggleFilterScope?.("events")}
-            />
-            <span>Apply to events</span>
-          </label>
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.spans ?? true}
-              onChange={() => onToggleFilterScope?.("spans")}
-            />
-            <span>Apply to spans</span>
-          </label>
-          <div className="filter-menu-divider" />
           <div className="filter-menu-dropdown">
             {allTags.length === 0 && (
               <div className="filter-menu-empty">No tags found</div>
@@ -1781,6 +1783,23 @@ const TimelineView = forwardRef(function TimelineView({
               );
             })}
           </div>
+          <div className="filter-menu-divider" />
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.events ?? true}
+              onChange={() => onToggleFilterScope?.("events")}
+            />
+            <span>Apply to events</span>
+          </label>
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.spans ?? true}
+              onChange={() => onToggleFilterScope?.("spans")}
+            />
+            <span>Apply to spans</span>
+          </label>
           <div className="filter-menu-divider" />
           <button
             className="context-menu-item"

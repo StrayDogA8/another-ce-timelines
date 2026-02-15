@@ -645,23 +645,6 @@ export default function Sidebar({
             top: `${filterMenu.y}px`,
           }}
         >
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.events ?? true}
-              onChange={() => onToggleFilterScope?.("events")}
-            />
-            <span>Apply to events</span>
-          </label>
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.spans ?? true}
-              onChange={() => onToggleFilterScope?.("spans")}
-            />
-            <span>Apply to spans</span>
-          </label>
-          <div className="filter-menu-divider" />
           <div className="filter-menu-dropdown">
             {allTags.length === 0 && (
               <div className="filter-menu-empty">No tags found</div>
@@ -680,6 +663,23 @@ export default function Sidebar({
               );
             })}
           </div>
+          <div className="filter-menu-divider" />
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.events ?? true}
+              onChange={() => onToggleFilterScope?.("events")}
+            />
+            <span>Apply to events</span>
+          </label>
+          <label className="context-menu-item filter-menu-item">
+            <input
+              type="checkbox"
+              checked={filterScope?.spans ?? true}
+              onChange={() => onToggleFilterScope?.("spans")}
+            />
+            <span>Apply to spans</span>
+          </label>
           <div className="filter-menu-divider" />
           <button
             className="context-menu-item"

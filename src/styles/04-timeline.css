@@ -168,6 +168,10 @@
   text-overflow: ellipsis;
 }
 
+.event.multi-lane .event-title {
+  white-space: normal;
+}
+
 .event-date  { font-size: 9px;  font-weight: 600; color: var(--gray-1); }
 
 .eras-layer { position: absolute; inset: 0; }

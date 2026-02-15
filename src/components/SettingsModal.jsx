@@ -33,6 +33,7 @@ export default function SettingsModal({
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
+  const [fixedEventHeight, setFixedEventHeight] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -158,6 +159,7 @@ export default function SettingsModal({
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
+        setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
         setValidationErrors([]);
         setBreakErrors([]);
         lastFilePathRef.current = currentPath;
@@ -239,6 +241,7 @@ export default function SettingsModal({
           breaks: parsedBreaks,
           layout,
           branchOrdering,
+          fixedEventHeight,
         });
       }
     }, 300);
@@ -262,6 +265,7 @@ export default function SettingsModal({
     layout,
     breaks,
     branchOrdering,
+    fixedEventHeight,
   ]);
 
   if (!isOpen) return null;
@@ -629,6 +633,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={useMonths}
                       onChange={(e) => setUseMonths(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Fixed Event Height */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Fixed Event Height</div>
+                  <div className="settings-row-description">Lock all events to a single-line height, truncating long titles with ellipsis.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={fixedEventHeight}
+                      onChange={(e) => setFixedEventHeight(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

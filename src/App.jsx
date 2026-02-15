@@ -988,6 +988,7 @@ function App() {
     breaks,
     layout,
     branchOrdering,
+    fixedEventHeight,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1022,6 +1023,7 @@ function App() {
         breaks,
         layout,
         branchOrdering,
+        fixedEventHeight,
       };
 
       if (!startLabel) delete nextFile.startLabel;
@@ -1030,6 +1032,7 @@ function App() {
       if (!breaks || breaks.length === 0) delete nextFile.breaks;
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
+      if (!fixedEventHeight) delete nextFile.fixedEventHeight;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {
