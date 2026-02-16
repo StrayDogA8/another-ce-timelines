@@ -18,4 +18,8 @@ const timelinePlugin = {
 export default defineConfig({
   base: './',
   plugins: [react(), timelinePlugin],
+  server: {
+    port: 5183,
+    strictPort: true,
+  },
 })

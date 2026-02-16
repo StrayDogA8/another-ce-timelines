@@ -898,20 +898,31 @@ const TimelineView = forwardRef(function TimelineView({
       timelineEl.style.transform = 'none';
       timelineEl.style.transformOrigin = '';
 
-      // Set --primary-bg to transparent if requested
+      // Set --primary-bg to transparent or custom color if requested
       if (exportPngOptions?.transparentBg) {
         root.style.setProperty('--primary-bg', 'transparent');
+      } else if (exportPngOptions?.customBg) {
+        root.style.setProperty('--primary-bg', exportPngOptions.customBg);
       }
 
+      let scale = 2;
+      if (exportPngOptions?.targetWidth) {
+        scale = exportPngOptions.targetWidth / timelineEl.scrollWidth;
+      }
+
+      const bgColor = exportPngOptions?.transparentBg
+        ? null
+        : (exportPngOptions?.customBg || originalPrimaryBg);
+
       const canvas = await html2canvas(timelineEl, {
-        backgroundColor: exportPngOptions?.transparentBg ? null : originalPrimaryBg,
-        scale: 2, // Higher quality
+        backgroundColor: bgColor,
+        scale,
         logging: false,
         height: calculatedHeight + 100,
         windowHeight: calculatedHeight + 100,
       });
 
-      if (exportPngOptions?.transparentBg) {
+      if (exportPngOptions?.transparentBg || exportPngOptions?.customBg) {
         root.style.setProperty('--primary-bg', originalPrimaryBg);
       }
 
@@ -919,40 +930,91 @@ const TimelineView = forwardRef(function TimelineView({
       timelineEl.style.transformOrigin = currentTransformOrigin;
 
       let finalCanvas = canvas;
-      const hasCrop = exportPngOptions?.cropLeft != null &&
-                      exportPngOptions?.cropRight != null;
+      const fillColor = exportPngOptions?.customBg || originalPrimaryBg;
 
-      if (hasCrop) {
-        const srcX = (exportPngOptions.cropLeft / 100) * canvas.width;
-        const srcWidth = ((exportPngOptions.cropRight - exportPngOptions.cropLeft) / 100) * canvas.width;
+      // If target height is taller than the rendered canvas, pad and center vertically
+      const targetH = exportPngOptions?.targetHeight;
+      if (targetH && canvas.height < targetH) {
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = canvas.width;
+        outCanvas.height = targetH;
+        const ctx = outCanvas.getContext('2d');
 
-        const cropWidth = Math.max(1, srcWidth);
-        const cropHeight = canvas.height;
-
-        // Create a new canvas with the cropped region
-        const croppedCanvas = document.createElement('canvas');
-        croppedCanvas.width = cropWidth;
-        croppedCanvas.height = cropHeight;
-        const ctx = croppedCanvas.getContext('2d');
-
-        // If transparent background, clear with transparent; otherwise fill with bg color
-        if (exportPngOptions.transparentBg) {
-          ctx.clearRect(0, 0, cropWidth, cropHeight);
+        if (exportPngOptions?.transparentBg) {
+          ctx.clearRect(0, 0, canvas.width, targetH);
         } else {
-          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim();
-          ctx.fillRect(0, 0, cropWidth, cropHeight);
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(0, 0, canvas.width, targetH);
         }
 
-        // Draw the cropped region (horizontal only, full height)
-        ctx.drawImage(
-          canvas,
-          srcX, 0, srcWidth, cropHeight,
-          0, 0, cropWidth, cropHeight
-        );
-        finalCanvas = croppedCanvas;
+        // Center the timeline vertically
+        const yOffset = Math.round((targetH - canvas.height) / 2);
+        ctx.drawImage(canvas, 0, yOffset);
+        finalCanvas = outCanvas;
+      }
+
+      // Draw title watermark if requested
+      if (exportPngOptions?.showTitle && exportPngOptions?.title) {
+        const w = finalCanvas.width;
+        const h = finalCanvas.height;
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = w;
+        outCanvas.height = h;
+        const ctx = outCanvas.getContext('2d');
+        ctx.drawImage(finalCanvas, 0, 0);
+
+        const fontSize = Math.max(14, Math.round(w * 0.018));
+        const padding = Math.round(fontSize * 1.5);
+        const computedStyle = getComputedStyle(document.documentElement);
+        const themeFont = computedStyle.getPropertyValue('--app-font-family').trim() || 'Inter, system-ui, sans-serif';
+        const themeColor = computedStyle.getPropertyValue('--dark-bg').trim() || '#888';
+        ctx.font = `700 ${fontSize}px ${themeFont}`;
+        ctx.fillStyle = themeColor;
+
+        const pos = exportPngOptions.titlePosition || 'bottom-right';
+        const metrics = ctx.measureText(exportPngOptions.title);
+        const logoHeight = Math.round(fontSize * 0.9);
+        const logoWidth = (67 / 25) * logoHeight;
+        const logoGap = Math.round(fontSize * 0.35);
+        const totalWidth = metrics.width + logoGap + logoWidth;
+        let x, y;
+
+        if (pos.includes('left')) x = padding;
+        else if (pos.includes('center')) x = (w - totalWidth) / 2;
+        else x = w - totalWidth - padding;
+
+        if (pos.includes('top')) y = padding + fontSize;
+        else y = h - padding;
+
+        ctx.fillText(exportPngOptions.title, x, y);
+
+        const logoX = x + metrics.width + logoGap;
+        const logoY = y - logoHeight;
+        const scale = logoHeight / 25;
+        ctx.save();
+        ctx.translate(logoX, logoY);
+        ctx.scale(scale, scale);
+        ctx.fillRect(0, 8.89844, 28.2656, 6.80469);
+        ctx.fillRect(35.0703, 0, 31.9297, 7.32812);
+        ctx.fillRect(35.0703, 16.75, 31.9297, 7.32812);
+        ctx.beginPath();
+        ctx.moveTo(35.0703, 0);
+        ctx.lineTo(35.0703, 24.0781);
+        ctx.lineTo(33.2656, 24.0781);
+        ctx.bezierCurveTo(30.5042, 24.0781, 28.2656, 21.8395, 28.2656, 19.0781);
+        ctx.lineTo(28.2656, 5);
+        ctx.bezierCurveTo(28.2656, 2.23858, 30.5042, 0, 33.2656, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        finalCanvas = outCanvas;
       }
 
       finalCanvas.toBlob((blob) => {
+        if (!blob) {
+          console.error('Failed to generate PNG — canvas may be too large for this resolution.');
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -1163,8 +1225,10 @@ const TimelineView = forwardRef(function TimelineView({
   }, [currentScale, isPlaying, timelineWidth]);
 
   // Trigger PNG download when requested from outside (e.g., Sidebar)
+  const lastPngTriggerRef = useRef(downloadPngTrigger);
   useEffect(() => {
-    if (downloadPngTrigger > 0) {
+    if (downloadPngTrigger > 0 && downloadPngTrigger !== lastPngTriggerRef.current) {
+      lastPngTriggerRef.current = downloadPngTrigger;
       handleDownloadPNG();
     }
   }, [downloadPngTrigger]);
@@ -1189,18 +1253,27 @@ const TimelineView = forwardRef(function TimelineView({
 
         if (options?.transparentBg) {
           root.style.setProperty('--primary-bg', 'transparent');
+        } else if (options?.customBg) {
+          root.style.setProperty('--primary-bg', options.customBg);
         }
 
+        const elWidth = timelineEl.scrollWidth;
+        const elHeight = calculatedHeight + 100;
+
+        const previewBgColor = options?.transparentBg
+          ? null
+          : (options?.customBg || originalPrimaryBg);
+
         const canvas = await html2canvas(timelineEl, {
-          backgroundColor: options?.transparentBg ? null : originalPrimaryBg,
-          scale: 1, // Lower scale for preview (faster)
+          backgroundColor: previewBgColor,
+          scale: 1,
           logging: false,
-          height: calculatedHeight + 100,
-          windowHeight: calculatedHeight + 100,
+          height: elHeight,
+          windowHeight: elHeight,
         });
 
         // Restore original --primary-bg
-        if (options?.transparentBg) {
+        if (options?.transparentBg || options?.customBg) {
           root.style.setProperty('--primary-bg', originalPrimaryBg);
         }
 
@@ -1214,6 +1287,8 @@ const TimelineView = forwardRef(function TimelineView({
           imageUrl: canvas.toDataURL('image/png'),
           canvasWidth: canvas.width,
           canvasHeight: canvas.height,
+          elementWidth: elWidth,
+          elementHeight: elHeight,
           timelineWidth,
           minYear,
           maxYear,
