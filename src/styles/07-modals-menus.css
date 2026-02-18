@@ -239,6 +239,13 @@
   max-width: 100%;
   max-height: 368px;
   border-radius: 4px;
+  cursor: grab;
+  user-select: none;
+  overflow: hidden;
+}
+
+.export-preview-wrapper.is-dragging {
+  cursor: grabbing;
 }
 
 .export-preview-image {
@@ -293,10 +300,14 @@
 }
 
 .export-preview-title-logo {
-  width: 2.412em;
-  height: 0.9em;
+  width: 2.15em;
+  height: 0.8em;
   margin-left: 0.35em;
-  vertical-align: -0.12em;
+  vertical-align: -0.08em;
+}
+
+.export-preview-title-logo-only {
+  margin-left: 0;
 }
 
 .export-preview-title-top-left { top: 6px; left: 8px; }
@@ -488,6 +499,94 @@
   min-width: 200px;
   display: flex;
   justify-content: flex-end;
+}
+
+.export-range-control {
+  width: min(360px, 42vw);
+}
+
+.export-range-slider-wrap {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.export-range-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--active-bg);
+}
+
+.export-range-selection {
+  position: absolute;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--element-bg);
+}
+
+.export-range-slider {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.export-range-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.export-range-slider::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+
+.export-range-slider::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--dark-bg);
+  background: var(--secondary-bg);
+  cursor: pointer;
+}
+
+.export-range-slider::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--dark-bg);
+  background: var(--secondary-bg);
+  cursor: pointer;
+}
+
+.export-range-slider-start {
+  z-index: 3;
+}
+
+.export-range-slider-end {
+  z-index: 4;
+}
+
+.export-range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: var(--text-2xs);
+  color: var(--element-bg);
 }
 
 .settings-row-label {

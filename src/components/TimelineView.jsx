@@ -905,9 +905,22 @@ const TimelineView = forwardRef(function TimelineView({
         root.style.setProperty('--primary-bg', exportPngOptions.customBg);
       }
 
+      const requestedStartYear = Number(exportPngOptions?.exportStartYear);
+      const requestedEndYear = Number(exportPngOptions?.exportEndYear);
+      const hasCustomRange = Number.isFinite(requestedStartYear) && Number.isFinite(requestedEndYear);
+      const targetW = exportPngOptions?.targetWidth;
+      const minRequestedYear = hasCustomRange ? Math.min(requestedStartYear, requestedEndYear) : null;
+      const maxRequestedYear = hasCustomRange ? Math.max(requestedStartYear, requestedEndYear) : null;
+      const sourceStartPxBase = hasCustomRange ? yearToPx(minRequestedYear) : 0;
+      const sourceEndPxBase = hasCustomRange ? yearToPx(maxRequestedYear) : timelineEl.scrollWidth;
+      const sourceWidthPxBase = Math.max(1, sourceEndPxBase - sourceStartPxBase);
+
       let scale = 2;
-      if (exportPngOptions?.targetWidth) {
-        scale = exportPngOptions.targetWidth / timelineEl.scrollWidth;
+      if (targetW) {
+        // For fixed export presets, use range width as the zoom window so output width stays at targetW.
+        scale = hasCustomRange
+          ? targetW / sourceWidthPxBase
+          : targetW / timelineEl.scrollWidth;
       }
 
       const bgColor = exportPngOptions?.transparentBg
@@ -931,30 +944,79 @@ const TimelineView = forwardRef(function TimelineView({
 
       let finalCanvas = canvas;
       const fillColor = exportPngOptions?.customBg || originalPrimaryBg;
+      if (hasCustomRange) {
+        const pxStart = sourceStartPxBase * scale;
+        const pxEnd = sourceEndPxBase * scale;
+        const sourceStart = Math.max(0, Math.min(finalCanvas.width, Math.round(pxStart)));
+        const sourceEnd = Math.max(0, Math.min(finalCanvas.width, Math.round(pxEnd)));
+        const sourceWidth = Math.max(1, sourceEnd - sourceStart);
+
+        if (sourceWidth > 0) {
+          const croppedCanvas = document.createElement('canvas');
+          croppedCanvas.width = sourceWidth;
+          croppedCanvas.height = finalCanvas.height;
+          const cropCtx = croppedCanvas.getContext('2d');
+          cropCtx.drawImage(
+            finalCanvas,
+            sourceStart,
+            0,
+            sourceWidth,
+            finalCanvas.height,
+            0,
+            0,
+            sourceWidth,
+            finalCanvas.height
+          );
+          finalCanvas = croppedCanvas;
+        }
+      }
+
+      // In fixed presets, custom-range capture already maps to target width (zoom behavior).
+      // Keep a fallback resize for non-range exports and rounding differences.
+      if (targetW && (!hasCustomRange || Math.abs(finalCanvas.width - targetW) > 1)) {
+        const resizedCanvas = document.createElement('canvas');
+        resizedCanvas.width = targetW;
+        resizedCanvas.height = Math.max(1, Math.round((finalCanvas.height * targetW) / finalCanvas.width));
+        const resizedCtx = resizedCanvas.getContext('2d');
+
+        if (exportPngOptions?.transparentBg) {
+          resizedCtx.clearRect(0, 0, resizedCanvas.width, resizedCanvas.height);
+        } else {
+          resizedCtx.fillStyle = fillColor;
+          resizedCtx.fillRect(0, 0, resizedCanvas.width, resizedCanvas.height);
+        }
+
+        resizedCtx.drawImage(finalCanvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
+        finalCanvas = resizedCanvas;
+      }
 
       // If target height is taller than the rendered canvas, pad and center vertically
       const targetH = exportPngOptions?.targetHeight;
-      if (targetH && canvas.height < targetH) {
+      if (targetH && finalCanvas.height < targetH) {
         const outCanvas = document.createElement('canvas');
-        outCanvas.width = canvas.width;
+        outCanvas.width = finalCanvas.width;
         outCanvas.height = targetH;
         const ctx = outCanvas.getContext('2d');
 
         if (exportPngOptions?.transparentBg) {
-          ctx.clearRect(0, 0, canvas.width, targetH);
+          ctx.clearRect(0, 0, finalCanvas.width, targetH);
         } else {
           ctx.fillStyle = fillColor;
-          ctx.fillRect(0, 0, canvas.width, targetH);
+          ctx.fillRect(0, 0, finalCanvas.width, targetH);
         }
 
         // Center the timeline vertically
-        const yOffset = Math.round((targetH - canvas.height) / 2);
-        ctx.drawImage(canvas, 0, yOffset);
+        const yOffset = Math.round((targetH - finalCanvas.height) / 2);
+        ctx.drawImage(finalCanvas, 0, yOffset);
         finalCanvas = outCanvas;
       }
 
       // Draw title watermark if requested
-      if (exportPngOptions?.showTitle && exportPngOptions?.title) {
+      const titleStyle = exportPngOptions?.titleStyle || 'title-logo';
+      const canRenderTitleWatermark =
+        exportPngOptions?.showTitle &&
+        (titleStyle === 'logo-only' || Boolean(exportPngOptions?.title));
+      if (canRenderTitleWatermark) {
         const w = finalCanvas.width;
         const h = finalCanvas.height;
         const outCanvas = document.createElement('canvas');
@@ -972,11 +1034,15 @@ const TimelineView = forwardRef(function TimelineView({
         ctx.fillStyle = themeColor;
 
         const pos = exportPngOptions.titlePosition || 'bottom-right';
-        const metrics = ctx.measureText(exportPngOptions.title);
-        const logoHeight = Math.round(fontSize * 0.9);
+        const showText = titleStyle !== 'logo-only';
+        const showLogo = titleStyle !== 'title-only';
+        const titleText = showText ? exportPngOptions.title : '';
+        const metrics = ctx.measureText(titleText);
+        const logoHeight = Math.round(fontSize * 0.8);
         const logoWidth = (67 / 25) * logoHeight;
         const logoGap = Math.round(fontSize * 0.35);
-        const totalWidth = metrics.width + logoGap + logoWidth;
+        const logoBaselineOffset = fontSize * 0.08;
+        const totalWidth = metrics.width + (showLogo ? ((showText ? logoGap : 0) + logoWidth) : 0);
         let x, y;
 
         if (pos.includes('left')) x = padding;
@@ -986,27 +1052,31 @@ const TimelineView = forwardRef(function TimelineView({
         if (pos.includes('top')) y = padding + fontSize;
         else y = h - padding;
 
-        ctx.fillText(exportPngOptions.title, x, y);
+        if (showText) {
+          ctx.fillText(titleText, x, y);
+        }
 
-        const logoX = x + metrics.width + logoGap;
-        const logoY = y - logoHeight;
-        const scale = logoHeight / 25;
-        ctx.save();
-        ctx.translate(logoX, logoY);
-        ctx.scale(scale, scale);
-        ctx.fillRect(0, 8.89844, 28.2656, 6.80469);
-        ctx.fillRect(35.0703, 0, 31.9297, 7.32812);
-        ctx.fillRect(35.0703, 16.75, 31.9297, 7.32812);
-        ctx.beginPath();
-        ctx.moveTo(35.0703, 0);
-        ctx.lineTo(35.0703, 24.0781);
-        ctx.lineTo(33.2656, 24.0781);
-        ctx.bezierCurveTo(30.5042, 24.0781, 28.2656, 21.8395, 28.2656, 19.0781);
-        ctx.lineTo(28.2656, 5);
-        ctx.bezierCurveTo(28.2656, 2.23858, 30.5042, 0, 33.2656, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
+        if (showLogo) {
+          const logoX = x + metrics.width + (showText ? logoGap : 0);
+          const logoY = y - logoHeight + logoBaselineOffset;
+          const scale = logoHeight / 25;
+          ctx.save();
+          ctx.translate(logoX, logoY);
+          ctx.scale(scale, scale);
+          ctx.fillRect(0, 8.89844, 28.2656, 6.80469);
+          ctx.fillRect(35.0703, 0, 31.9297, 7.32812);
+          ctx.fillRect(35.0703, 16.75, 31.9297, 7.32812);
+          ctx.beginPath();
+          ctx.moveTo(35.0703, 0);
+          ctx.lineTo(35.0703, 24.0781);
+          ctx.lineTo(33.2656, 24.0781);
+          ctx.bezierCurveTo(30.5042, 24.0781, 28.2656, 21.8395, 28.2656, 19.0781);
+          ctx.lineTo(28.2656, 5);
+          ctx.bezierCurveTo(28.2656, 2.23858, 30.5042, 0, 33.2656, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
         finalCanvas = outCanvas;
       }
 
@@ -1298,10 +1368,10 @@ const TimelineView = forwardRef(function TimelineView({
           },
           percentToYear: (percent) => {
             const px = (percent / 100) * canvas.width;
-            // Inverse of yearToPx: px = TIMELINE_PADDING + (year - minYear) * PX_PER_YEAR
-            // year = (px - TIMELINE_PADDING) / PX_PER_YEAR + minYear
-            const year = (px - TIMELINE_PADDING) / PX_PER_YEAR + minYear;
-            return Math.round(year * 100) / 100; // Round to 2 decimal places
+            const compressedYear = (px - TIMELINE_PADDING) / PX_PER_YEAR + compressedMin;
+            const clampedCompressed = Math.min(Math.max(compressedYear, compressedMin), compressedMax);
+            const year = decompressYear(clampedCompressed);
+            return Math.round(year * 100) / 100;
           },
         };
       } catch (error) {
@@ -1309,7 +1379,7 @@ const TimelineView = forwardRef(function TimelineView({
         return null;
       }
     }
-  }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR]);
+  }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR, compressedMin, compressedMax, decompressYear]);
 
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
@@ -1488,6 +1558,7 @@ const TimelineView = forwardRef(function TimelineView({
                   position: 'absolute',
                   left: `${connectorLeft}px`,
                   top: `${span.top}px`,
+                  zIndex: 1000 - laneDifference,
                   pointerEvents: 'none',
                 }}
               >
