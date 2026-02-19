@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus, Tag, Eye, EyeOff } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -11,10 +11,14 @@ export default function Sidebar({
   timelineData,
   allElements,
   activeTags = [],
+  hiddenTags = [],
   onToggleTag,
+  onToggleHiddenTag,
   filterScope,
   onToggleFilterScope,
   onClearTags,
+  pinnedTags = [],
+  onTogglePinnedTag,
   onAddEvent,
   onAddSpan,
   onAddEra,
@@ -650,16 +654,51 @@ export default function Sidebar({
               <div className="filter-menu-empty">No tags found</div>
             )}
             {allTags.map((tag) => {
-              const isChecked = activeTags.includes(tag);
+              const isShown = activeTags.includes(tag);
+              const isHidden = hiddenTags.includes(tag);
+              const isPinned = pinnedTags.includes(tag);
               return (
-                <label key={tag} className="context-menu-item filter-menu-item">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => onToggleTag?.(tag)}
-                  />
+                <div key={tag} className="context-menu-item filter-menu-item filter-menu-item-with-pin">
                   <span className="filter-menu-label">{tag}</span>
-                </label>
+                  <div className="filter-menu-actions">
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleTag?.(tag);
+                      }}
+                      aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                      title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                    >
+                      <Eye size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleHiddenTag?.(tag);
+                      }}
+                      aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                      title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                    >
+                      <EyeOff size={12} />
+                    </button>
+                  <button
+                    type="button"
+                    className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePinnedTag?.(tag);
+                    }}
+                    aria-label={isPinned ? "Remove label" : "Use as label"}
+                    title={isPinned ? "Remove label" : "Use as label"}
+                  >
+                    <Tag size={12} />
+                  </button>
+                  </div>
+                </div>
               );
             })}
           </div>

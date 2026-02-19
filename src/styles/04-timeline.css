@@ -43,7 +43,7 @@
   background: var(--dark-bg);
 }
 
-.timeline-break-indicator {
+.timeline-scale-break-indicator {
   position: absolute;
   top: -3px;
   transform: translateY(-0.5px);
@@ -53,12 +53,12 @@
   justify-content: center;
 }
 
-.timeline-break-indicator svg {
+.timeline-scale-break-indicator svg {
   width: 100%;
   height: 100%;
 }
 
-.timeline-break-label {
+.timeline-scale-break-label {
   position: absolute;
   top: 16px;
   left: 50%;
@@ -172,7 +172,52 @@
   white-space: normal;
 }
 
-.event-date  { font-size: 9px;  font-weight: 600; color: var(--gray-1); }
+.event-date  {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--gray-1);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-date .pinned-tags {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.event-date .pinned-tag {
+  margin-left: 0;
+}
+
+.pinned-tags {
+  margin-left: 2px;
+}
+
+.pinned-tag {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 500;
+  color: var(--dark-bg);
+  background: var(--active-bg);
+  border-radius: 999px;
+  padding: 0 6px;
+  margin-left: 4px;
+  line-height: 1.35;
+}
+
+.span-item .pinned-tags {
+  margin-left: 6px;
+}
+
+.span-item .pinned-tag {
+  color: var(--dark-bg);
+  background: var(--active-bg);
+  border: none;
+}
 
 .eras-layer { position: absolute; inset: 0; }
 .era-item {

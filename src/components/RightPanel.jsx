@@ -1002,20 +1002,21 @@ export default function RightPanel({
                   {formData.tags.map((tag) => {
                     const isSelected = activeTags.includes(tag);
                     return (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
-                        onClick={() => {
-                          if (onToggleTag) {
-                            onToggleTag(tag);
-                          } else {
-                            onFilterByTag?.(tag);
-                          }
-                        }}
-                      >
-                        {tag}
-                      </button>
+                      <div key={tag} className="tag-chip-wrap">
+                        <button
+                          type="button"
+                          className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
+                          onClick={() => {
+                            if (onToggleTag) {
+                              onToggleTag(tag);
+                            } else {
+                              onFilterByTag?.(tag);
+                            }
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1344,19 +1345,24 @@ export default function RightPanel({
               </div>
               {Array.isArray(formData.tags) && formData.tags.length > 0 && (
                 <div className="chip-selected-list">
-                  {formData.tags.map((tag) => (
-                    <div key={tag} className="chip-selected-item">
+                  {formData.tags.map((tag) => {
+                    return (
+                    <div
+                      key={tag}
+                      className="chip-selected-item"
+                    >
                       <span className="chip-selected-text">{tag}</span>
-                      <button
-                        type="button"
-                        className="chip-selected-remove"
-                        onClick={() => removeTag(tag)}
-                        aria-label={`Remove ${tag}`}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          className="chip-selected-remove"
+                          onClick={() => removeTag(tag)}
+                          aria-label={`Remove ${tag}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1592,3 +1598,4 @@ export default function RightPanel({
     </div>
   );
 }
+

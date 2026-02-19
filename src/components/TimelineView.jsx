@@ -10,7 +10,7 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause } from "lucide-react";
+import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
@@ -37,9 +37,13 @@ const TimelineView = forwardRef(function TimelineView({
   filterScope,
   onToggleFilterScope,
   activeTags = [],
+  hiddenTags = [],
   allTags = [],
   onToggleTag,
+  onToggleHiddenTag,
   onClearTags,
+  pinnedTags = [],
+  onTogglePinnedTag,
   onViewportYearChange,
 }, ref) {
   const containerRef = useRef(null);
@@ -82,7 +86,7 @@ const TimelineView = forwardRef(function TimelineView({
     calculatedHeight,
     BASE_LINE_Y,
     ticks,
-    normalizedBreaks,
+    normalizedScaleSections,
     compressedMin,
     compressedMax,
     TIMELINE_PADDING,
@@ -145,7 +149,7 @@ const TimelineView = forwardRef(function TimelineView({
     const minYear = file?.start ?? rawMin;
     const maxYear = file?.end ?? rawMax;
 
-    const parseBreakValue = (value) => {
+    const parseScaleValue = (value) => {
       if (typeof value === "number") return value;
       if (typeof value === "string") {
         const parsed = parseTimelineInput(value);
@@ -154,12 +158,19 @@ const TimelineView = forwardRef(function TimelineView({
       return null;
     };
 
-    const normalizeBreaks = (breaks, min, max) => {
-      if (!Array.isArray(breaks) || breaks.length === 0) return [];
-      const cleaned = breaks
+    const normalizeScaleSections = (sections, legacyBreaks, min, max) => {
+      // Support old breaks format as scale=0 sections
+      let raw = Array.isArray(sections) && sections.length > 0
+        ? sections
+        : Array.isArray(legacyBreaks) && legacyBreaks.length > 0
+          ? legacyBreaks.map((b) => ({ ...b, scale: 0 }))
+          : [];
+      if (raw.length === 0) return [];
+
+      const cleaned = raw
         .map((item) => {
-          const startRaw = parseBreakValue(item?.start);
-          const endRaw = parseBreakValue(item?.end);
+          const startRaw = parseScaleValue(item?.start);
+          const endRaw = parseScaleValue(item?.end);
           if (!Number.isFinite(startRaw) || !Number.isFinite(endRaw)) return null;
           const start = Math.min(startRaw, endRaw);
           const end = Math.max(startRaw, endRaw);
@@ -167,15 +178,17 @@ const TimelineView = forwardRef(function TimelineView({
           const clippedStart = Math.max(min, start);
           const clippedEnd = Math.min(max, end);
           if (clippedEnd <= clippedStart) return null;
-          return { start: clippedStart, end: clippedEnd };
+          const scale = Math.max(0, Math.min(2, Number(item?.scale) || 0));
+          return { start: clippedStart, end: clippedEnd, scale };
         })
         .filter(Boolean)
         .sort((a, b) => a.start - b.start);
 
+      // Merge overlapping sections with the same scale
       const merged = [];
       cleaned.forEach((current) => {
         const last = merged[merged.length - 1];
-        if (!last || current.start > last.end) {
+        if (!last || current.start > last.end || current.scale !== last.scale) {
           merged.push({ ...current });
         } else {
           last.end = Math.max(last.end, current.end);
@@ -184,44 +197,55 @@ const TimelineView = forwardRef(function TimelineView({
       return merged;
     };
 
-    const normalizedBreaks = normalizeBreaks(file?.breaks, minYear, maxYear);
+    const normalizedScaleSections = normalizeScaleSections(
+      file?.scaleSections, file?.breaks, minYear, maxYear
+    );
 
     const compressYear = (year) => {
-      let skipped = 0;
-      for (const gap of normalizedBreaks) {
-        if (year >= gap.end) {
-          skipped += gap.end - gap.start;
+      let adjustment = 0;
+      for (const section of normalizedScaleSections) {
+        const duration = section.end - section.start;
+        if (year >= section.end) {
+          adjustment += duration * (1 - section.scale);
           continue;
         }
-        if (year > gap.start) {
-          return gap.start - skipped;
+        if (year > section.start) {
+          const partial = year - section.start;
+          return year - adjustment - partial * (1 - section.scale);
         }
         break;
       }
-      return year - skipped;
+      return year - adjustment;
     };
 
-    const isYearInBreak = (year) =>
-      normalizedBreaks.some((gap) => year > gap.start && year < gap.end);
+    const isYearInZeroScale = (year) =>
+      normalizedScaleSections.some((s) => s.scale === 0 && year > s.start && year < s.end);
 
-    const isBreakBoundary = (year) =>
-      normalizedBreaks.some(
-        (gap) => Math.abs(year - gap.start) < 0.0001 || Math.abs(year - gap.end) < 0.0001
+    const isZeroScaleBoundary = (year) =>
+      normalizedScaleSections.some(
+        (s) => s.scale === 0 && (Math.abs(year - s.start) < 0.0001 || Math.abs(year - s.end) < 0.0001)
       );
 
     const compressedMin = compressYear(minYear);
     const compressedMax = compressYear(maxYear);
     const range = Math.max(1, compressedMax - compressedMin);
     const decompressYear = (compressedYear) => {
-      let skipped = 0;
-      for (const gap of normalizedBreaks) {
-        const gapStartCompressed = gap.start - skipped;
-        if (compressedYear < gapStartCompressed) {
-          break;
+      let adjustment = 0;
+      for (const section of normalizedScaleSections) {
+        const duration = section.end - section.start;
+        const sectionStartCompressed = section.start - adjustment;
+        const sectionCompressedWidth = duration * section.scale;
+        if (compressedYear >= sectionStartCompressed + sectionCompressedWidth) {
+          adjustment += duration * (1 - section.scale);
+          continue;
         }
-        skipped += gap.end - gap.start;
+        if (compressedYear > sectionStartCompressed) {
+          const offset = compressedYear - sectionStartCompressed;
+          return section.start + (section.scale > 0 ? offset / section.scale : 0);
+        }
+        break;
       }
-      return compressedYear + skipped;
+      return compressedYear + adjustment;
     };
 
     // Calculate detail level automatically based on range
@@ -382,7 +406,7 @@ const TimelineView = forwardRef(function TimelineView({
         const y = Math.floor(m / 12);
         const monthIndex = m % 12;
         const value = Number((y + monthIndex / 12).toFixed(6));
-        if (isYearInBreak(value) || isBreakBoundary(value)) {
+        if (isYearInZeroScale(value) || isZeroScaleBoundary(value)) {
           continue;
         }
         ticks.push({
@@ -393,7 +417,7 @@ const TimelineView = forwardRef(function TimelineView({
     } else {
       const startTick = Math.ceil(minYear / step) * step;
       for (let y = startTick; y <= maxYear; y += step) {
-        if (isYearInBreak(y) || isBreakBoundary(y)) {
+        if (isYearInZeroScale(y) || isZeroScaleBoundary(y)) {
           continue;
         }
         ticks.push({
@@ -423,7 +447,7 @@ const TimelineView = forwardRef(function TimelineView({
       calculatedHeight,
       BASE_LINE_Y,
       ticks,
-      normalizedBreaks,
+      normalizedScaleSections,
       compressedMin,
       compressedMax,
       TIMELINE_PADDING,
@@ -1411,8 +1435,8 @@ const TimelineView = forwardRef(function TimelineView({
         className="timeline"
         style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
       >
-        {/* Timeline line with break gaps */}
-        {normalizedBreaks.length === 0 ? (
+        {/* Timeline line with scale section gaps */}
+        {normalizedScaleSections.filter((s) => s.scale === 0).length === 0 ? (
           <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
         ) : (
           <div className="timeline-line-segments" style={{ top: `${BASE_LINE_Y}px` }}>
@@ -1420,53 +1444,52 @@ const TimelineView = forwardRef(function TimelineView({
               const segments = [];
               const GAP_WIDTH = 24;
               const GAP_OVERLAP = 2;
-              let lastEnd = -100; // Start before the padding
+              let lastEnd = -100;
 
-              normalizedBreaks.forEach((breakItem, index) => {
-                const breakPx = yearToPx(breakItem.start);
+              normalizedScaleSections
+                .filter((s) => s.scale === 0)
+                .forEach((section, index) => {
+                  const sectionPx = yearToPx(section.start);
 
-                // Line segment before this break
-                segments.push(
-                  <div
-                    key={`segment-${index}`}
-                    className="timeline-line-segment"
-                    style={{
-                      left: `${lastEnd}px`,
-                      width: `${breakPx - lastEnd - GAP_WIDTH / 2 + GAP_OVERLAP}px`,
-                    }}
-                  />
-                );
+                  segments.push(
+                    <div
+                      key={`segment-${index}`}
+                      className="timeline-line-segment"
+                      style={{
+                        left: `${lastEnd}px`,
+                        width: `${sectionPx - lastEnd - GAP_WIDTH / 2 + GAP_OVERLAP}px`,
+                      }}
+                    />
+                  );
 
-                // Break indicator with label
-                const startLabel = formatYear(breakItem.start, file.negID, file.posID, false);
-                const endLabel = formatYear(breakItem.end, file.negID, file.posID, false);
-                segments.push(
-                  <div
-                    key={`break-${index}`}
-                    className="timeline-break-indicator"
-                    style={{
-                      left: `${breakPx - GAP_WIDTH / 2}px`,
-                      width: `${GAP_WIDTH}px`,
-                    }}
-                  >
-                    <svg viewBox="0 0 20 10" preserveAspectRatio="none">
-                      <path
-                        d="M0,5 L4,5 L7,1 L10,9 L13,1 L16,5 L20,5"
-                        stroke="var(--dark-bg)"
-                        strokeWidth="3"
-                        strokeLinecap="square"
-                        strokeLinejoin="miter"
-                        fill="none"
-                      />
-                    </svg>
-                    <div className="timeline-break-label">{startLabel} – {endLabel}</div>
-                  </div>
-                );
+                  const startLabel = formatYear(section.start, file.negID, file.posID, false);
+                  const endLabel = formatYear(section.end, file.negID, file.posID, false);
+                  segments.push(
+                    <div
+                      key={`break-${index}`}
+                      className="timeline-scale-break-indicator"
+                      style={{
+                        left: `${sectionPx - GAP_WIDTH / 2}px`,
+                        width: `${GAP_WIDTH}px`,
+                      }}
+                    >
+                      <svg viewBox="0 0 20 10" preserveAspectRatio="none">
+                        <path
+                          d="M0,5 L4,5 L7,1 L10,9 L13,1 L16,5 L20,5"
+                          stroke="var(--dark-bg)"
+                          strokeWidth="3"
+                          strokeLinecap="square"
+                          strokeLinejoin="miter"
+                          fill="none"
+                        />
+                      </svg>
+                      <div className="timeline-scale-break-label">{startLabel} – {endLabel}</div>
+                    </div>
+                  );
 
-                lastEnd = breakPx + GAP_WIDTH / 2 - GAP_OVERLAP;
-              });
+                  lastEnd = sectionPx + GAP_WIDTH / 2 - GAP_OVERLAP;
+                });
 
-              // Final segment after last break
               segments.push(
                 <div
                   key="segment-final"
@@ -1616,6 +1639,20 @@ const TimelineView = forwardRef(function TimelineView({
                 <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
                   {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true)}
                 </span>
+                {(() => {
+                  const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
+                    .filter((tag) => pinnedTags.includes(tag));
+                  if (visiblePinnedTags.length === 0) return null;
+                  return (
+                    <span className="pinned-tags" style={{ color: spanTextColor }}>
+                      {visiblePinnedTags.map((tag) => (
+                        <span key={tag} className="pinned-tag">
+                          {tag}
+                        </span>
+                      ))}
+                    </span>
+                  );
+                })()}
               </div>
             );
           })}
@@ -1722,25 +1759,58 @@ const TimelineView = forwardRef(function TimelineView({
                 }}
               >
                 <div className="event-title">{event.title}</div>
-                <div className="event-date">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true)}</div>
+                <div className="event-date">
+                  {event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true)}
+                  {(() => {
+                    const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
+                      .filter((tag) => pinnedTags.includes(tag));
+                    if (visiblePinnedTags.length === 0) return null;
+                    return (
+                      <span className="pinned-tags">
+                        {visiblePinnedTags.map((tag) => (
+                          <span key={tag} className="pinned-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {ticks.map((tick) => (
-          <div
-            key={tick.value}
-            className="tick"
-            style={{
-              left: `${yearToPx(tick.value)}px`,
-              top: `${BASE_LINE_Y - 5}px`,
-            }}
-          >
-            <div className="tick-line" />
-            <div className="tick-label">{tick.label ?? formatYear(tick.value, file.negID, file.posID, false)}</div>
-          </div>
-        ))}
+        {(() => {
+          // Per-tick label visibility based on actual pixel distance from last shown label
+          const MIN_LABEL_GAP = 8;
+          const CHAR_WIDTH = 5.5; // approximate at 9px font
+          let lastLabelRight = -Infinity;
+          return ticks.map((tick) => {
+            const px = yearToPx(tick.value);
+            const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false);
+            const halfWidth = (label.length * CHAR_WIDTH) / 2;
+            const labelLeft = px - halfWidth;
+            const showLabel = labelLeft >= lastLabelRight + MIN_LABEL_GAP;
+            if (showLabel) {
+              lastLabelRight = px + halfWidth;
+            }
+            if (!showLabel) return null;
+            return (
+              <div
+                key={tick.value}
+                className="tick"
+                style={{
+                  left: `${yearToPx(tick.value)}px`,
+                  top: `${BASE_LINE_Y - 5}px`,
+                }}
+              >
+                <div className="tick-line" />
+                <div className="tick-label">{label}</div>
+              </div>
+            );
+          });
+        })()}
       </div>
 
       {contextMenu && contextMenu.element && (
@@ -1872,7 +1942,7 @@ const TimelineView = forwardRef(function TimelineView({
         <div className="timeline-canvas-divider" />
         <button
           type="button"
-          className={`timeline-canvas-button${activeTags.length > 0 ? ' timeline-canvas-button-active' : ''}`}
+          className={`timeline-canvas-button${(activeTags.length > 0 || hiddenTags.length > 0) ? ' timeline-canvas-button-active' : ''}`}
           onClick={handleToggleFilterMenu}
           aria-label="Filter"
           title="Filter"
@@ -1916,16 +1986,51 @@ const TimelineView = forwardRef(function TimelineView({
               <div className="filter-menu-empty">No tags found</div>
             )}
             {allTags.map((tag) => {
-              const isChecked = activeTags.includes(tag);
+              const isShown = activeTags.includes(tag);
+              const isHidden = hiddenTags.includes(tag);
+              const isPinned = pinnedTags.includes(tag);
               return (
-                <label key={tag} className="context-menu-item filter-menu-item">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => onToggleTag?.(tag)}
-                  />
+                <div key={tag} className="context-menu-item filter-menu-item filter-menu-item-with-pin">
                   <span className="filter-menu-label">{tag}</span>
-                </label>
+                  <div className="filter-menu-actions">
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleTag?.(tag);
+                      }}
+                      aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                      title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                    >
+                      <Eye size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleHiddenTag?.(tag);
+                      }}
+                      aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                      title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                    >
+                      <EyeOff size={12} />
+                    </button>
+                  <button
+                    type="button"
+                    className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePinnedTag?.(tag);
+                    }}
+                    aria-label={isPinned ? "Remove label" : "Use as label"}
+                    title={isPinned ? "Remove label" : "Use as label"}
+                  >
+                    <Tag size={12} />
+                  </button>
+                  </div>
+                </div>
               );
             })}
           </div>

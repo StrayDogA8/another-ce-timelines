@@ -412,6 +412,42 @@
   background: color-mix(in srgb, var(--element-bg), black 10%);
 }
 
+.tag-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.tag-pin-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--gray-1);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 1px;
+  transition: color 0.15s ease;
+}
+
+.tag-chip-wrap:hover .tag-pin-btn,
+.chip-selected-item:hover .tag-pin-btn,
+.tag-pin-btn.is-pinned {
+  display: inline-flex;
+}
+
+.tag-pin-btn.is-pinned {
+  color: var(--dark-bg);
+}
+
+.tag-pin-btn:hover {
+  color: var(--dark-bg);
+}
+
 .view-group-chips {
   align-items: flex-start;
 }

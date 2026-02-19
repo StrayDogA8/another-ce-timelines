@@ -63,29 +63,38 @@
 }
 
 .sidebar-filter-menu {
-  min-width: 180px;
-  max-width: 240px;
-  padding: 6px;
+  min-width: 250px;
+  max-width: 320px;
+  padding: 8px;
   overflow-x: hidden;
   font-family: inherit;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
 }
 
 .filter-menu-dropdown {
-  max-height: 160px;
+  max-height: 240px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 2px;
+  padding: 3px 10px 3px 4px;
   border: 1px solid var(--active-bg);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--secondary-bg);
 }
 
 .filter-menu-item {
   font-family: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 400;
   line-height: 1.2;
   user-select: none;
+  border-radius: 7px;
+  min-height: 28px;
+  padding: 3px 6px;
+}
+
+.filter-menu-item:hover {
+  background: transparent;
 }
 
 .filter-menu-item input {
@@ -95,6 +104,74 @@
 
 .filter-menu-item span {
   color: inherit;
+}
+
+.filter-menu-item-with-pin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.filter-menu-item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.filter-menu-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.filter-menu-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--element-bg);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 0.15s ease;
+}
+
+.filter-menu-icon-btn:hover,
+.filter-menu-icon-btn.is-active,
+.filter-menu-pin-btn.is-pinned {
+  opacity: 1;
+}
+
+.filter-menu-show-btn.is-active {
+  color: var(--dark-bg);
+  border-color: var(--active-bg);
+  background: color-mix(in srgb, var(--active-bg), var(--secondary-bg) 35%);
+}
+
+.filter-menu-hide-btn.is-active {
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318, var(--active-bg) 55%);
+  background: color-mix(in srgb, #b42318 14%, var(--secondary-bg));
+}
+
+.filter-menu-pin-btn.is-pinned {
+  color: var(--dark-bg);
+  border-color: var(--active-bg);
+  background: color-mix(in srgb, var(--active-bg), var(--secondary-bg) 30%);
+}
+
+.filter-menu-icon-btn:hover {
+  border-color: var(--active-bg);
+  background: var(--active-bg);
 }
 
 .filter-menu-divider {
@@ -109,12 +186,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--text-sm);
 }
 
 .filter-menu-empty {
-  padding: 6px;
+  padding: 10px 8px;
   font-size: var(--text-sm);
   color: var(--element-bg);
+  text-align: center;
 }
 
 .filter-menu-dropdown::-webkit-scrollbar {
@@ -633,27 +712,33 @@
   border-color: var(--element-bg);
 }
 
-/* Timeline Breaks UI */
-.settings-row-breaks {
+/* Scale Sections UI */
+.settings-row-scale-sections {
   align-items: flex-start;
 }
 
-.settings-breaks-container {
+.settings-scale-sections-container {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
   min-width: 240px;
 }
 
-.settings-break-row {
+.settings-scale-section-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.settings-break-input {
+.settings-scale-section-input {
   width: 90px;
   padding: 8px 10px;
+  text-align: center;
+}
+
+.settings-scale-section-scale {
+  width: 52px;
+  padding: 8px 6px;
   text-align: center;
 }
 
@@ -661,19 +746,19 @@
   border-color: #b42318;
 }
 
-.settings-break-error {
+.settings-scale-section-error {
   font-size: var(--text-2xs);
   color: #b42318;
   margin-left: 4px;
 }
 
-.settings-break-separator {
+.settings-scale-section-separator {
   color: var(--element-bg);
   font-size: var(--text-base);
   flex-shrink: 0;
 }
 
-.settings-break-remove {
+.settings-scale-section-remove {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -688,13 +773,13 @@
   flex-shrink: 0;
 }
 
-.settings-break-remove:hover {
+.settings-scale-section-remove:hover {
   background: var(--active-bg);
   border-color: var(--element-bg);
   color: #b42318;
 }
 
-.settings-break-add {
+.settings-scale-section-add {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -710,7 +795,7 @@
   transition: all 0.15s ease;
 }
 
-.settings-break-add:hover {
+.settings-scale-section-add:hover {
   background: var(--active-bg);
   border-style: solid;
   border-color: var(--element-bg);

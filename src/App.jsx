@@ -119,6 +119,8 @@ function App() {
   const [appFontSize, setAppFontSize] = useState(14);
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
+  const [hiddenTags, setHiddenTags] = useState([]);
+  const [pinnedTags, setPinnedTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
   const [homeSettingsSignal, setHomeSettingsSignal] = useState(0);
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
@@ -694,6 +696,17 @@ function App() {
       }
       return [...prev, tag];
     });
+    setHiddenTags((prev) => prev.filter((value) => value !== tag));
+  };
+
+  const handleToggleHiddenTag = (tag) => {
+    setHiddenTags((prev) => {
+      if (prev.includes(tag)) {
+        return prev.filter((value) => value !== tag);
+      }
+      return [...prev, tag];
+    });
+    setActiveTags((prev) => prev.filter((value) => value !== tag));
   };
 
   const handleToggleFilterScope = (key) => {
@@ -705,10 +718,21 @@ function App() {
 
   const handleClearTags = () => {
     setActiveTags([]);
+    setHiddenTags([]);
   };
 
   const handleFilterByTag = (tag) => {
     setActiveTags([tag]);
+    setHiddenTags((prev) => prev.filter((value) => value !== tag));
+  };
+
+  const handleTogglePinnedTag = (tag) => {
+    if (!tag) return;
+    setPinnedTags((prev) => (
+      prev.includes(tag)
+        ? prev.filter((value) => value !== tag)
+        : [...prev, tag]
+    ));
   };
 
   const handleEditElement = (id) => {
@@ -985,7 +1009,7 @@ function App() {
     startLabel,
     endLabel,
     useMonths,
-    breaks,
+    scaleSections,
     layout,
     branchOrdering,
     fixedEventHeight,
@@ -1020,16 +1044,18 @@ function App() {
         startLabel,
         endLabel,
         useMonths,
-        breaks,
+        scaleSections,
         layout,
         branchOrdering,
         fixedEventHeight,
       };
 
+      // Clean up legacy breaks field when saving with new scaleSections
+      delete nextFile.breaks;
       if (!startLabel) delete nextFile.startLabel;
       if (!endLabel) delete nextFile.endLabel;
       if (useMonths === undefined) delete nextFile.useMonths;
-      if (!breaks || breaks.length === 0) delete nextFile.breaks;
+      if (!scaleSections || scaleSections.length === 0) delete nextFile.scaleSections;
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
@@ -1589,8 +1615,9 @@ function App() {
 
   const filteredElements = useMemo(() => {
     if (!timelineData) return [];
-    if (activeTags.length === 0) return timelineData.elements;
-    const tagSet = new Set(activeTags);
+    if (activeTags.length === 0 && hiddenTags.length === 0) return timelineData.elements;
+    const showSet = new Set(activeTags);
+    const hideSet = new Set(hiddenTags);
     return timelineData.elements.filter((element) => {
       if (element.type !== "event" && element.type !== "span") {
         return true;
@@ -1602,9 +1629,18 @@ function App() {
         return true;
       }
       const tags = Array.isArray(element.tags) ? element.tags : [];
-      return tags.some((tag) => tagSet.has(tag));
+
+      if (tags.some((tag) => hideSet.has(tag))) {
+        return false;
+      }
+
+      if (showSet.size === 0) {
+        return true;
+      }
+
+      return tags.some((tag) => showSet.has(tag));
     });
-  }, [timelineData, activeTags, filterScope]);
+  }, [timelineData, activeTags, hiddenTags, filterScope]);
 
   const filteredTimelineData = useMemo(() => ({
     ...timelineData,
@@ -1635,6 +1671,14 @@ function App() {
     });
     return Array.from(tags).sort((a, b) => a.localeCompare(b));
   }, [timelineData]);
+
+  useEffect(() => {
+    setPinnedTags((prev) => prev.filter((tag) => allTags.includes(tag)));
+  }, [allTags]);
+
+  useEffect(() => {
+    setHiddenTags((prev) => prev.filter((tag) => allTags.includes(tag)));
+  }, [allTags]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -1736,10 +1780,14 @@ function App() {
           timelineData={filteredTimelineData}
           allElements={timelineData.elements}
           activeTags={activeTags}
+          hiddenTags={hiddenTags}
           onToggleTag={handleToggleTag}
+          onToggleHiddenTag={handleToggleHiddenTag}
           filterScope={filterScope}
           onToggleFilterScope={handleToggleFilterScope}
           onClearTags={handleClearTags}
+          pinnedTags={pinnedTags}
+          onTogglePinnedTag={handleTogglePinnedTag}
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
@@ -1829,9 +1877,13 @@ function App() {
             filterScope={filterScope}
             onToggleFilterScope={handleToggleFilterScope}
             activeTags={activeTags}
+            hiddenTags={hiddenTags}
             allTags={allTags}
             onToggleTag={handleToggleTag}
+            onToggleHiddenTag={handleToggleHiddenTag}
             onClearTags={handleClearTags}
+            pinnedTags={pinnedTags}
+            onTogglePinnedTag={handleTogglePinnedTag}
             onViewportYearChange={setViewportYear}
           />
         )}

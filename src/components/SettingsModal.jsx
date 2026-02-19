@@ -29,7 +29,7 @@ export default function SettingsModal({
   const [theme, setTheme] = useState(defaultThemeKey || "");
   const [fontFamily, setFontFamily] = useState("default");
   const [useMonths, setUseMonths] = useState(false);
-  const [breaks, setBreaks] = useState([]);
+  const [scaleSections, setScaleSections] = useState([]);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
@@ -37,7 +37,7 @@ export default function SettingsModal({
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
-  const [breakErrors, setBreakErrors] = useState([]);
+  const [scaleSectionErrors, setScaleSectionErrors] = useState([]);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
   const lastFilePathRef = useRef(null);
@@ -50,20 +50,27 @@ export default function SettingsModal({
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  // Convert stored breaks (numeric) to editable breaks (strings for inputs)
-  const loadBreaks = (storedBreaks = []) => {
-    if (!Array.isArray(storedBreaks) || storedBreaks.length === 0) return [];
-    return storedBreaks.map((item) => ({
+  // Convert stored scale sections (numeric) to editable (strings for inputs)
+  const loadScaleSections = (stored = [], legacyBreaks = []) => {
+    const source = Array.isArray(stored) && stored.length > 0
+      ? stored
+      : Array.isArray(legacyBreaks) && legacyBreaks.length > 0
+        ? legacyBreaks.map((b) => ({ ...b, scale: 0 }))
+        : [];
+    if (source.length === 0) return [];
+    return source.map((item) => ({
       start: String(item?.start ?? ""),
       end: String(item?.end ?? ""),
+      scale: String(item?.scale ?? "0"),
     }));
   };
 
-  // Validate a single break entry
-  const validateBreak = (item) => {
+  // Validate a single scale section entry
+  const validateScaleSection = (item) => {
     const startRaw = item?.start?.trim() || "";
     const endRaw = item?.end?.trim() || "";
-    if (!startRaw && !endRaw) return null; // Empty is OK
+    const scaleRaw = item?.scale?.trim() || "";
+    if (!startRaw && !endRaw && !scaleRaw) return null;
     if (!startRaw || !endRaw) return "Both start and end required";
 
     const parsedStart = parseTimelineInput(startRaw);
@@ -71,15 +78,18 @@ export default function SettingsModal({
     if (!Number.isFinite(parsedStart.value)) return "Invalid start date";
     if (!Number.isFinite(parsedEnd.value)) return "Invalid end date";
     if (parsedStart.value === parsedEnd.value) return "Start and end must differ";
+
+    const scaleNum = Number(scaleRaw);
+    if (!Number.isFinite(scaleNum) || scaleNum < 0 || scaleNum > 2) return "Scale must be 0–2";
     return null;
   };
 
-  // Convert editable breaks (strings) to numeric breaks for saving
-  const saveBreaks = (editableBreaks = []) => {
+  // Convert editable scale sections (strings) to numeric for saving
+  const saveScaleSections = (editable = []) => {
     const out = [];
     const errors = [];
-    editableBreaks.forEach((item, index) => {
-      const error = validateBreak(item);
+    editable.forEach((item, index) => {
+      const error = validateScaleSection(item);
       errors[index] = error;
 
       if (error) return;
@@ -92,32 +102,33 @@ export default function SettingsModal({
 
       const startVal = parsedStart.value;
       const endVal = parsedEnd.value;
+      const scale = Math.max(0, Math.min(2, Number(item?.scale) || 0));
 
       const ordered = startVal < endVal
-        ? { start: startVal, end: endVal }
-        : { start: endVal, end: startVal };
+        ? { start: startVal, end: endVal, scale }
+        : { start: endVal, end: startVal, scale };
       out.push(ordered);
     });
-    setBreakErrors(errors);
+    setScaleSectionErrors(errors);
     return out;
   };
 
-  const addBreak = () => {
-    setBreaks([...breaks, { start: "", end: "" }]);
-    setBreakErrors((prev) => [...prev, null]);
+  const addScaleSection = () => {
+    setScaleSections([...scaleSections, { start: "", end: "", scale: "0" }]);
+    setScaleSectionErrors((prev) => [...prev, null]);
   };
 
-  const removeBreak = (index) => {
-    setBreaks(breaks.filter((_, i) => i !== index));
-    setBreakErrors((prev) => prev.filter((_, i) => i !== index));
+  const removeScaleSection = (index) => {
+    setScaleSections(scaleSections.filter((_, i) => i !== index));
+    setScaleSectionErrors((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateBreak = (index, field, value) => {
-    const nextBreaks = breaks.map((b, i) => (i === index ? { ...b, [field]: value } : b));
-    setBreaks(nextBreaks);
-    setBreakErrors((prev) => {
+  const updateScaleSection = (index, field, value) => {
+    const next = scaleSections.map((s, i) => (i === index ? { ...s, [field]: value } : s));
+    setScaleSections(next);
+    setScaleSectionErrors((prev) => {
       const nextErrors = [...prev];
-      nextErrors[index] = validateBreak(nextBreaks[index]);
+      nextErrors[index] = validateScaleSection(next[index]);
       return nextErrors;
     });
   };
@@ -155,13 +166,13 @@ export default function SettingsModal({
         setFontFamily(timelineData.file.font || "default");
         setLayout(timelineData.file.layout || "Horizontal");
         setUseMonths(Boolean(timelineData.file.useMonths));
-        setBreaks(loadBreaks(timelineData.file.breaks));
+        setScaleSections(loadScaleSections(timelineData.file.scaleSections, timelineData.file.breaks));
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
         setValidationErrors([]);
-        setBreakErrors([]);
+        setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
         setIsInitialized(true);
       }
@@ -224,7 +235,7 @@ export default function SettingsModal({
         useMonths && parsedEnd.precision !== "day"
           ? snapToMonthGrid(parsedEnd.value)
           : parsedEnd.value;
-      const parsedBreaks = saveBreaks(breaks);
+      const parsedScaleSections = saveScaleSections(scaleSections);
       if (onUpdateTimeline) {
         onUpdateTimeline({
           title,
@@ -238,7 +249,7 @@ export default function SettingsModal({
           startLabel: parsedStart.label,
           endLabel: parsedEnd.label,
           useMonths,
-          breaks: parsedBreaks,
+          scaleSections: parsedScaleSections,
           layout,
           branchOrdering,
           fixedEventHeight,
@@ -263,7 +274,7 @@ export default function SettingsModal({
     fontFamily,
     useMonths,
     layout,
-    breaks,
+    scaleSections,
     branchOrdering,
     fixedEventHeight,
   ]);
@@ -493,56 +504,66 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Timeline Breaks */}
-          <div className="settings-row settings-row-breaks">
+          {/* Scale Sections */}
+          <div className="settings-row settings-row-scale-sections">
             <div className="settings-row-left">
-              <div className="settings-row-label">Timeline Breaks</div>
+              <div className="settings-row-label">Scale Sections</div>
               <div className="settings-row-description">
-                Skip empty spans of time.
+                Squish or stretch spans of time.
               </div>
             </div>
-            <div className="settings-row-right settings-breaks-container">
-              {breaks.map((breakItem, index) => (
-                <div key={index} className="settings-break-row-wrap">
-                  <div className="settings-break-row">
+            <div className="settings-row-right settings-scale-sections-container">
+              {scaleSections.map((section, index) => (
+                <div key={index} className="settings-scale-section-row-wrap">
+                  <div className="settings-scale-section-row">
                     <input
                       type="text"
-                      className={`settings-input settings-break-input ${breakErrors[index] ? 'settings-input-error' : ''}`}
-                      value={breakItem.start}
-                      onChange={(e) => updateBreak(index, "start", e.target.value)}
+                      className={`settings-input settings-scale-section-input ${scaleSectionErrors[index] ? 'settings-input-error' : ''}`}
+                      value={section.start}
+                      onChange={(e) => updateScaleSection(index, "start", e.target.value)}
                       placeholder="Start"
                       maxLength={20}
                     />
-                    <span className="settings-break-separator">–</span>
+                    <span className="settings-scale-section-separator">–</span>
                     <input
                       type="text"
-                      className={`settings-input settings-break-input ${breakErrors[index] ? 'settings-input-error' : ''}`}
-                      value={breakItem.end}
-                      onChange={(e) => updateBreak(index, "end", e.target.value)}
+                      className={`settings-input settings-scale-section-input ${scaleSectionErrors[index] ? 'settings-input-error' : ''}`}
+                      value={section.end}
+                      onChange={(e) => updateScaleSection(index, "end", e.target.value)}
                       placeholder="End"
                       maxLength={20}
                     />
+                    <input
+                      type="number"
+                      className={`settings-input settings-scale-section-scale ${scaleSectionErrors[index] ? 'settings-input-error' : ''}`}
+                      value={section.scale}
+                      onChange={(e) => updateScaleSection(index, "scale", e.target.value)}
+                      placeholder="Scale"
+                      min={0}
+                      max={2}
+                      step={0.1}
+                    />
                     <button
                       type="button"
-                      className="settings-break-remove"
-                      onClick={() => removeBreak(index)}
-                      aria-label="Remove break"
+                      className="settings-scale-section-remove"
+                      onClick={() => removeScaleSection(index)}
+                      aria-label="Remove scale section"
                     >
                       <X size={14} />
                     </button>
                   </div>
-                  {breakErrors[index] && (
-                    <div className="settings-break-error">{breakErrors[index]}</div>
+                  {scaleSectionErrors[index] && (
+                    <div className="settings-scale-section-error">{scaleSectionErrors[index]}</div>
                   )}
                 </div>
               ))}
               <button
                 type="button"
-                className="settings-break-add"
-                onClick={addBreak}
+                className="settings-scale-section-add"
+                onClick={addScaleSection}
               >
                 <Plus size={14} />
-                <span>Add Break</span>
+                <span>Add Section</span>
               </button>
             </div>
           </div>

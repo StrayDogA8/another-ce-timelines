@@ -79,8 +79,8 @@ export default function TimelineScrollbar({
     const minYear = file.start ?? rawMin;
     const maxYear = file.end ?? rawMax;
 
-    // Parse and normalize breaks
-    const parseBreakValue = (value) => {
+    // Parse and normalize scale sections (with legacy breaks fallback)
+    const parseScaleValue = (value) => {
       if (typeof value === "number") return value;
       if (typeof value === "string") {
         const parsed = parseTimelineInput(value);
@@ -89,12 +89,18 @@ export default function TimelineScrollbar({
       return null;
     };
 
-    const normalizeBreaks = (breaks, min, max) => {
-      if (!Array.isArray(breaks) || breaks.length === 0) return [];
-      const cleaned = breaks
+    const normalizeScaleSections = (sections, legacyBreaks, min, max) => {
+      let raw = Array.isArray(sections) && sections.length > 0
+        ? sections
+        : Array.isArray(legacyBreaks) && legacyBreaks.length > 0
+          ? legacyBreaks.map((b) => ({ ...b, scale: 0 }))
+          : [];
+      if (raw.length === 0) return [];
+
+      const cleaned = raw
         .map((item) => {
-          const startRaw = parseBreakValue(item?.start);
-          const endRaw = parseBreakValue(item?.end);
+          const startRaw = parseScaleValue(item?.start);
+          const endRaw = parseScaleValue(item?.end);
           if (!Number.isFinite(startRaw) || !Number.isFinite(endRaw)) return null;
           const start = Math.min(startRaw, endRaw);
           const end = Math.max(startRaw, endRaw);
@@ -102,7 +108,8 @@ export default function TimelineScrollbar({
           const clippedStart = Math.max(min, start);
           const clippedEnd = Math.min(max, end);
           if (clippedEnd <= clippedStart) return null;
-          return { start: clippedStart, end: clippedEnd };
+          const scale = Math.max(0, Math.min(2, Number(item?.scale) || 0));
+          return { start: clippedStart, end: clippedEnd, scale };
         })
         .filter(Boolean)
         .sort((a, b) => a.start - b.start);
@@ -110,7 +117,7 @@ export default function TimelineScrollbar({
       const merged = [];
       cleaned.forEach((current) => {
         const last = merged[merged.length - 1];
-        if (!last || current.start > last.end) {
+        if (!last || current.start > last.end || current.scale !== last.scale) {
           merged.push({ ...current });
         } else {
           last.end = Math.max(last.end, current.end);
@@ -119,29 +126,44 @@ export default function TimelineScrollbar({
       return merged;
     };
 
-    const normalizedBreaks = normalizeBreaks(file.breaks, minYear, maxYear);
+    const normalizedScaleSections = normalizeScaleSections(
+      file.scaleSections, file.breaks, minYear, maxYear
+    );
 
     const compressYear = (year) => {
-      let skipped = 0;
-      for (const gap of normalizedBreaks) {
-        if (year >= gap.end) {
-          skipped += gap.end - gap.start;
+      let adjustment = 0;
+      for (const section of normalizedScaleSections) {
+        const duration = section.end - section.start;
+        if (year >= section.end) {
+          adjustment += duration * (1 - section.scale);
           continue;
         }
-        if (year > gap.start) return gap.start - skipped;
+        if (year > section.start) {
+          const partial = year - section.start;
+          return year - adjustment - partial * (1 - section.scale);
+        }
         break;
       }
-      return year - skipped;
+      return year - adjustment;
     };
 
     const decompressYear = (compressedYear) => {
-      let skipped = 0;
-      for (const gap of normalizedBreaks) {
-        const gapStartCompressed = gap.start - skipped;
-        if (compressedYear < gapStartCompressed) break;
-        skipped += gap.end - gap.start;
+      let adjustment = 0;
+      for (const section of normalizedScaleSections) {
+        const duration = section.end - section.start;
+        const sectionStartCompressed = section.start - adjustment;
+        const sectionCompressedWidth = duration * section.scale;
+        if (compressedYear >= sectionStartCompressed + sectionCompressedWidth) {
+          adjustment += duration * (1 - section.scale);
+          continue;
+        }
+        if (compressedYear > sectionStartCompressed) {
+          const offset = compressedYear - sectionStartCompressed;
+          return section.start + (section.scale > 0 ? offset / section.scale : 0);
+        }
+        break;
       }
-      return compressedYear + skipped;
+      return compressedYear + adjustment;
     };
 
     return {
