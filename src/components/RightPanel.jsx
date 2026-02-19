@@ -30,9 +30,12 @@ export default function RightPanel({
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const [notesBasePath, setNotesBasePath] = useState("");
   const prevSelectedIdRef = useRef(null);
-  const [branchQuery, setBranchQuery] = useState("");
-  const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
-  const branchMenuTimeoutRef = useRef(null);
+  const [spanParentQuery, setSpanParentQuery] = useState("");
+  const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
+  const spanParentMenuTimeoutRef = useRef(null);
+  const [mergeParentQuery, setMergeParentQuery] = useState("");
+  const [isMergeParentMenuOpen, setIsMergeParentMenuOpen] = useState(false);
+  const mergeParentMenuTimeoutRef = useRef(null);
   const [parentQuery, setParentQuery] = useState("");
   const [isParentMenuOpen, setIsParentMenuOpen] = useState(false);
   const parentMenuTimeoutRef = useRef(null);
@@ -72,8 +75,10 @@ export default function RightPanel({
       if (prevId !== selectedElement.id) {
         if (!shouldPreserveEditMode) {
           setIsEditMode(false);
-          setBranchQuery("");
-          setIsBranchMenuOpen(false);
+          setSpanParentQuery("");
+          setIsSpanParentMenuOpen(false);
+          setMergeParentQuery("");
+          setIsMergeParentMenuOpen(false);
           setIsParentMenuOpen(false);
           setIsTagMenuOpen(false);
         }
@@ -84,8 +89,10 @@ export default function RightPanel({
 
   useEffect(() => {
     if (!isEditMode) {
-      setBranchQuery("");
-      setIsBranchMenuOpen(false);
+      setSpanParentQuery("");
+      setIsSpanParentMenuOpen(false);
+      setMergeParentQuery("");
+      setIsMergeParentMenuOpen(false);
       setIsParentMenuOpen(false);
       setIsTagMenuOpen(false);
     }
@@ -171,7 +178,8 @@ export default function RightPanel({
   // Cleanup all menu timeouts on unmount
   useEffect(() => {
     return () => {
-      if (branchMenuTimeoutRef.current) clearTimeout(branchMenuTimeoutRef.current);
+      if (spanParentMenuTimeoutRef.current) clearTimeout(spanParentMenuTimeoutRef.current);
+      if (mergeParentMenuTimeoutRef.current) clearTimeout(mergeParentMenuTimeoutRef.current);
       if (parentMenuTimeoutRef.current) clearTimeout(parentMenuTimeoutRef.current);
       if (tagMenuTimeoutRef.current) clearTimeout(tagMenuTimeoutRef.current);
     };
@@ -284,9 +292,9 @@ export default function RightPanel({
     );
   }, [parentCandidates, parentQuery]);
 
-  const branchCandidates = useMemo(() => {
+  // Span parent candidates: spans whose time range contains this span's START
+  const spanParentCandidates = useMemo(() => {
     if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
-    const existing = new Set(formData.branches || []);
     return timelineData.elements
       .filter((el) => el.type === "span" && el.id !== formData.id)
       .map((span) => ({
@@ -294,18 +302,38 @@ export default function RightPanel({
         _start: getSpanNumericStart(span),
         _end: getSpanNumericEnd(span),
       }))
-      .filter((span) => Number.isFinite(span._start) && span._start >= parentRange.start && span._start <= parentRange.end)
-      .filter((span) => !existing.has(span.id));
+      .filter((span) => Number.isFinite(span._start) && Number.isFinite(span._end) && parentRange.start >= span._start && parentRange.start <= span._end);
   }, [timelineData, formData, parentRange]);
 
-  const branchSuggestions = useMemo(() => {
-    if (!branchQuery.trim()) return [];
-    const needle = branchQuery.trim().toLowerCase();
-    return branchCandidates.filter((span) =>
+  const spanParentSuggestions = useMemo(() => {
+    if (!spanParentQuery.trim()) return spanParentCandidates;
+    const needle = spanParentQuery.trim().toLowerCase();
+    return spanParentCandidates.filter((span) =>
       span.id.toLowerCase().includes(needle) ||
       (span.title || "").toLowerCase().includes(needle)
     );
-  }, [branchCandidates, branchQuery]);
+  }, [spanParentCandidates, spanParentQuery]);
+
+  const mergeParentCandidates = useMemo(() => {
+    if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
+    return timelineData.elements
+      .filter((el) => el.type === "span" && el.id !== formData.id)
+      .map((span) => ({
+        ...span,
+        _start: getSpanNumericStart(span),
+        _end: getSpanNumericEnd(span),
+      }))
+      .filter((span) => Number.isFinite(span._start) && Number.isFinite(span._end) && parentRange.end >= span._start && parentRange.end <= span._end);
+  }, [timelineData, formData, parentRange]);
+
+  const mergeParentSuggestions = useMemo(() => {
+    if (!mergeParentQuery.trim()) return mergeParentCandidates;
+    const needle = mergeParentQuery.trim().toLowerCase();
+    return mergeParentCandidates.filter((span) =>
+      span.id.toLowerCase().includes(needle) ||
+      (span.title || "").toLowerCase().includes(needle)
+    );
+  }, [mergeParentCandidates, mergeParentQuery]);
 
   const tagCandidates = useMemo(() => {
     if (!timelineData) return [];
@@ -326,29 +354,49 @@ export default function RightPanel({
     return tagCandidates.filter((tag) => tag.toLowerCase().includes(needle));
   }, [tagCandidates, tagQuery]);
 
-  const addBranch = (spanId) => {
+  const setSpanParent = (spanId) => {
     if (!spanId) return;
-    const existing = Array.isArray(formData.branches) ? formData.branches : [];
-    if (existing.includes(spanId)) return;
-    const nextBranches = [...existing, spanId];
-    setFormData((prev) => ({ ...prev, branches: nextBranches }));
-    commitDraft({ ...formData, branches: nextBranches });
-    setBranchQuery("");
+    setFormData((prev) => ({ ...prev, parent: spanId }));
+    commitDraft({ ...formData, parent: spanId });
+    setSpanParentQuery("");
+    setIsSpanParentMenuOpen(false);
   };
 
-  const removeBranch = (spanId) => {
-    const existing = Array.isArray(formData.branches) ? formData.branches : [];
-    const nextBranches = existing.filter((id) => id !== spanId);
-    setFormData((prev) => ({ ...prev, branches: nextBranches }));
-    commitDraft({ ...formData, branches: nextBranches });
+  const clearSpanParent = () => {
+    const { parent: _p, ...rest } = formData;
+    setFormData(rest);
+    commitDraft(rest);
   };
 
-  const handleBranchBlur = () => {
-    if (branchMenuTimeoutRef.current) {
-      clearTimeout(branchMenuTimeoutRef.current);
+  const handleSpanParentBlur = () => {
+    if (spanParentMenuTimeoutRef.current) {
+      clearTimeout(spanParentMenuTimeoutRef.current);
     }
-    branchMenuTimeoutRef.current = setTimeout(() => {
-      setIsBranchMenuOpen(false);
+    spanParentMenuTimeoutRef.current = setTimeout(() => {
+      setIsSpanParentMenuOpen(false);
+    }, 120);
+  };
+
+  const setMergeParent = (spanId) => {
+    if (!spanId) return;
+    setFormData((prev) => ({ ...prev, mergeParent: spanId }));
+    commitDraft({ ...formData, mergeParent: spanId });
+    setMergeParentQuery("");
+    setIsMergeParentMenuOpen(false);
+  };
+
+  const clearMergeParent = () => {
+    const { mergeParent: _m, ...rest } = formData;
+    setFormData(rest);
+    commitDraft(rest);
+  };
+
+  const handleMergeParentBlur = () => {
+    if (mergeParentMenuTimeoutRef.current) {
+      clearTimeout(mergeParentMenuTimeoutRef.current);
+    }
+    mergeParentMenuTimeoutRef.current = setTimeout(() => {
+      setIsMergeParentMenuOpen(false);
     }, 120);
   };
 
@@ -910,7 +958,8 @@ export default function RightPanel({
                         formData.date,
                         timelineData?.file?.negID,
                         timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true
+                        timelineData?.file?.useMonths === true,
+                        timelineData?.file?.hideDecimals
                       )}
                   </p>
                 </div>
@@ -925,7 +974,8 @@ export default function RightPanel({
                         formData.start,
                         timelineData?.file?.negID,
                         timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true
+                        timelineData?.file?.useMonths === true,
+                        timelineData?.file?.hideDecimals
                       )}
                   </p>
                 </div>
@@ -938,7 +988,8 @@ export default function RightPanel({
                         formData.end,
                         timelineData?.file?.negID,
                         timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true
+                        timelineData?.file?.useMonths === true,
+                        timelineData?.file?.hideDecimals
                       )}
                   </p>
                 </div>
@@ -966,27 +1017,38 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Branches (spans only) */}
+            {/* Parent span (spans only) */}
             {formData.type === "span" && (
-              <div className="view-group view-group-chips">
-                <label>Branches</label>
+              <div className="view-group">
+                <label>Parent</label>
                 <div className="view-separator" />
-                {Array.isArray(formData.branches) && formData.branches.length > 0 ? (
-                  <div className="tag-chip-list">
-                    {formData.branches.map((branchId) => {
-                      const branchElement = timelineData.elements.find(el => el.id === branchId);
-                      return (
-                        <button
-                          key={branchId}
-                          type="button"
-                          className="tag-chip tag-chip-link"
-                          onClick={() => onSelect(branchId)}
-                        >
-                          {branchElement?.title || branchId}
-                        </button>
-                      );
-                    })}
-                  </div>
+                {formData.parent ? (
+                  <button
+                    type="button"
+                    className="tag-chip tag-chip-link"
+                    onClick={() => onSelect(formData.parent)}
+                  >
+                    {timelineData.elements.find(el => el.id === formData.parent)?.title || formData.parent}
+                  </button>
+                ) : (
+                  <p>None</p>
+                )}
+              </div>
+            )}
+
+            {/* Merge target (spans only) */}
+            {formData.type === "span" && (
+              <div className="view-group">
+                <label>Merge Into</label>
+                <div className="view-separator" />
+                {formData.mergeParent ? (
+                  <button
+                    type="button"
+                    className="tag-chip tag-chip-link"
+                    onClick={() => onSelect(formData.mergeParent)}
+                  >
+                    {timelineData.elements.find(el => el.id === formData.mergeParent)?.title || formData.mergeParent}
+                  </button>
                 ) : (
                   <p>None</p>
                 )}
@@ -1002,21 +1064,20 @@ export default function RightPanel({
                   {formData.tags.map((tag) => {
                     const isSelected = activeTags.includes(tag);
                     return (
-                      <div key={tag} className="tag-chip-wrap">
-                        <button
-                          type="button"
-                          className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
-                          onClick={() => {
-                            if (onToggleTag) {
-                              onToggleTag(tag);
-                            } else {
-                              onFilterByTag?.(tag);
-                            }
-                          }}
-                        >
-                          {tag}
-                        </button>
-                      </div>
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
+                        onClick={() => {
+                          if (onToggleTag) {
+                            onToggleTag(tag);
+                          } else {
+                            onFilterByTag?.(tag);
+                          }
+                        }}
+                      >
+                        {tag}
+                      </button>
                     );
                   })}
                 </div>
@@ -1213,86 +1274,158 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Branches (spans only) */}
+            {/* Parent span (spans only) */}
             {formData.type === "span" && (
               <div className="form-group">
                 <div className="edit-row">
-                  <label htmlFor="branches">Branches</label>
+                  <label htmlFor="spanParent">Parent</label>
                   <div className="edit-separator" />
-                  <div className="branch-picker">
-                    <input
-                      id="branches"
-                      type="text"
-                      value={branchQuery}
-                      onChange={(e) => {
-                        setBranchQuery(e.target.value);
-                        setIsBranchMenuOpen(true);
-                        if (validationErrors.length) setValidationErrors([]);
-                      }}
-                      onFocus={() => setIsBranchMenuOpen(true)}
-                      onBlur={handleBranchBlur}
-                      placeholder="Search span ID or title..."
-                      className="edit-input branch-input"
-                      maxLength={ID_MAX_LENGTH}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          if (branchSuggestions.length > 0) {
-                            addBranch(branchSuggestions[0].id);
-                          }
-                        }
-                      }}
-                    />
-                    {isBranchMenuOpen && branchQuery.trim().length > 0 && (
-                      <div className="branch-suggestions">
-                        {branchSuggestions.length > 0 ? (
-                          branchSuggestions.map((span) => (
-                            <button
-                              key={span.id}
-                              type="button"
-                              className="branch-suggestion-item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                addBranch(span.id);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">{span.title || span.id}</span>
-                              <span className="branch-suggestion-id">{span.id}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="branch-suggestion-empty">No matching spans</div>
-                        )}
+                  {formData.parent ? (
+                    <div className="chip-selected-list">
+                      <div className="chip-selected-item">
+                        <button
+                          type="button"
+                          className="chip-selected-link"
+                          onClick={() => onSelect(formData.parent)}
+                        >
+                          {timelineData.elements.find((el) => el.id === formData.parent)?.title || formData.parent}
+                        </button>
+                        <button
+                          type="button"
+                          className="chip-selected-remove"
+                          onClick={clearSpanParent}
+                          aria-label="Remove parent"
+                        >
+                          ×
+                        </button>
                       </div>
-                    )}
-                  </div>
-                </div>
-                {Array.isArray(formData.branches) && formData.branches.length > 0 && (
-                  <div className="chip-selected-list">
-                    {formData.branches.map((branchId) => {
-                      const branchElement = timelineData.elements.find((el) => el.id === branchId);
-                      return (
-                        <div key={branchId} className="chip-selected-item">
-                          <button
-                            type="button"
-                            className="chip-selected-link"
-                            onClick={() => onSelect(branchId)}
-                          >
-                            {branchElement?.title || branchId}
-                          </button>
-                          <button
-                            type="button"
-                            className="chip-selected-remove"
-                            onClick={() => removeBranch(branchId)}
-                            aria-label={`Remove ${branchElement?.title || branchId}`}
-                          >
-                            ×
-                          </button>
+                    </div>
+                  ) : (
+                    <div className="branch-picker">
+                      <input
+                        id="spanParent"
+                        type="text"
+                        value={spanParentQuery}
+                        onChange={(e) => {
+                          setSpanParentQuery(e.target.value);
+                          setIsSpanParentMenuOpen(true);
+                        }}
+                        onFocus={() => setIsSpanParentMenuOpen(true)}
+                        onBlur={handleSpanParentBlur}
+                        placeholder="Search span ID or title..."
+                        className="edit-input branch-input"
+                        maxLength={ID_MAX_LENGTH}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (spanParentSuggestions.length > 0) {
+                              setSpanParent(spanParentSuggestions[0].id);
+                            }
+                          }
+                        }}
+                      />
+                      {isSpanParentMenuOpen && spanParentQuery.trim().length > 0 && (
+                        <div className="branch-suggestions">
+                          {spanParentSuggestions.length > 0 ? (
+                            spanParentSuggestions.map((span) => (
+                              <button
+                                key={span.id}
+                                type="button"
+                                className="branch-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setSpanParent(span.id);
+                                }}
+                              >
+                                <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                <span className="branch-suggestion-id">{span.id}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="branch-suggestion-empty">No matching spans</div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {formData.type === "span" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="mergeParent">Merge Into</label>
+                  <div className="edit-separator" />
+                  {formData.mergeParent ? (
+                    <div className="chip-selected-list">
+                      <div className="chip-selected-item">
+                        <button
+                          type="button"
+                          className="chip-selected-link"
+                          onClick={() => onSelect(formData.mergeParent)}
+                        >
+                          {timelineData.elements.find((el) => el.id === formData.mergeParent)?.title || formData.mergeParent}
+                        </button>
+                        <button
+                          type="button"
+                          className="chip-selected-remove"
+                          onClick={clearMergeParent}
+                          aria-label="Remove merge target"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="branch-picker">
+                      <input
+                        id="mergeParent"
+                        type="text"
+                        value={mergeParentQuery}
+                        onChange={(e) => {
+                          setMergeParentQuery(e.target.value);
+                          setIsMergeParentMenuOpen(true);
+                        }}
+                        onFocus={() => setIsMergeParentMenuOpen(true)}
+                        onBlur={handleMergeParentBlur}
+                        placeholder="Search span ID or title..."
+                        className="edit-input branch-input"
+                        maxLength={ID_MAX_LENGTH}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (mergeParentSuggestions.length > 0) {
+                              setMergeParent(mergeParentSuggestions[0].id);
+                            }
+                          }
+                        }}
+                      />
+                      {isMergeParentMenuOpen && mergeParentQuery.trim().length > 0 && (
+                        <div className="branch-suggestions">
+                          {mergeParentSuggestions.length > 0 ? (
+                            mergeParentSuggestions.map((span) => (
+                              <button
+                                key={span.id}
+                                type="button"
+                                className="branch-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setMergeParent(span.id);
+                                }}
+                              >
+                                <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                <span className="branch-suggestion-id">{span.id}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="branch-suggestion-empty">No matching spans</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

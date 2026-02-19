@@ -10,6 +10,7 @@ const RESOLUTION_OPTIONS = [
   { value: 'letter', label: 'Letter 300 DPI (3300 × 2550)', width: 3300, height: 2550 },
   { value: 'a4', label: 'A4 300 DPI (3508 × 2480)', width: 3508, height: 2480 },
   { value: 'poster', label: 'Poster 36×24" (10800 × 7200)', width: 10800, height: 7200 },
+  { value: 'custom', label: 'Custom', width: null, height: null },
 ];
 
 export default function ExportPngModal({ isOpen, onClose, onExport, timelineData, timelineViewRef }) {
@@ -21,6 +22,8 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const [previewOffset, setPreviewOffset] = useState({ x: 0, y: 0 });
   const [isDraggingPreview, setIsDraggingPreview] = useState(false);
   const [resolution, setResolution] = useState('current');
+  const [customWidth, setCustomWidth] = useState('1920');
+  const [customHeight, setCustomHeight] = useState('1080');
   const [bgOption, setBgOption] = useState('default');
   const [showTitle, setShowTitle] = useState(false);
   const [titlePosition, setTitlePosition] = useState('bottom-right');
@@ -185,7 +188,15 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   };
 
   const handleExport = () => {
-    const selectedRes = RESOLUTION_OPTIONS.find(r => r.value === resolution) || RESOLUTION_OPTIONS[0];
+    let targetWidth, targetHeight;
+    if (resolution === 'custom') {
+      targetWidth = parseInt(customWidth, 10) || null;
+      targetHeight = parseInt(customHeight, 10) || null;
+    } else {
+      const selectedRes = RESOLUTION_OPTIONS.find(r => r.value === resolution) || RESOLUTION_OPTIONS[0];
+      targetWidth = selectedRes.width;
+      targetHeight = selectedRes.height;
+    }
 
     let exportBgOpts = {};
     if (bgOption === 'transparent') {
@@ -205,8 +216,8 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
     onExport({
       ...exportBgOpts,
       filename: (filename || "").trim() || (timelineData?.file?.id || timelineData?.file?.title || "timeline"),
-      targetWidth: selectedRes.width,
-      targetHeight: selectedRes.height,
+      targetWidth,
+      targetHeight,
       exportStartYear: startYear,
       exportEndYear: endYear,
       showTitle,
@@ -230,6 +241,17 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
 
   const getExportDimensions = () => {
     if (!previewData?.elementWidth || !previewData?.elementHeight) return null;
+    if (resolution === 'custom') {
+      const w = parseInt(customWidth, 10);
+      const h = parseInt(customHeight, 10);
+      if (w > 0 && h > 0) return { width: w, height: h };
+      if (w > 0) {
+        const sourceWidth = rangeWidthPx || previewData.elementWidth;
+        const scale = w / sourceWidth;
+        return { width: w, height: Math.round(previewData.elementHeight * scale) };
+      }
+      return null;
+    }
     if (selectedRes.width) {
       const sourceWidth = rangeWidthPx || previewData.elementWidth;
       const scale = selectedRes.width / sourceWidth;
@@ -264,7 +286,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const displayYear = (value) => {
     if (!Number.isFinite(value)) return "--";
     const useMonths = file?.useMonths === true;
-    return formatYear(useMonths ? value : Math.round(value), file?.negID, file?.posID, useMonths);
+    return formatYear(useMonths ? value : Math.round(value), file?.negID, file?.posID, useMonths, file?.hideDecimals);
   };
   const selectedStartYear = previewData?.percentToYear
     ? previewData.percentToYear(exportRange.startPercent)
@@ -410,6 +432,27 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
+              {resolution === 'custom' && (
+                <div className="export-custom-resolution">
+                  <input
+                    type="number"
+                    className="settings-input export-custom-resolution-input"
+                    value={customWidth}
+                    onChange={(e) => setCustomWidth(e.target.value)}
+                    placeholder="Width"
+                    min={1}
+                  />
+                  <span className="settings-scale-section-separator">×</span>
+                  <input
+                    type="number"
+                    className="settings-input export-custom-resolution-input"
+                    value={customHeight}
+                    onChange={(e) => setCustomHeight(e.target.value)}
+                    placeholder="Height"
+                    min={1}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

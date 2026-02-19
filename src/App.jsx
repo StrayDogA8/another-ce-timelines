@@ -858,7 +858,6 @@ function App() {
       start,
       end,
       color: "#A6977E",
-      branches: [],
     };
 
     setTimelineData((prevData) => {
@@ -929,7 +928,8 @@ function App() {
       };
 
       if (original.type === "span") {
-        baseCopy.branches = [];
+        delete baseCopy.parent;
+        delete baseCopy.mergeParent;
       }
 
       const updatedData = {
@@ -956,11 +956,11 @@ function App() {
           };
         }
 
-        if (el.type === "span" && el.branches?.includes(elementId)) {
-          return {
-            ...el,
-            branches: el.branches.filter(id => id !== elementId),
-          };
+        if (el.type === "span" && (el.parent === elementId || el.mergeParent === elementId)) {
+          const cleaned = { ...el };
+          if (cleaned.parent === elementId) delete cleaned.parent;
+          if (cleaned.mergeParent === elementId) delete cleaned.mergeParent;
+          return cleaned;
         }
 
         return el;
@@ -1110,21 +1110,37 @@ function App() {
       console.log('Loaded timeline from Electron file system');
 
       const normalizeTimelineData = (data) => {
-        const nextElements = (data.elements || []).map((element) => {
-          if (element.type !== "span") return element;
-          const branches = Array.isArray(element.branches) ? element.branches : [];
-          const forks = Array.isArray(element.forks) ? element.forks : [];
-          if (forks.length === 0) {
-            const { forks: _forks, ...rest } = element;
-            return rest;
+        const elements = data.elements || [];
+
+        // Migrate old parent-defined branches/forks/merges to child-defined parent/mergeParent.
+        // Build maps: childId -> parentId for branches, childId -> parentId for merges.
+        const branchParentMap = {};
+        const mergeParentMap = {};
+        for (const el of elements) {
+          if (el.type !== "span") continue;
+          const branches = Array.isArray(el.branches) ? el.branches : [];
+          const forks = Array.isArray(el.forks) ? el.forks : [];
+          const allBranches = Array.from(new Set([...branches, ...forks]));
+          for (const childId of allBranches) {
+            branchParentMap[childId] = el.id;
           }
-          const merged = [...branches, ...forks];
-          const unique = Array.from(new Set(merged));
-          const { forks: _forks, ...rest } = element;
-          return {
-            ...rest,
-            branches: unique,
-          };
+          const merges = Array.isArray(el.merges) ? el.merges : [];
+          for (const childId of merges) {
+            mergeParentMap[childId] = el.id;
+          }
+        }
+
+        const nextElements = elements.map((element) => {
+          if (element.type !== "span") return element;
+          const { branches: _b, forks: _f, merges: _m, ...rest } = element;
+          // Preserve existing child-defined fields; fill from old parent-defined arrays
+          if (!rest.parent && branchParentMap[element.id]) {
+            rest.parent = branchParentMap[element.id];
+          }
+          if (!rest.mergeParent && mergeParentMap[element.id]) {
+            rest.mergeParent = mergeParentMap[element.id];
+          }
+          return rest;
         });
         return {
           ...data,

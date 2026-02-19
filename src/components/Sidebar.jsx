@@ -71,7 +71,7 @@ export default function Sidebar({
 
   const fmtYear = (y) => {
     if (!file) return String(y);
-    return formatYear(y, file.negID, file.posID, file.useMonths === true);
+    return formatYear(y, file.negID, file.posID, file.useMonths === true, file.hideDecimals);
   };
 
   const eraRows = useMemo(

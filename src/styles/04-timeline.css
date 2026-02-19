@@ -121,7 +121,7 @@
 .span-connector-top,
 .span-connector-bottom {
   position: absolute;
-  width: 19px;
+  width: 21px;
   padding-top: 24px;
 }
 
@@ -133,6 +133,23 @@
 .span-connector-bottom {
   transform: translateY(-4px);
   border-bottom-left-radius: 8px;
+}
+
+.span-connector-merge-top,
+.span-connector-merge-bottom {
+  position: absolute;
+  width: 21px;
+  padding-top: 24px;
+}
+
+.span-connector-merge-top {
+  transform: translateY(0px);
+  border-top-right-radius: 8px;
+}
+
+.span-connector-merge-bottom {
+  transform: translateY(-4px);
+  border-bottom-right-radius: 8px;
 }
 
 .event-line,

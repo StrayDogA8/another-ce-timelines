@@ -34,6 +34,7 @@ export default function SettingsModal({
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
+  const [hideDecimals, setHideDecimals] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -171,6 +172,7 @@ export default function SettingsModal({
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
+        setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setValidationErrors([]);
         setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
@@ -253,6 +255,7 @@ export default function SettingsModal({
           layout,
           branchOrdering,
           fixedEventHeight,
+          hideDecimals,
         });
       }
     }, 300);
@@ -277,6 +280,7 @@ export default function SettingsModal({
     scaleSections,
     branchOrdering,
     fixedEventHeight,
+    hideDecimals,
   ]);
 
   if (!isOpen) return null;
@@ -672,6 +676,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={fixedEventHeight}
                       onChange={(e) => setFixedEventHeight(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Hide Decimals */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Hide Decimals</div>
+                  <div className="settings-row-description">Round displayed years to whole numbers (e.g., -323.5 shows as 323 BC).</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={hideDecimals}
+                      onChange={(e) => setHideDecimals(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

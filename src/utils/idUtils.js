@@ -46,10 +46,11 @@ export function updateElementReferences(timelineData, oldId, newId) {
     }
 
     if (element.type === 'span') {
-      if (element.branches) {
-        updated.branches = element.branches.map(branchId =>
-          branchId === oldId ? newId : branchId
-        );
+      if (element.parent === oldId) {
+        updated.parent = newId;
+      }
+      if (element.mergeParent === oldId) {
+        updated.mergeParent = newId;
       }
     }
 

@@ -187,7 +187,7 @@ export default function TimelineScrollbar({
     const showMonths = file.useMonths === true;
     const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
     const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths);
+    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths, file.hideDecimals);
 
     if (nextLabel !== lastSliderLabelRef.current) {
       lastSliderLabelRef.current = nextLabel;
@@ -246,7 +246,7 @@ export default function TimelineScrollbar({
       const showMonths = capturedFile.useMonths === true;
       const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
       const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths);
+      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths, capturedFile.hideDecimals);
 
       if (yearLabelRef.current && nextLabel !== lastSliderLabelRef.current) {
         lastSliderLabelRef.current = nextLabel;

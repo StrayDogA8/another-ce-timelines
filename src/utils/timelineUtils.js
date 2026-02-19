@@ -1,6 +1,7 @@
-export function formatYear(year, negID, posID, useMonths = false) {
+export function formatYear(year, negID, posID, useMonths = false, hideDecimals = false) {
   if (year < 0) {
-    return negID ? `${Math.abs(year)} ${negID}` : `${year}`;
+    const display = hideDecimals ? Math.round(Math.abs(year)) : Math.abs(year);
+    return negID ? `${display} ${negID}` : `${hideDecimals ? -Math.round(Math.abs(year)) : year}`;
   }
   if (year > 0) {
     const yearInt = Math.floor(year);
@@ -8,7 +9,7 @@ export function formatYear(year, negID, posID, useMonths = false) {
     const hasFraction = Math.abs(fraction) > 1e-9;
     const hasShortYear = yearInt <= 9999;
 
-    if (useMonths && hasShortYear) {
+    if (useMonths && hasShortYear && !hideDecimals) {
       const months = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
@@ -20,7 +21,8 @@ export function formatYear(year, negID, posID, useMonths = false) {
       return posID ? `${label} ${posID}` : label;
     }
 
-    const label = `${hasFraction ? year : yearInt}`;
+    const display = hideDecimals ? Math.round(year) : (hasFraction ? year : yearInt);
+    const label = `${display}`;
     return posID ? `${label} ${posID}` : label;
   }
   return "0";
@@ -81,44 +83,60 @@ export function pickStep(range) {
 }
 
 // build child -> { parentId, offset } from spans
-// Rules:
-// - Branches: must start within parent's time span, alternate above/below with increasing offset
+// Each child span declares its parent via span.parent (string ID).
+// Children of the same parent alternate above/below with increasing offset.
 // Pattern: -1, +1, -2, +2, -3, +3, ...
 export function buildSpanChildPlacement(spans, branchOrdering = "later-first") {
   const placement = {};
+
+  // Group children by their parent
+  const childrenByParent = {};
   for (const span of spans) {
-    // branches alternate below/above
+    if (span.parent) {
+      if (!childrenByParent[span.parent]) childrenByParent[span.parent] = [];
+      childrenByParent[span.parent].push(span.id);
+    }
+  }
+
+  for (const [parentId, childIds] of Object.entries(childrenByParent)) {
     // offset -1 = lower lane number = larger Y = BELOW parent (lower on screen)
     // offset +1 = higher lane number = smaller Y = ABOVE parent (higher on screen)
-    // Pattern: index 0 → -1, index 1 → +1, index 2 → -2, index 3 → +2, etc.
-    if (Array.isArray(span.branches)) {
-      const orderedBranches =
-        branchOrdering === "original"
-          ? [...span.branches]
-          : [...span.branches].sort((aId, bId) => {
-              const a = spans.find(s => s.id === aId);
-              const b = spans.find(s => s.id === bId);
-              const aHasChildren = Array.isArray(a?.branches) && a.branches.length > 0;
-              const bHasChildren = Array.isArray(b?.branches) && b.branches.length > 0;
-              if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
-              const aStart = a?.start ?? 0;
-              const bStart = b?.start ?? 0;
-              if (aStart !== bStart) return bStart - aStart;
-              return String(aId).localeCompare(String(bId));
-            });
-      // "later-first": branches with their own branches stay closer, then later start dates.
-      // "original": keep the branch list order from the .timeline file.
-      // Alternate offsets around the parent: -1, +1, -2, +2, ...
-      // Negative offsets appear lower on screen, positive offsets higher.
-      orderedBranches.forEach((childId, index) => {
-        const magnitude = index + 1;
-        const offset = index % 2 === 0 ? -magnitude : +magnitude;
-        placement[childId] = {
-          parentId: span.id,
-          offset,
-          priority: index,
-        };
-      });
+    const orderedChildren =
+      branchOrdering === "original"
+        ? [...childIds]
+        : [...childIds].sort((aId, bId) => {
+            const a = spans.find(s => s.id === aId);
+            const b = spans.find(s => s.id === bId);
+            const aHasChildren = spans.some(s => s.parent === aId);
+            const bHasChildren = spans.some(s => s.parent === bId);
+            if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
+            const aStart = a?.start ?? 0;
+            const bStart = b?.start ?? 0;
+            if (aStart !== bStart) return bStart - aStart;
+            return String(aId).localeCompare(String(bId));
+          });
+    // Alternate offsets around the parent: -1, +1, -2, +2, ...
+    // Negative offsets appear lower on screen, positive offsets higher.
+    orderedChildren.forEach((childId, index) => {
+      const magnitude = index + 1;
+      const offset = index % 2 === 0 ? -magnitude : +magnitude;
+      placement[childId] = {
+        parentId,
+        offset,
+        priority: index,
+      };
+    });
+  }
+  return placement;
+}
+
+// build child -> { parentId } for merge connections (visual only, no lane changes)
+// Each child span declares its merge target via span.mergeParent (string ID).
+export function buildSpanMergePlacement(spans) {
+  const placement = {};
+  for (const span of spans) {
+    if (span.mergeParent) {
+      placement[span.id] = { parentId: span.mergeParent };
     }
   }
   return placement;
@@ -148,8 +166,11 @@ export function layoutSpans({
   const familyBands = new Map();
 
   const childToParent = {};
+  const parentToChildren = {};
   Object.entries(spanChildPlacement).forEach(([childId, { parentId }]) => {
     childToParent[childId] = parentId;
+    if (!parentToChildren[parentId]) parentToChildren[parentId] = [];
+    parentToChildren[parentId].push(childId);
   });
 
   const getRootId = (id) => {
@@ -172,8 +193,7 @@ export function layoutSpans({
       const { id, offset } = stack.pop();
       minOffset = Math.min(minOffset, offset);
       maxOffset = Math.max(maxOffset, offset);
-      const span = spanById[id];
-      const children = Array.isArray(span?.branches) ? span.branches : [];
+      const children = parentToChildren[id] || [];
       children.forEach((childId) => {
         const placement = spanChildPlacement[childId];
         if (!placement) return;
@@ -201,7 +221,7 @@ export function layoutSpans({
       if (!span) continue;
       minStart = Math.min(minStart, span.start);
       maxEnd = Math.max(maxEnd, span.end);
-      const children = Array.isArray(span.branches) ? span.branches : [];
+      const children = parentToChildren[id] || [];
       children.forEach((childId) => stack.push(childId));
     }
     const result = { start: minStart, end: maxEnd };
@@ -213,8 +233,8 @@ export function layoutSpans({
     startA < endB && endA > startB;
 
   const rootSpans = spans.filter(span => !childToParent[span.id]);
-  const familyRoots = rootSpans.filter(span => Array.isArray(span.branches) && span.branches.length > 0);
-  const otherRoots = rootSpans.filter(span => !Array.isArray(span.branches) || span.branches.length === 0);
+  const familyRoots = rootSpans.filter(span => parentToChildren[span.id]?.length > 0);
+  const otherRoots = rootSpans.filter(span => !parentToChildren[span.id]?.length);
 
   familyRoots.sort((a, b) => a.start - b.start);
   otherRoots.sort((a, b) => a.start - b.start);
@@ -250,7 +270,7 @@ export function layoutSpans({
       if (offset === 0) continue; 
       const childLane = baseLane + offset;
 
-      const childIds = [...(span.branches || [])];
+      const childIds = parentToChildren[span.id] || [];
       for (const childId of childIds) {
         const childPlacement = spanChildPlacement[childId];
         if (childPlacement && childPlacement.offset === offset) {
@@ -353,11 +373,9 @@ export function layoutSpans({
     });
 
     const children = [];
-    if (span.branches) {
-      span.branches.forEach((childId) => {
-        if (spanById[childId]) children.push(spanById[childId]);
-      });
-    }
+    (parentToChildren[span.id] || []).forEach((childId) => {
+      if (spanById[childId]) children.push(spanById[childId]);
+    });
     children
       .sort((a, b) => {
         const aPriority = spanChildPlacement[a.id]?.priority ?? 0;

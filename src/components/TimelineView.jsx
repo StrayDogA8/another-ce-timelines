@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle }
 import {
   pickStep,
   buildSpanChildPlacement,
+  buildSpanMergePlacement,
   calcSpanBandHeight,
   layoutSpans,
   layoutEvents,
@@ -77,6 +78,7 @@ const TimelineView = forwardRef(function TimelineView({
   const {
     file,
     spanChildPlacement,
+    spanMergePlacement,
     finalSpans,
     finalEvents,
     finalEras,
@@ -272,6 +274,7 @@ const TimelineView = forwardRef(function TimelineView({
       adjustedSpans,
       timelineData?.file?.branchOrdering || "later-first"
     );
+    const spanMergePlacement = buildSpanMergePlacement(adjustedSpans);
 
     // First pass: calculate with temporary BASE_LINE_Y to determine content extent
     const TEMP_BASE_LINE_Y = 500;
@@ -433,6 +436,7 @@ const TimelineView = forwardRef(function TimelineView({
       adjustedSpans,
       adjustedEras,
       spanChildPlacement,
+      spanMergePlacement,
       spanBandHeight,
       finalSpans,
       finalEvents,
@@ -489,7 +493,7 @@ const TimelineView = forwardRef(function TimelineView({
       onViewportYearChange?.(snappedYear);
     }
     const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths);
+    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths, file.hideDecimals);
     if (nextLabel !== lastSliderLabelRef.current) {
       lastSliderLabelRef.current = nextLabel;
       setSliderYearLabel(nextLabel);
@@ -1252,7 +1256,7 @@ const TimelineView = forwardRef(function TimelineView({
       const showMonths = capturedFile.useMonths === true;
       const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
       const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths);
+      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths, capturedFile.hideDecimals);
 
       if (yearLabelRef.current && nextLabel !== lastSliderLabelRef.current) {
         lastSliderLabelRef.current = nextLabel;
@@ -1462,8 +1466,8 @@ const TimelineView = forwardRef(function TimelineView({
                     />
                   );
 
-                  const startLabel = formatYear(section.start, file.negID, file.posID, false);
-                  const endLabel = formatYear(section.end, file.negID, file.posID, false);
+                  const startLabel = formatYear(section.start, file.negID, file.posID, false, file.hideDecimals);
+                  const endLabel = formatYear(section.end, file.negID, file.posID, false, file.hideDecimals);
                   segments.push(
                     <div
                       key={`break-${index}`}
@@ -1612,12 +1616,93 @@ const TimelineView = forwardRef(function TimelineView({
               </div>
             );
           })}
+          {/* Merge connectors - at the END of child spans, flipped horizontally */}
+          {finalSpans.map((span) => {
+            const mergePlacement = spanMergePlacement[span.id];
+            if (!mergePlacement) return null;
+
+            const SPAN_HEIGHT = 23;
+            const mergeParent = finalSpans.find(s => s.id === mergePlacement.parentId);
+            if (!mergeParent) return null;
+
+            const laneDifference = Math.abs(span.lane - mergeParent.lane);
+            const isAboveParent = span.lane > mergeParent.lane; // higher lane = above
+            const isBelowParent = span.lane < mergeParent.lane;
+
+            if (laneDifference === 0) return null; // same lane, no connector needed
+
+            let mergeConnectorHeight = undefined;
+            let mergeConnectorOffset = undefined;
+            if (laneDifference > 1) {
+              const childTop = span.top;
+              const parentTop = mergeParent.top;
+              const deltaTop = parentTop - childTop;
+              const extraTrim = 12;
+              const height = Math.max(0, Math.abs(deltaTop) + SPAN_HEIGHT - extraTrim);
+              mergeConnectorHeight = `${height}px`;
+              mergeConnectorOffset = deltaTop < 0 ? `${deltaTop + extraTrim - 3}px` : `0px`;
+            }
+
+            const CONNECTOR_OFFSET_X = 19;
+            const connectorLeft =
+              span.left + span.width + (laneDifference === 1 ? 0 : -CONNECTOR_OFFSET_X);
+
+            return (
+              <div
+                key={`merge-connector-${span.id}`}
+                style={{
+                  position: 'absolute',
+                  left: `${connectorLeft}px`,
+                  top: `${span.top}px`,
+                  zIndex: 1000 - laneDifference,
+                  pointerEvents: 'none',
+                }}
+              >
+                {isAboveParent && (
+                  <div
+                    className="span-connector-merge-top"
+                    style={{
+                      backgroundColor: span.color || "var(--element-bg)",
+                      paddingTop: mergeConnectorHeight,
+                      transform: mergeConnectorOffset
+                        ? `translateY(${mergeConnectorOffset})`
+                        : undefined,
+                    }}
+                  />
+                )}
+                {isBelowParent && (
+                  <div
+                    className="span-connector-merge-bottom"
+                    style={{
+                      backgroundColor: span.color || "var(--element-bg)",
+                      paddingTop: mergeConnectorHeight,
+                      transform: mergeConnectorOffset
+                        ? `translateY(${mergeConnectorOffset})`
+                        : undefined,
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="spans-layer">
           {finalSpans.map((span) => {
             const isSelected = selectedId === span.id;
             const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
+
+            const mergePlacement = spanMergePlacement[span.id];
+            let mergeRadius = undefined;
+            if (mergePlacement) {
+              const mergeParent = finalSpans.find(s => s.id === mergePlacement.parentId);
+              if (mergeParent && mergeParent.lane !== span.lane) {
+                const isAboveParent = span.lane > mergeParent.lane;
+                mergeRadius = isAboveParent
+                  ? { borderTopRightRadius: 8 }
+                  : { borderBottomRightRadius: 8 };
+              }
+            }
 
             return (
               <div
@@ -1626,9 +1711,10 @@ const TimelineView = forwardRef(function TimelineView({
                 className={`span-item ${isSelected ? "is-selected" : ""}`}
                 style={{
                   left: `${span.left + (spanChildPlacement[span.id] ? -2 : 0)}px`,
-                  width: `${span.width + (spanChildPlacement[span.id] ? 2 : 0)}px`,
+                  width: `${span.width + (spanChildPlacement[span.id] ? 2 : 0) + (mergePlacement ? 2 : 0)}px`,
                   top: `${span.top}px`,
-                  background: span.color || "var(--element-bg)"
+                  background: span.color || "var(--element-bg)",
+                  ...mergeRadius,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1637,7 +1723,7 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
                 <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                  {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true)}
+                  {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
                 </span>
                 {(() => {
                   const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
@@ -1760,7 +1846,7 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 <div className="event-title">{event.title}</div>
                 <div className="event-date">
-                  {event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true)}
+                  {event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
                   {(() => {
                     const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                       .filter((tag) => pinnedTags.includes(tag));
@@ -1788,7 +1874,7 @@ const TimelineView = forwardRef(function TimelineView({
           let lastLabelRight = -Infinity;
           return ticks.map((tick) => {
             const px = yearToPx(tick.value);
-            const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false);
+            const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
             const halfWidth = (label.length * CHAR_WIDTH) / 2;
             const labelLeft = px - halfWidth;
             const showLabel = labelLeft >= lastLabelRight + MIN_LABEL_GAP;
