@@ -160,7 +160,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
 
   useEffect(() => {
     setPreviewOffset((current) => clampPreviewOffset(current));
-  }, [previewScale, previewData, resolution, clampPreviewOffset]);
+  }, [previewScale, previewData, resolution, customWidth, customHeight, clampPreviewOffset]);
 
   if (!isOpen) return null;
 
@@ -268,14 +268,24 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   // Calculate the output aspect ratio for the preview wrapper
   const getOutputAspectRatio = () => {
     if (!previewData?.elementWidth || !previewData?.elementHeight) return null;
-    if (!selectedRes.width || !selectedRes.height) return null;
+
+    let targetW, targetH;
+    if (resolution === 'custom') {
+      targetW = parseInt(customWidth, 10);
+      targetH = parseInt(customHeight, 10);
+      if (!(targetW > 0 && targetH > 0)) return null;
+    } else {
+      targetW = selectedRes.width;
+      targetH = selectedRes.height;
+      if (!targetW || !targetH) return null;
+    }
 
     const sourceWidth = rangeWidthPx || previewData.elementWidth;
-    const scale = selectedRes.width / sourceWidth;
+    const scale = targetW / sourceWidth;
     const scaledH = previewData.elementHeight * scale;
-    if (selectedRes.height <= scaledH) return null; // timeline fills or exceeds target
+    if (targetH <= scaledH) return null; // timeline fills or exceeds target
 
-    return `${selectedRes.width} / ${selectedRes.height}`;
+    return `${targetW} / ${targetH}`;
   };
 
   const outputAspectRatio = getOutputAspectRatio();
