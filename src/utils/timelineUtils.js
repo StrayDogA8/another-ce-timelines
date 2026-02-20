@@ -160,6 +160,7 @@ export function layoutSpans({
   timelineEnd,
 }) {
   const spanLaneEnds = [];
+  const spanLaneIntervals = [];
   const spanLaneById = {};
   const spanById = Object.fromEntries(spans.map(s => [s.id, s]));
   const finalSpans = [];
@@ -243,8 +244,12 @@ export function layoutSpans({
 
   function spanFitsInLane(lane, start, end, rootId) {
     const startPx = yearToPx(start);
-    const laneEnd = spanLaneEnds[lane];
-    if (!(laneEnd === undefined || laneEnd + SPAN_GAP <= startPx)) {
+    const endPx = yearToPx(end);
+    const intervals = spanLaneIntervals[lane] || [];
+    const hasCollision = intervals.some(({ startPx: existingStartPx, endPx: existingEndPx }) => {
+      return !(existingEndPx + SPAN_GAP <= startPx || endPx + SPAN_GAP <= existingStartPx);
+    });
+    if (hasCollision) {
       return false;
     }
     if (!rootId) return true;
@@ -349,6 +354,11 @@ export function layoutSpans({
     }
 
     spanLaneEnds[lane] = right;
+    if (!spanLaneIntervals[lane]) spanLaneIntervals[lane] = [];
+    spanLaneIntervals[lane].push({
+      startPx: left,
+      endPx: right,
+    });
     spanLaneById[span.id] = lane;
 
     if (!placement) {
@@ -410,6 +420,35 @@ export function layoutSpans({
       });
       spanLaneEnds.length = 0;
       shiftedLaneEnds.forEach((end, index) => {
+        spanLaneEnds[index] = end;
+      });
+    }
+
+    // Densify lane indexes to remove empty gaps between used lanes.
+    // This prevents visual blank rows when some lane numbers end up unused.
+    const usedLanes = Array.from(new Set(finalSpans.map((span) => span.lane))).sort((a, b) => a - b);
+    const denseLaneByOldLane = new Map(usedLanes.map((lane, idx) => [lane, idx]));
+
+    if (usedLanes.some((lane, idx) => lane !== idx)) {
+      finalSpans.forEach((span) => {
+        const denseLane = denseLaneByOldLane.get(span.lane);
+        if (denseLane === undefined) return;
+        span.lane = denseLane;
+        span.top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - denseLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+        spanLaneById[span.id] = denseLane;
+      });
+
+      const rebuiltLaneEnds = [];
+      finalSpans.forEach((span) => {
+        const lane = span.lane;
+        const right = span.left + span.width;
+        if (rebuiltLaneEnds[lane] === undefined || right > rebuiltLaneEnds[lane]) {
+          rebuiltLaneEnds[lane] = right;
+        }
+      });
+
+      spanLaneEnds.length = 0;
+      rebuiltLaneEnds.forEach((end, index) => {
         spanLaneEnds[index] = end;
       });
     }
