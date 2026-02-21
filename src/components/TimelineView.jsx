@@ -11,7 +11,7 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { FileJson, Image, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff } from "lucide-react";
+import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
@@ -31,6 +31,7 @@ const TimelineView = forwardRef(function TimelineView({
   downloadPngTrigger,
   exportPngOptions,
   onExportPng,
+  onExportVideo,
   rightPanelWidth = 0,
   isRightPanelOpen = false,
   leftPanelWidth = 0,
@@ -1983,6 +1984,13 @@ const TimelineView = forwardRef(function TimelineView({
           >
             <Image size={16} />
             <span>Download .png</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onExportVideo?.())}
+          >
+            <Video size={16} />
+            <span>Export Video</span>
           </button>
 
           <div className="context-menu-separator" />

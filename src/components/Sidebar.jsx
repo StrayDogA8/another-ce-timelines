@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus, Tag, Eye, EyeOff } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus, Tag, Eye, EyeOff } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -25,6 +25,7 @@ export default function Sidebar({
   onOpenSettings,
   onDownloadJson,
   onDownloadPng,
+  onDownloadVideo,
   onLoadTimeline,
   onNewTimeline,
   onDuplicateTimeline,
@@ -447,6 +448,13 @@ export default function Sidebar({
           >
             <Image size={16} />
             <span>Download .png</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onDownloadVideo?.())}
+          >
+            <Video size={16} />
+            <span>Export Video</span>
           </button>
 
           <div className="context-menu-separator" />

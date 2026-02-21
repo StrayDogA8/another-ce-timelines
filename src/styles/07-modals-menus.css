@@ -1090,3 +1090,45 @@
   transform: scale(0.98);
 }
 
+.settings-create-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-video-preview-wrapper {
+  position: relative;
+}
+
+.export-video-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--active-bg);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.export-video-progress-fill {
+  height: 100%;
+  background: var(--element-bg);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+@keyframes panPreview {
+  0% {
+    object-position: var(--pan-start, 0%) center;
+  }
+  100% {
+    object-position: var(--pan-end, 100%) center;
+  }
+}
+
+@keyframes panPreviewLeft {
+  0% {
+    left: var(--pan-left-start, 0%);
+  }
+  100% {
+    left: var(--pan-left-end, 0%);
+  }
+}

@@ -36,28 +36,37 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const previewDragRef = useRef({ startX: 0, startY: 0, startOffsetX: 0, startOffsetY: 0 });
   const backdropPointerDownRef = useRef(false);
   const previewContainerRef = useRef(null);
+  const minRangePercent = 5;
+  const rangeSpanPercent = Math.max(minRangePercent, exportRange.endPercent - exportRange.startPercent);
+  const rangeCenterPercent = (exportRange.startPercent + exportRange.endPercent) / 2;
+  const effectiveRangeSpanPercent = Math.min(100, Math.max(minRangePercent, rangeSpanPercent / previewScale));
+  const baseStartPercent = Math.min(
+    Math.max(0, rangeCenterPercent - effectiveRangeSpanPercent / 2),
+    100 - effectiveRangeSpanPercent,
+  );
+  const maxStartPercent = 100 - effectiveRangeSpanPercent;
 
   const clampPreviewOffset = useCallback((nextOffset, scaleValue = previewScale) => {
     const container = previewContainerRef.current;
-    const wrapper = previewWrapperRef.current;
-    if (!container || !wrapper) return nextOffset;
+    const containerWidth = container?.clientWidth;
+    if (!container || !containerWidth) return nextOffset;
 
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    const baseWidth = wrapper.offsetWidth;
-    const baseHeight = wrapper.offsetHeight;
-    if (!containerWidth || !containerHeight || !baseWidth || !baseHeight) return nextOffset;
-
-    const scaledWidth = baseWidth * scaleValue;
-    const scaledHeight = baseHeight * scaleValue;
-    const limitX = Math.max(0, (scaledWidth - containerWidth) / 2);
-    const limitY = Math.max(0, (scaledHeight - containerHeight) / 2);
+    const scaleSafe = Math.min(10, Math.max(0.3, scaleValue));
+    const span = Math.min(100, Math.max(minRangePercent, rangeSpanPercent / scaleSafe));
+    const center = rangeCenterPercent;
+    const baseStart = Math.min(Math.max(0, center - span / 2), 100 - span);
+    const maxStart = 100 - span;
+    const percentPerPx = span / containerWidth;
+    const minPanPercent = -baseStart;
+    const maxPanPercent = maxStart - baseStart;
+    const minOffsetX = -maxPanPercent / percentPerPx;
+    const maxOffsetX = -minPanPercent / percentPerPx;
 
     return {
-      x: Math.min(limitX, Math.max(-limitX, nextOffset.x)),
-      y: Math.min(limitY, Math.max(-limitY, nextOffset.y)),
+      x: Math.min(maxOffsetX, Math.max(minOffsetX, nextOffset.x)),
+      y: 0,
     };
-  }, [previewScale]);
+  }, [previewScale, minRangePercent, rangeSpanPercent, rangeCenterPercent]);
 
   useEffect(() => {
     if (isOpen && timelineData?.file) {
@@ -234,8 +243,6 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   };
 
   const selectedRes = RESOLUTION_OPTIONS.find(r => r.value === resolution) || RESOLUTION_OPTIONS[0];
-  const minRangePercent = 5;
-  const rangeSpanPercent = Math.max(minRangePercent, exportRange.endPercent - exportRange.startPercent);
   const rangeRatio = rangeSpanPercent / 100;
   const rangeWidthPx = previewData?.elementWidth ? previewData.elementWidth * rangeRatio : null;
 
@@ -308,15 +315,18 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const rangeMaxYear = previewData?.maxYear;
   const rangeStep = 0.1;
 
-  const hasCustomRange = exportRange.startPercent > 0 || exportRange.endPercent < 100;
-  const previewImageStyle = hasCustomRange
-    ? {
-      width: `${100 / rangeRatio}%`,
-      maxWidth: "none",
-      maxHeight: "none",
-      marginLeft: `-${(exportRange.startPercent / rangeSpanPercent) * 100}%`,
-    }
-    : undefined;
+  const containerWidth = previewContainerRef.current?.clientWidth || 1;
+  const panPercent = -(previewOffset.x * effectiveRangeSpanPercent) / containerWidth;
+  const effectiveStartPercent = Math.min(
+    Math.max(0, baseStartPercent + panPercent),
+    maxStartPercent,
+  );
+  const previewImageStyle = {
+    width: `${100 / (effectiveRangeSpanPercent / 100)}%`,
+    maxWidth: "none",
+    maxHeight: "none",
+    marginLeft: `-${(effectiveStartPercent / effectiveRangeSpanPercent) * 100}%`,
+  };
 
   const handleStartRangeChange = (e) => {
     const raw = Number(e.target.value);
@@ -373,9 +383,9 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
                 className={`export-preview-wrapper${isDraggingPreview ? ' is-dragging' : ''}`}
                 onMouseDown={handlePreviewMouseDown}
                 style={{
-                  transform: `translate(${previewOffset.x}px, ${previewOffset.y}px) scale(${previewScale})`,
+                  transform: `translate(${previewOffset.x}px, 0)`,
                   transformOrigin: "center",
-                  ...(hasCustomRange ? { justifyContent: 'flex-start' } : {}),
+                  justifyContent: 'flex-start',
                   ...(outputAspectRatio ? {
                     aspectRatio: outputAspectRatio,
                     backgroundColor: previewBgColor,

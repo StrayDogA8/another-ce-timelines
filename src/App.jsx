@@ -8,6 +8,7 @@ import RightPanel from "./components/RightPanel";
 import SettingsModal from "./components/SettingsModal";
 import NewTimelineModal from "./components/NewTimelineModal";
 import ExportPngModal from "./components/ExportPngModal";
+import ExportVideoModal from "./components/ExportVideoModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
 import {
@@ -93,6 +94,7 @@ function App() {
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
   const [exportPngOptions, setExportPngOptions] = useState(null);
+  const [isExportVideoModalOpen, setIsExportVideoModalOpen] = useState(false);
   const [editRequestId, setEditRequestId] = useState(null);
   const defaultThemeKey = getInitialThemeKey(themeConfig);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
@@ -1100,6 +1102,10 @@ function App() {
     setDownloadPngTrigger(prev => prev + 1);
   };
 
+  const handleDownloadVideo = () => {
+    setIsExportVideoModalOpen(true);
+  };
+
   const handleLoadTimeline = async (timelineId) => {
     try {
       if (!window.electron?.loadTimeline) {
@@ -1810,6 +1816,7 @@ function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDownloadJson={handleDownloadJSON}
           onDownloadPng={handleDownloadPNG}
+          onDownloadVideo={handleDownloadVideo}
           onLoadTimeline={handleLoadTimeline}
           onNewTimeline={handleNewTimeline}
           onDuplicateTimeline={handleDuplicateTimeline}
@@ -1886,6 +1893,7 @@ function App() {
             downloadPngTrigger={downloadPngTrigger}
             exportPngOptions={exportPngOptions}
             onExportPng={handleDownloadPNG}
+            onExportVideo={handleDownloadVideo}
             rightPanelWidth={rightWidth}
             isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
             leftPanelWidth={currentLeftWidth}
@@ -2084,6 +2092,13 @@ function App() {
         isOpen={isExportPngModalOpen}
         onClose={() => setIsExportPngModalOpen(false)}
         onExport={handleExportPng}
+        timelineData={timelineData}
+        timelineViewRef={timelineViewRef}
+      />
+
+      <ExportVideoModal
+        isOpen={isExportVideoModalOpen}
+        onClose={() => setIsExportVideoModalOpen(false)}
         timelineData={timelineData}
         timelineViewRef={timelineViewRef}
       />
