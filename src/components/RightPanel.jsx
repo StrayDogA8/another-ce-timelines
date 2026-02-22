@@ -48,6 +48,10 @@ export default function RightPanel({
 
   const isValidIdValue = (value) => /^[a-z0-9_-]+$/i.test(value);
   const isValidTagValue = (value) => /^[a-z0-9 _-]+$/i.test(value);
+  const isSafeNoteFilename = (name) => {
+    if (!name || typeof name !== 'string') return false;
+    return /^[a-z0-9_-]+\.md$/i.test(name) && !name.includes('..');
+  };
   const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");
 
   const pushValidationError = (message) => {
@@ -590,7 +594,7 @@ export default function RightPanel({
   };
 
   const handleNoteSave = async () => {
-    if (!formData?.noteFile) return;
+    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
     const timelineId = timelineData?.file?.id?.replace('-timeline', '');
     if (!timelineId) return;
     await writeNote({
@@ -601,7 +605,7 @@ export default function RightPanel({
   };
 
   const handleDeleteNote = async () => {
-    if (!formData?.noteFile) return;
+    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
     const confirmed = window.confirm("Delete this note? This cannot be undone.");
     if (!confirmed) return;
 
@@ -780,7 +784,6 @@ export default function RightPanel({
         "ul",
       ],
       ALLOWED_ATTR: [
-        "style",
         "href",
         "target",
         "rel",

@@ -851,11 +851,12 @@ const TimelineView = forwardRef(function TimelineView({
       }
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
       }
     };
 
-    requestAnimationFrame(animate);
+    let rafId = requestAnimationFrame(animate);
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
   }, [selectedId, timelineData.elements]);
 
   // Close context menu on click outside

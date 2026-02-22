@@ -3,6 +3,44 @@ import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllip
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
+function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu }) {
+  const isSelected = selectedId && selectedId === item.id;
+  const leftIndent = 16 + level * 16;
+
+  return (
+    <button
+      className={`sb-row ${isSelected ? "is-selected" : ""}`}
+      style={{
+        marginLeft: "5px",
+        paddingLeft: `${Math.max(0, leftIndent - 5)}px`,
+      }}
+      onClick={() => {
+        if (listRef.current) {
+          lastScrollTopRef.current = listRef.current.scrollTop;
+        }
+        onSelect?.(item.id);
+        requestAnimationFrame(() => {
+          if (listRef.current) {
+            listRef.current.scrollTop = lastScrollTopRef.current;
+          }
+        });
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setElementMenu({
+          x: e.clientX,
+          y: e.clientY,
+          element: item,
+        });
+      }}
+    >
+      <span className="sb-row-title">{item.title}</span>
+      <span className="sb-row-right">{rightText}</span>
+    </button>
+  );
+}
+
 export default function Sidebar({
   isCollapsed,
   onToggle,
@@ -314,43 +352,7 @@ export default function Sidebar({
     }
   };
 
-  const Row = ({ item, rightText, level = 0 }) => {
-    const isSelected = selectedId && selectedId === item.id;
-    const leftIndent = 16 + level * 16;
-
-    return (
-      <button
-        className={`sb-row ${isSelected ? "is-selected" : ""}`}
-        style={{
-          marginLeft: "5px",
-          paddingLeft: `${Math.max(0, leftIndent - 5)}px`,
-        }}
-        onClick={() => {
-          if (listRef.current) {
-            lastScrollTopRef.current = listRef.current.scrollTop;
-          }
-          onSelect?.(item.id);
-          requestAnimationFrame(() => {
-            if (listRef.current) {
-              listRef.current.scrollTop = lastScrollTopRef.current;
-            }
-          });
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setElementMenu({
-            x: e.clientX,
-            y: e.clientY,
-            element: item,
-          });
-        }}
-      >
-        <span className="sb-row-title">{item.title}</span>
-        <span className="sb-row-right">{rightText}</span>
-      </button>
-    );
-  };
+  const rowProps = { selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu };
 
   return (
     <div className="sidebar-root">
@@ -581,11 +583,12 @@ export default function Sidebar({
             {openEras && (
               <div className="sb-section-body">
                 {eraRows.map((e) => (
-                  <Row
+                  <SidebarRow
                     key={e.id}
                     item={e}
                     rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
                     level={0}
+                    {...rowProps}
                   />
                 ))}
               </div>
@@ -607,11 +610,12 @@ export default function Sidebar({
             {openSpans && (
               <div className="sb-section-body">
                 {spanRows.map((s) => (
-                  <Row
+                  <SidebarRow
                     key={s.id}
                     item={s}
                     rightText={formatRange(s.start, s.end, s.startLabel, s.endLabel)}
                     level={0}
+                    {...rowProps}
                   />
                 ))}
               </div>
@@ -633,11 +637,12 @@ export default function Sidebar({
             {openEvents && (
               <div className="sb-section-body">
                 {eventRows.map((ev) => (
-                  <Row
+                  <SidebarRow
                     key={ev.id}
                     item={ev}
                     rightText={ev.dateLabel ?? fmtYear(ev.date)}
                     level={0}
+                    {...rowProps}
                   />
                 ))}
               </div>

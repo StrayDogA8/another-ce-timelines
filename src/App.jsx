@@ -532,6 +532,9 @@ function App() {
     run();
     return () => {
       cancelled = true;
+      for (const [pluginId] of loaded.entries()) {
+        unloadPlugin(pluginId);
+      }
     };
   }, [installedPlugins, enabledPlugins, pluginApi, registerView, unregisterView, registerAction, unregisterAction, registerField, unregisterField]);
 

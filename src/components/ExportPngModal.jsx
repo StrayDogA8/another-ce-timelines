@@ -199,8 +199,10 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const handleExport = () => {
     let targetWidth, targetHeight;
     if (resolution === 'custom') {
-      targetWidth = parseInt(customWidth, 10) || null;
-      targetHeight = parseInt(customHeight, 10) || null;
+      const parsedW = parseInt(customWidth, 10);
+      const parsedH = parseInt(customHeight, 10);
+      targetWidth = (parsedW > 0) ? Math.min(parsedW, 16384) : null;
+      targetHeight = (parsedH > 0) ? Math.min(parsedH, 16384) : null;
     } else {
       const selectedRes = RESOLUTION_OPTIONS.find(r => r.value === resolution) || RESOLUTION_OPTIONS[0];
       targetWidth = selectedRes.width;
@@ -239,6 +241,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
 
   const handleCancel = () => {
     setValidationErrors([]);
+    setPreviewData(null);
     onClose();
   };
 
@@ -249,11 +252,12 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const getExportDimensions = () => {
     if (!previewData?.elementWidth || !previewData?.elementHeight) return null;
     if (resolution === 'custom') {
-      const w = parseInt(customWidth, 10);
-      const h = parseInt(customHeight, 10);
+      const w = Math.min(16384, parseInt(customWidth, 10));
+      const h = Math.min(16384, parseInt(customHeight, 10));
       if (w > 0 && h > 0) return { width: w, height: h };
       if (w > 0) {
         const sourceWidth = rangeWidthPx || previewData.elementWidth;
+        if (!sourceWidth) return null;
         const scale = w / sourceWidth;
         return { width: w, height: Math.round(previewData.elementHeight * scale) };
       }
@@ -461,6 +465,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
                     onChange={(e) => setCustomWidth(e.target.value)}
                     placeholder="Width"
                     min={1}
+                    max={16384}
                   />
                   <span className="settings-scale-section-separator">×</span>
                   <input
@@ -470,6 +475,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
                     onChange={(e) => setCustomHeight(e.target.value)}
                     placeholder="Height"
                     min={1}
+                    max={16384}
                   />
                 </div>
               )}

@@ -53,7 +53,11 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
 
   // Reset state when modal opens
   useEffect(() => {
-    if (isOpen && timelineData?.file) {
+    if (!isOpen) {
+      setPreviewData(null);
+      return;
+    }
+    if (timelineData?.file) {
       const file = timelineData.file;
       setFilename(file.id || file.title || "timeline");
       setPreviewData(null);
@@ -112,15 +116,15 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
 
   const getDurationValue = () => {
     if (duration === 'custom') {
-      return Math.max(1, parseInt(customDuration, 10) || 10);
+      return Math.min(300, Math.max(1, parseInt(customDuration, 10) || 10));
     }
     return duration;
   };
 
   const getOutputDimensions = () => {
     if (resolution === 'custom') {
-      const w = parseInt(customWidth, 10);
-      const h = parseInt(customHeight, 10);
+      const w = Math.min(7680, parseInt(customWidth, 10));
+      const h = Math.min(4320, parseInt(customHeight, 10));
       if (w > 0 && h > 0) return { width: w, height: h };
       return null;
     }
@@ -140,6 +144,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
   };
 
   const handleExport = async () => {
+    if (isExporting) return;
     if (!previewData?.imageUrl) return;
     const dims = getOutputDimensions();
     if (!dims) return;
@@ -148,6 +153,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
     setExportProgress(0);
     exportCancelRef.current = false;
 
+    let encoder = null;
     try {
       const actualDuration = getDurationValue();
       const actualFps = fps;
@@ -193,7 +199,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
         fastStart: 'in-memory',
       });
 
-      const encoder = new VideoEncoder({
+      encoder = new VideoEncoder({
         output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
         error: (e) => console.error('Encoder error:', e),
       });
@@ -330,6 +336,11 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
         }
       }
 
+      if (exportCancelRef.current) {
+        encoder.close();
+        return;
+      }
+
       await encoder.flush();
       encoder.close();
       muxer.finalize();
@@ -347,6 +358,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
     } catch (error) {
       console.error('Error exporting video:', error);
     } finally {
+      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (_) {}
       setIsExporting(false);
       setExportProgress(0);
     }
@@ -552,6 +564,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
                     onChange={(e) => setCustomWidth(e.target.value)}
                     placeholder="Width"
                     min={1}
+                    max={7680}
                     disabled={isExporting}
                   />
                   <span className="settings-scale-section-separator">&times;</span>
@@ -562,6 +575,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
                     onChange={(e) => setCustomHeight(e.target.value)}
                     placeholder="Height"
                     min={1}
+                    max={4320}
                     disabled={isExporting}
                   />
                 </div>

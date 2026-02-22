@@ -59,6 +59,7 @@ export function getReadableTextColor(background) {
 
 export function calculateDetailLevel(range) {
   const absRange = Math.abs(range);
+  if (absRange === 0) return 1;
 
   // Calculate detail level so scrollbar is 20% at min zoom (0.5) with 1200px viewport
   const detailLevel = 12000 / absRange;
@@ -68,6 +69,7 @@ export function calculateDetailLevel(range) {
 
 export function pickStep(range) {
   const absRange = Math.abs(range);
+  if (absRange === 0) return 1;
   const targetTicks = 10;
   const roughStep = absRange / targetTicks;
   const exponent = Math.floor(Math.log10(roughStep));

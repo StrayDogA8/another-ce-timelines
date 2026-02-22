@@ -227,11 +227,11 @@ app.whenReady().then(async () => {
       const normalizedFontPath = path.normalize(fontPath);
       const normalizedFontsDir = path.normalize(fontsDir);
 
-      if (!normalizedFontPath.startsWith(normalizedFontsDir)) {
+      if (!normalizedFontPath.startsWith(normalizedFontsDir + path.sep)) {
         return new Response('Forbidden', { status: 403 });
       }
 
-      return net.fetch(pathToFileURL(fontPath).toString());
+      return net.fetch(pathToFileURL(normalizedFontPath).toString());
     } catch (error) {
       console.error('Error serving font:', error);
       return new Response('Not found', { status: 404 });
@@ -306,19 +306,24 @@ ipcMain.handle('list-timelines', async () => {
     const files = await fs.readdir(userDataDir);
     const timelineFiles = files.filter(f => f.endsWith('.timeline'));
 
-    const timelines = await Promise.all(
+    const timelines = (await Promise.all(
       timelineFiles.map(async (file) => {
-        const filePath = path.join(userDataDir, file);
-        const content = await fs.readFile(filePath, 'utf8');
-        const data = JSON.parse(content);
-        const filename = file.replace('.timeline', '');
+        try {
+          const filePath = path.join(userDataDir, file);
+          const content = await fs.readFile(filePath, 'utf8');
+          const data = JSON.parse(content);
+          const filename = file.replace('.timeline', '');
 
-        return {
-          id: filename,
-          name: data.file?.title || filename
-        };
+          return {
+            id: filename,
+            name: data.file?.title || filename
+          };
+        } catch (err) {
+          console.warn(`Skipping corrupt timeline ${file}:`, err.message);
+          return null;
+        }
       })
-    );
+    )).filter(Boolean);
 
     return timelines;
   } catch (error) {
@@ -617,10 +622,24 @@ ipcMain.handle('get-app-settings', async () => {
   }
 });
 
+const ALLOWED_SETTINGS_KEYS = new Set([
+  'timelineStorageDir', 'storageDir', 'notesStorageDir',
+  'pluginsStorageDir', 'themeKey', 'enabledPlugins',
+]);
+
 ipcMain.handle('set-app-settings', async (event, settings) => {
   try {
+    if (!settings || typeof settings !== 'object') {
+      return { success: false, error: 'Invalid settings' };
+    }
+    const sanitized = {};
+    for (const key of Object.keys(settings)) {
+      if (ALLOWED_SETTINGS_KEYS.has(key)) {
+        sanitized[key] = settings[key];
+      }
+    }
     const filePath = appSettingsPath();
-    await fs.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf8');
+    await fs.writeFile(filePath, JSON.stringify(sanitized, null, 2), 'utf8');
     return { success: true };
   } catch (error) {
     console.error('Error saving app settings:', error);
@@ -821,6 +840,10 @@ ipcMain.handle('open-external', async (event, { url }) => {
     if (!url || typeof url !== 'string') {
       return { success: false, error: 'Missing url' };
     }
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return { success: false, error: 'Only HTTP/HTTPS URLs are allowed' };
+    }
     await shell.openExternal(url);
     return { success: true };
   } catch (error) {
@@ -871,11 +894,15 @@ ipcMain.handle('save-user-theme', async (event, { id, content }) => {
     if (!id || !content) {
       return { success: false, error: 'Missing id or content' };
     }
+    let parsed;
+    try { parsed = JSON.parse(content); } catch {
+      return { success: false, error: 'Invalid JSON' };
+    }
     const dir = userThemesDir();
     await fs.mkdir(dir, { recursive: true });
     const safeId = sanitizeId(id, 'theme');
     const filePath = path.join(dir, `${safeId}.json`);
-    await fs.writeFile(filePath, content, 'utf8');
+    await fs.writeFile(filePath, JSON.stringify(parsed, null, 2), 'utf8');
     return { success: true, path: filePath };
   } catch (error) {
     console.error('Error saving user theme:', error);

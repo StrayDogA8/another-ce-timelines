@@ -159,7 +159,8 @@ export default function SettingsModal({
         setTitle(timelineData.file.title || "");
         setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
         setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
-        const nextDetailLevel = Number(timelineData.file.detailLevel || 1);
+        const rawDetail = Number(timelineData.file.detailLevel);
+        const nextDetailLevel = Number.isFinite(rawDetail) ? rawDetail : 1;
         const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
         setDetailLevel(clampedDetail);
         setDetailSlider(detailToSlider(clampedDetail));
