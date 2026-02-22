@@ -1644,9 +1644,7 @@ const TimelineView = forwardRef(function TimelineView({
               mergeConnectorOffset = deltaTop < 0 ? `${deltaTop + extraTrim - 3}px` : `0px`;
             }
 
-            const CONNECTOR_OFFSET_X = 19;
-            const connectorLeft =
-              span.left + span.width + (laneDifference === 1 ? 0 : -CONNECTOR_OFFSET_X);
+            const connectorLeft = span.left + span.width;
 
             return (
               <div
@@ -1694,16 +1692,6 @@ const TimelineView = forwardRef(function TimelineView({
             const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
 
             const mergePlacement = spanMergePlacement[span.id];
-            let mergeRadius = undefined;
-            if (mergePlacement) {
-              const mergeParent = finalSpans.find(s => s.id === mergePlacement.parentId);
-              if (mergeParent && mergeParent.lane !== span.lane) {
-                const isAboveParent = span.lane > mergeParent.lane;
-                mergeRadius = isAboveParent
-                  ? { borderTopRightRadius: 8 }
-                  : { borderBottomRightRadius: 8 };
-              }
-            }
 
             return (
               <div
@@ -1715,7 +1703,6 @@ const TimelineView = forwardRef(function TimelineView({
                   width: `${span.width + (spanChildPlacement[span.id] ? 2 : 0) + (mergePlacement ? 2 : 0)}px`,
                   top: `${span.top}px`,
                   background: span.color || "var(--element-bg)",
-                  ...mergeRadius,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
