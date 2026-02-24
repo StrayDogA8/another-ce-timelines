@@ -35,6 +35,7 @@ export default function SettingsModal({
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -174,6 +175,7 @@ export default function SettingsModal({
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
+        setShowGrid(Boolean(timelineData.file.showGrid));
         setValidationErrors([]);
         setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
@@ -257,6 +259,7 @@ export default function SettingsModal({
           branchOrdering,
           fixedEventHeight,
           hideDecimals,
+          showGrid,
         });
       }
     }, 300);
@@ -282,6 +285,7 @@ export default function SettingsModal({
     branchOrdering,
     fixedEventHeight,
     hideDecimals,
+    showGrid,
   ]);
 
   if (!isOpen) return null;
@@ -695,6 +699,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={hideDecimals}
                       onChange={(e) => setHideDecimals(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Show Grid */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Show Grid</div>
+                  <div className="settings-row-description">Display subtle vertical grid lines aligned with tick marks.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showGrid}
+                      onChange={(e) => setShowGrid(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

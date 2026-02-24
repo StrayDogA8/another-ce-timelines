@@ -492,6 +492,27 @@ export default function RightPanel({
       }
     }
 
+    // Validate breaks
+    if (draft.type === "span" && Array.isArray(draft.breaks) && draft.breaks.length > 0) {
+      const spanStart = parsedStart.value;
+      const spanEnd = parsedEnd.value;
+      if (spanStart !== null && spanEnd !== null) {
+        const breakYears = [];
+        for (const brk of draft.breaks) {
+          if (brk.year == null) continue;
+          if (brk.year <= spanStart || brk.year >= spanEnd) {
+            errors.push("Break years must be between span start and end.");
+            break;
+          }
+          if (breakYears.includes(brk.year)) {
+            errors.push("Break years must be unique.");
+            break;
+          }
+          breakYears.push(brk.year);
+        }
+      }
+    }
+
     if (errors.length > 0) {
       return { errors, nextData: null };
     }
@@ -525,6 +546,14 @@ export default function RightPanel({
         nextData.endLabel = parsedEnd.label;
       } else {
         delete nextData.endLabel;
+      }
+    }
+
+    // Clean up break yearInput fields
+    if (Array.isArray(nextData.breaks)) {
+      nextData.breaks = nextData.breaks.map(({ yearInput, _idx, _i, ...rest }) => rest);
+      if (nextData.breaks.length === 0) {
+        delete nextData.breaks;
       }
     }
 
@@ -1002,67 +1031,55 @@ export default function RightPanel({
             {/* Color (spans and eras only) */}
 
             {/* Parent (events only) */}
-            {formData.type === "event" && (
+            {formData.type === "event" && formData.parents && formData.parents.length > 0 && formData.parents[0] && (
               <div className="view-group">
                 <label>Parent</label>
                 <div className="view-separator" />
-                {formData.parents && formData.parents.length > 0 && formData.parents[0] ? (
-                  <button
-                    type="button"
-                    className="parent-link"
-                    onClick={() => onSelect(formData.parents[0])}
-                  >
-                    {timelineData.elements.find(el => el.id === formData.parents[0])?.title || formData.parents[0]}
-                  </button>
-                ) : (
-                  <p>None</p>
-                )}
+                <button
+                  type="button"
+                  className="parent-link"
+                  onClick={() => onSelect(formData.parents[0])}
+                >
+                  {timelineData.elements.find(el => el.id === formData.parents[0])?.title || formData.parents[0]}
+                </button>
               </div>
             )}
 
             {/* Parent span (spans only) */}
-            {formData.type === "span" && (
+            {formData.type === "span" && formData.parent && (
               <div className="view-group">
                 <label>Parent</label>
                 <div className="view-separator" />
-                {formData.parent ? (
-                  <button
-                    type="button"
-                    className="tag-chip tag-chip-link"
-                    onClick={() => onSelect(formData.parent)}
-                  >
-                    {timelineData.elements.find(el => el.id === formData.parent)?.title || formData.parent}
-                  </button>
-                ) : (
-                  <p>None</p>
-                )}
+                <button
+                  type="button"
+                  className="tag-chip tag-chip-link"
+                  onClick={() => onSelect(formData.parent)}
+                >
+                  {timelineData.elements.find(el => el.id === formData.parent)?.title || formData.parent}
+                </button>
               </div>
             )}
 
             {/* Merge target (spans only) */}
-            {formData.type === "span" && (
+            {formData.type === "span" && formData.mergeParent && (
               <div className="view-group">
                 <label>Merge Into</label>
                 <div className="view-separator" />
-                {formData.mergeParent ? (
-                  <button
-                    type="button"
-                    className="tag-chip tag-chip-link"
-                    onClick={() => onSelect(formData.mergeParent)}
-                  >
-                    {timelineData.elements.find(el => el.id === formData.mergeParent)?.title || formData.mergeParent}
-                  </button>
-                ) : (
-                  <p>None</p>
-                )}
+                <button
+                  type="button"
+                  className="tag-chip tag-chip-link"
+                  onClick={() => onSelect(formData.mergeParent)}
+                >
+                  {timelineData.elements.find(el => el.id === formData.mergeParent)?.title || formData.mergeParent}
+                </button>
               </div>
             )}
 
             {/* Tags */}
-            <div className="view-group view-group-chips">
-              <label>Tags</label>
-              <div className="view-separator" />
-              {Array.isArray(formData.tags) && formData.tags.length > 0 ? (
+            {Array.isArray(formData.tags) && formData.tags.length > 0 && (
+              <div className="view-group view-group-chips">
+                <label>Tags</label>
+                <div className="view-separator" />
                 <div className="tag-chip-list">
                   {formData.tags.map((tag) => {
                     const isSelected = activeTags.includes(tag);
@@ -1084,10 +1101,30 @@ export default function RightPanel({
                     );
                   })}
                 </div>
-              ) : (
-                <p>None</p>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Breaks (spans only, view mode) */}
+            {formData.type === "span" && Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
+              <div className="view-group view-group-chips">
+                <label>Breaks</label>
+                <div className="view-separator" />
+                <div style={{ gridColumn: 3, display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {[...formData.breaks]
+                    .sort((a, b) => (a.year ?? 0) - (b.year ?? 0))
+                    .map((brk, i) => (
+                      <div key={i} className="break-view-item">
+                        <div className="break-view-info">
+                          <span className="break-view-label">{brk.label || "(no label)"}</span>
+                          <span className="break-view-year">
+                            {formatYear(brk.year, timelineData?.file?.negID, timelineData?.file?.posID, timelineData?.file?.useMonths === true, timelineData?.file?.hideDecimals)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {pluginFields
               .filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type))
@@ -1542,6 +1579,38 @@ export default function RightPanel({
               </div>
             )}
 
+            {/* Size (spans only) */}
+            {formData.type === "span" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="spanSize">Size</label>
+                  <div className="edit-separator" />
+                  <div className="edit-select-wrap">
+                    <select
+                      id="spanSize"
+                      className="edit-select"
+                      value={formData.spanSize || "normal"}
+                      onChange={(e) => {
+                        const val = e.target.value === "normal" ? undefined : e.target.value;
+                        const next = { ...formData };
+                        if (val) {
+                          next.spanSize = val;
+                        } else {
+                          delete next.spanSize;
+                        }
+                        setFormData(next);
+                        commitDraft(next);
+                      }}
+                    >
+                      <option value="thin">Thin</option>
+                      <option value="normal">Normal</option>
+                      <option value="thick">Thick</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Event styling (events only) */}
             {formData.type === "event" && (
               <>
@@ -1584,6 +1653,169 @@ export default function RightPanel({
                       </select>
                     </div>
                   </div>
+                </div>
+              </>
+            )}
+
+            {/* Breaks (spans only) */}
+            {formData.type === "span" && (
+              <>
+                <div className="edit-section-label">Breaks</div>
+                <div className="breaks-list">
+                  {Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
+                    formData.breaks
+                      .map((brk, idx) => ({ ...brk, _idx: idx }))
+                      .sort((a, b) => (a.year ?? 0) - (b.year ?? 0))
+                      .map((brk) => {
+                        const idx = brk._idx;
+                        return (
+                          <div key={idx} className="break-item">
+                            <div className="break-item-header">
+                              <span className="break-item-label">Break {formData.breaks
+                                .map((b, i) => ({ ...b, _i: i }))
+                                .sort((a, b) => (a.year ?? 0) - (b.year ?? 0))
+                                .findIndex((b) => b._i === idx) + 1}</span>
+                              <button
+                                type="button"
+                                className="break-remove"
+                                onClick={() => {
+                                  const nextBreaks = formData.breaks.filter((_, i) => i !== idx);
+                                  handleChange("breaks", nextBreaks);
+                                  commitDraft({ ...formData, breaks: nextBreaks });
+                                }}
+                                aria-label="Remove break"
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <div className="break-field">
+                              <label>year</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={brk.yearInput ?? String(brk.year ?? "")}
+                                onChange={(e) => {
+                                  const nextBreaks = [...formData.breaks];
+                                  nextBreaks[idx] = { ...nextBreaks[idx], yearInput: e.target.value };
+                                  handleChange("breaks", nextBreaks);
+                                }}
+                                onBlur={(e) => {
+                                  const parsed = parseTimelineInput(e.target.value);
+                                  if (parsed.value !== null) {
+                                    const nextBreaks = [...formData.breaks];
+                                    nextBreaks[idx] = { ...nextBreaks[idx], year: parsed.value, yearInput: undefined };
+                                    handleChange("breaks", nextBreaks);
+                                    commitDraft({ ...formData, breaks: nextBreaks });
+                                  }
+                                }}
+                                maxLength={20}
+                              />
+                            </div>
+                            <div className="break-field">
+                              <label>label</label>
+                              <input
+                                type="text"
+                                value={brk.label ?? ""}
+                                onChange={(e) => {
+                                  const nextBreaks = [...formData.breaks];
+                                  nextBreaks[idx] = { ...nextBreaks[idx], label: e.target.value };
+                                  handleChange("breaks", nextBreaks);
+                                }}
+                                onBlur={() => commitDraft(formData)}
+                                maxLength={200}
+                              />
+                            </div>
+                            <div className="break-field">
+                              <label>color</label>
+                              <div className="break-color-wrap">
+                                <input
+                                  type="color"
+                                  value={brk.color || formData.color || "#808080"}
+                                  onChange={(e) => {
+                                    const nextBreaks = [...formData.breaks];
+                                    nextBreaks[idx] = { ...nextBreaks[idx], color: e.target.value };
+                                    handleChange("breaks", nextBreaks);
+                                    commitDraft({ ...formData, breaks: nextBreaks.map((b, i) => i === idx ? { ...b, color: e.target.value } : b) });
+                                  }}
+                                  className="edit-color-picker"
+                                />
+                                <input
+                                  type="text"
+                                  value={brk.color || ""}
+                                  onChange={(e) => {
+                                    const nextBreaks = [...formData.breaks];
+                                    nextBreaks[idx] = { ...nextBreaks[idx], color: e.target.value };
+                                    handleChange("breaks", nextBreaks);
+                                  }}
+                                  onBlur={(e) => {
+                                    const normalized = normalizeColor(e.target.value);
+                                    const nextBreaks = [...formData.breaks];
+                                    nextBreaks[idx] = { ...nextBreaks[idx], color: normalized };
+                                    handleChange("breaks", nextBreaks);
+                                    commitDraft({ ...formData, breaks: nextBreaks.map((b, i) => i === idx ? { ...b, color: normalized } : b) });
+                                  }}
+                                  className="edit-color-text"
+                                  maxLength={7}
+                                  placeholder="#000000"
+                                />
+                              </div>
+                            </div>
+                            <div className="break-field">
+                              <label>size</label>
+                              <select
+                                className="edit-select"
+                                style={{ fontSize: "var(--text-xs)", padding: "3px 20px 3px 6px", minWidth: 0 }}
+                                value={brk.size || ""}
+                                onChange={(e) => {
+                                  const nextBreaks = [...formData.breaks];
+                                  const val = e.target.value;
+                                  if (val) {
+                                    nextBreaks[idx] = { ...nextBreaks[idx], size: val };
+                                  } else {
+                                    const { size: _, ...rest } = nextBreaks[idx];
+                                    nextBreaks[idx] = rest;
+                                  }
+                                  handleChange("breaks", nextBreaks);
+                                  commitDraft({ ...formData, breaks: nextBreaks });
+                                }}
+                              >
+                                <option value="">Inherit</option>
+                                <option value="thin">Thin</option>
+                                <option value="normal">Normal</option>
+                                <option value="thick">Thick</option>
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                  <button
+                    type="button"
+                    className="btn-add-break"
+                    onClick={() => {
+                      const existingBreaks = Array.isArray(formData.breaks) ? formData.breaks : [];
+                      const allYears = [formData.start, ...existingBreaks.map((b) => b.year).filter((y) => y != null), formData.end];
+                      allYears.sort((a, b) => a - b);
+                      // Find the largest gap to place the new break
+                      let maxGap = 0;
+                      let gapStart = formData.start;
+                      let gapEnd = formData.end;
+                      for (let i = 0; i < allYears.length - 1; i++) {
+                        const gap = allYears[i + 1] - allYears[i];
+                        if (gap > maxGap) {
+                          maxGap = gap;
+                          gapStart = allYears[i];
+                          gapEnd = allYears[i + 1];
+                        }
+                      }
+                      const newYear = Math.round((gapStart + gapEnd) / 2);
+                      const nextBreaks = [...existingBreaks, { year: newYear, label: "", color: formData.color || "#808080" }];
+                      handleChange("breaks", nextBreaks);
+                      commitDraft({ ...formData, breaks: nextBreaks });
+                    }}
+                  >
+                    + Add Break
+                  </button>
                 </div>
               </>
             )}

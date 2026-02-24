@@ -184,6 +184,28 @@ export function layoutSpans({
     return current;
   };
 
+  const CSS_SPAN_HEIGHT = 20;
+
+  const sizeRank = (size) => size === "thick" ? 2 : size === "thin" ? 0 : 1;
+  const getEffectiveSize = (s) => {
+    if (!s) return "normal";
+    let maxRank = sizeRank(s.spanSize);
+    if (Array.isArray(s.breaks)) {
+      for (const brk of s.breaks) {
+        maxRank = Math.max(maxRank, sizeRank(brk.size));
+      }
+    }
+    return maxRank === 2 ? "thick" : maxRank === 0 ? "thin" : "normal";
+  };
+  const isThickSpan = (s) => getEffectiveSize(s) === "thick";
+  const isThinSpan = (s) => getEffectiveSize(s) === "thin";
+
+  function spanFitsAllNeededLanes(lane, span, rootId) {
+    if (!spanFitsInLane(lane, span.start, span.end, rootId)) return false;
+    if (isThickSpan(span) && !spanFitsInLane(lane + 1, span.start, span.end, rootId)) return false;
+    return true;
+  }
+
   const familyOffsetsCache = new Map();
   const getFamilyOffsets = (rootId) => {
     if (familyOffsetsCache.has(rootId)) return familyOffsetsCache.get(rootId);
@@ -196,6 +218,10 @@ export function layoutSpans({
       const { id, offset } = stack.pop();
       minOffset = Math.min(minOffset, offset);
       maxOffset = Math.max(maxOffset, offset);
+
+      if (isThickSpan(spanById[id])) {
+        maxOffset = Math.max(maxOffset, offset + 1);
+      }
       const children = parentToChildren[id] || [];
       children.forEach((childId) => {
         const placement = spanChildPlacement[childId];
@@ -271,10 +297,12 @@ export function layoutSpans({
 
     if (baseLane + minOffset < 0) return false;
 
-    if (!spanFitsInLane(baseLane, start, end, rootId)) return false;
+    if (!spanFitsAllNeededLanes(baseLane, span, rootId)) return false;
 
     for (let offset = minOffset; offset <= maxOffset; offset++) {
-      if (offset === 0) continue; 
+      if (offset === 0) continue;
+
+      if (offset === 1 && isThickSpan(span)) continue;
       const childLane = baseLane + offset;
 
       const childIds = parentToChildren[span.id] || [];
@@ -282,7 +310,7 @@ export function layoutSpans({
         const childPlacement = spanChildPlacement[childId];
         if (childPlacement && childPlacement.offset === offset) {
           const child = spanById[childId];
-          if (child && !spanFitsInLane(childLane, child.start, child.end, rootId)) {
+          if (child && !spanFitsAllNeededLanes(childLane, child, rootId)) {
             return false;
           }
         }
@@ -319,22 +347,25 @@ export function layoutSpans({
 
     const rootId = getRootId(span.id);
 
+    const thick = isThickSpan(span);
+    const thin = isThinSpan(span);
+
     if (placement) {
       const parentLane = spanLaneById[placement.parentId];
       if (parentLane !== undefined) {
-        const direction = placement.offset > 0 ? 1 : -1; 
+        const direction = placement.offset > 0 ? 1 : -1;
         let searchLane = parentLane + direction;
 
         while (true) {
           if (searchLane < 0) {
             searchLane = parentLane + 1;
-            while (!spanFitsInLane(searchLane, span.start, span.end, rootId)) {
+            while (!spanFitsAllNeededLanes(searchLane, span, rootId)) {
               searchLane++;
             }
             break;
           }
 
-          if (spanFitsInLane(searchLane, span.start, span.end, rootId)) {
+          if (spanFitsAllNeededLanes(searchLane, span, rootId)) {
             break;
           }
 
@@ -344,7 +375,7 @@ export function layoutSpans({
         lane = searchLane;
       } else {
         lane = 0;
-        while (!spanFitsInLane(lane, span.start, span.end, rootId)) {
+        while (!spanFitsAllNeededLanes(lane, span, rootId)) {
           lane++;
         }
       }
@@ -355,12 +386,17 @@ export function layoutSpans({
       }
     }
 
+    // Record intervals in occupied lanes
     spanLaneEnds[lane] = right;
     if (!spanLaneIntervals[lane]) spanLaneIntervals[lane] = [];
-    spanLaneIntervals[lane].push({
-      startPx: left,
-      endPx: right,
-    });
+    spanLaneIntervals[lane].push({ startPx: left, endPx: right });
+
+    if (thick) {
+      spanLaneEnds[lane + 1] = right;
+      if (!spanLaneIntervals[lane + 1]) spanLaneIntervals[lane + 1] = [];
+      spanLaneIntervals[lane + 1].push({ startPx: left, endPx: right });
+    }
+
     spanLaneById[span.id] = lane;
 
     if (!placement) {
@@ -374,14 +410,22 @@ export function layoutSpans({
       });
     }
 
-    const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - lane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+    // Compute top and visual height
+    const topLane = thick ? lane + 1 : lane;
+    const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+    const spanHeight = thick
+      ? CSS_SPAN_HEIGHT + SPAN_HEIGHT + SPAN_VERTICAL_GAP
+      : thin ? Math.round(CSS_SPAN_HEIGHT / 2) : CSS_SPAN_HEIGHT;
+    // For thin spans, center vertically within the lane
+    const topOffset = thin ? Math.round((CSS_SPAN_HEIGHT - spanHeight) / 2) : 0;
 
     finalSpans.push({
       ...span,
       left,
       width,
-      top,
+      top: top + topOffset,
       lane,
+      spanHeight,
     });
 
     const children = [];
@@ -428,7 +472,12 @@ export function layoutSpans({
 
     // Densify lane indexes to remove empty gaps between used lanes.
     // This prevents visual blank rows when some lane numbers end up unused.
-    const usedLanes = Array.from(new Set(finalSpans.map((span) => span.lane))).sort((a, b) => a - b);
+    const usedLaneSet = new Set();
+    finalSpans.forEach((span) => {
+      usedLaneSet.add(span.lane);
+      if (isThickSpan(span)) usedLaneSet.add(span.lane + 1);
+    });
+    const usedLanes = Array.from(usedLaneSet).sort((a, b) => a - b);
     const denseLaneByOldLane = new Map(usedLanes.map((lane, idx) => [lane, idx]));
 
     if (usedLanes.some((lane, idx) => lane !== idx)) {
@@ -436,7 +485,12 @@ export function layoutSpans({
         const denseLane = denseLaneByOldLane.get(span.lane);
         if (denseLane === undefined) return;
         span.lane = denseLane;
-        span.top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - denseLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+        const thick = isThickSpan(span);
+        const thin = isThinSpan(span);
+        const topLane = thick ? denseLane + 1 : denseLane;
+        const baseTop = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+        const topOffset = thin ? Math.round((CSS_SPAN_HEIGHT - span.spanHeight) / 2) : 0;
+        span.top = baseTop + topOffset;
         spanLaneById[span.id] = denseLane;
       });
 
@@ -446,6 +500,12 @@ export function layoutSpans({
         const right = span.left + span.width;
         if (rebuiltLaneEnds[lane] === undefined || right > rebuiltLaneEnds[lane]) {
           rebuiltLaneEnds[lane] = right;
+        }
+        if (isThickSpan(span)) {
+          const extraLane = lane + 1;
+          if (rebuiltLaneEnds[extraLane] === undefined || right > rebuiltLaneEnds[extraLane]) {
+            rebuiltLaneEnds[extraLane] = right;
+          }
         }
       });
 

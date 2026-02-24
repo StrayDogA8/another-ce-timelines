@@ -257,8 +257,8 @@ const TimelineView = forwardRef(function TimelineView({
     const detailMultiplier = file?.detailLevel ?? 1;
     const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
 
-    const zoomInScale = Math.max(currentScale, 1);
-    const step = pickStep(range / (detailMultiplier * zoomInScale * 2));
+    const baseStep = pickStep(range / (detailMultiplier * 2));
+    const step = baseStep / 5;
     const TIMELINE_PADDING = 200; // px padding on each end
     const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
 
@@ -1549,36 +1549,52 @@ const TimelineView = forwardRef(function TimelineView({
         {/* Connectors layer - behind everything */}
         <div className="connectors-layer">
           {finalSpans.map((span) => {
-            const SPAN_HEIGHT = 23;
+            const spanH = span.spanHeight ?? 20;
             const placement = spanChildPlacement[span.id];
             const isChild = !!placement;
-            const isTopChild = isChild && placement.offset > 0;
-            const isBottomChild = isChild && placement.offset < 0;
 
             if (!isChild) return null;
 
             // Calculate actual visual distance for connector height and offset
             let connectorHeight = undefined;
-            let connectorOffset = undefined;
+            let connectorTransform = undefined;
             const parentSpan = finalSpans.find(s => s.id === placement.parentId);
-            if (parentSpan) {
-              const laneDifference = Math.abs(span.lane - parentSpan.lane);
-              if (laneDifference > 1) {
-                const SPAN_HEIGHT = 23;
-                const childTop = span.top;
-                const parentTop = parentSpan.top;
-                const deltaTop = parentTop - childTop;
-                const extraTrim = 12;
-                const height = Math.max(0, Math.abs(deltaTop) + SPAN_HEIGHT - extraTrim);
-                connectorHeight = `${height}px`;
-                connectorOffset = deltaTop < 0 ? `${deltaTop + extraTrim - 3}px` : `0px`;
+            const isTopChild = parentSpan ? span.top < parentSpan.top : placement.offset > 0;
+            const isBottomChild = parentSpan ? span.top > parentSpan.top : placement.offset < 0;
+            const connectorOffsetX = spanH - 1;
+            const laneDifference = parentSpan ? Math.abs(span.lane - parentSpan.lane) : 0;
+            if (parentSpan && laneDifference >= 1) {
+              const childTop = span.top;
+              const parentTop = parentSpan.top;
+              const deltaTop = parentTop - childTop;
+              const parentH = parentSpan.spanHeight ?? 20;
+              if (laneDifference === 1) {
+                if (deltaTop >= 0) {
+                  // Top child, 1 lane
+                  connectorHeight = `${deltaTop + 1}px`;
+                } else {
+                  // Bottom child, 1 lane
+                  const transformY = deltaTop + parentH - 1;
+                  connectorHeight = `${-deltaTop + spanH - parentH + 1}px`;
+                  connectorTransform = `translateY(${transformY}px)`;
+                }
+              } else {
+                if (deltaTop >= 0) {
+                  // Top child, >1 lane
+                  const extraTrim = Math.round(spanH / 2) + 2;
+                  connectorHeight = `${Math.max(0, deltaTop + spanH - extraTrim)}px`;
+                  connectorTransform = `translate(-${connectorOffsetX}px, 0px)`;
+                } else {
+                  // Bottom child, >1 lane
+                  const parentTrim = Math.round(parentH / 2) + 2;
+                  connectorHeight = `${Math.max(0, -deltaTop + spanH - parentTrim)}px`;
+                  connectorTransform = `translate(-${connectorOffsetX}px, ${deltaTop + parentTrim}px)`;
+                }
               }
             }
 
-            const CONNECTOR_OFFSET_X = 19;
-            const laneDifference = parentSpan ? Math.abs(span.lane - parentSpan.lane) : 0;
             const connectorLeft =
-              span.left - (laneDifference === 1 ? CONNECTOR_OFFSET_X : 0);
+              span.left - (laneDifference === 1 ? connectorOffsetX : 0);
 
             return (
               <div
@@ -1597,9 +1613,8 @@ const TimelineView = forwardRef(function TimelineView({
                     style={{
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
-                      transform: connectorOffset
-                        ? `translate(-19px, ${connectorOffset})`
-                        : undefined,
+                      transform: connectorTransform,
+                      width: `${spanH + 1}px`,
                     }}
                   />
                 )}
@@ -1609,9 +1624,8 @@ const TimelineView = forwardRef(function TimelineView({
                     style={{
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
-                      transform: connectorOffset
-                        ? `translate(-19px, ${connectorOffset})`
-                        : undefined,
+                      transform: connectorTransform,
+                      width: `${spanH + 1}px`,
                     }}
                   />
                 )}
@@ -1623,7 +1637,7 @@ const TimelineView = forwardRef(function TimelineView({
             const mergePlacement = spanMergePlacement[span.id];
             if (!mergePlacement) return null;
 
-            const SPAN_HEIGHT = 23;
+            const mergeSpanH = span.spanHeight ?? 20;
             const mergeParent = finalSpans.find(s => s.id === mergePlacement.parentId);
             if (!mergeParent) return null;
 
@@ -1639,8 +1653,8 @@ const TimelineView = forwardRef(function TimelineView({
               const childTop = span.top;
               const parentTop = mergeParent.top;
               const deltaTop = parentTop - childTop;
-              const extraTrim = 12;
-              const height = Math.max(0, Math.abs(deltaTop) + SPAN_HEIGHT - extraTrim);
+              const extraTrim = Math.round(mergeSpanH / 2) + 2;
+              const height = Math.max(0, Math.abs(deltaTop) + mergeSpanH - extraTrim);
               mergeConnectorHeight = `${height}px`;
               mergeConnectorOffset = deltaTop < 0 ? `${deltaTop + extraTrim - 3}px` : `0px`;
             }
@@ -1693,27 +1707,103 @@ const TimelineView = forwardRef(function TimelineView({
             const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
 
             const mergePlacement = spanMergePlacement[span.id];
+            const hasBreaks = Array.isArray(span.breaks) && span.breaks.length > 0;
+
+            const segments = [];
+            if (hasBreaks) {
+              const sortedBreaks = [...span.breaks].sort((a, b) => a.year - b.year);
+              const spanLeftPx = span.left;
+              const segHeight = (size) => size === "thick" ? 43 : size === "thin" ? 10 : 20;
+              const firstSize = span.spanSize || "normal";
+              segments.push({
+                label: span.title,
+                color: span.color || "var(--element-bg)",
+                startYear: span.start,
+                endYear: sortedBreaks[0].year,
+                leftPx: 0,
+                widthPx: yearToPx(sortedBreaks[0].year) - spanLeftPx,
+                size: firstSize,
+                height: segHeight(firstSize),
+              });
+              for (let i = 0; i < sortedBreaks.length; i++) {
+                const brk = sortedBreaks[i];
+                const nextYear = i < sortedBreaks.length - 1 ? sortedBreaks[i + 1].year : span.end;
+                const brkSize = brk.size || span.spanSize || "normal";
+                segments.push({
+                  label: brk.label || "",
+                  color: brk.color || span.color || "var(--element-bg)",
+                  startYear: brk.year,
+                  endYear: nextYear,
+                  leftPx: yearToPx(brk.year) - spanLeftPx,
+                  widthPx: yearToPx(nextYear) - yearToPx(brk.year),
+                  size: brkSize,
+                  height: segHeight(brkSize),
+                });
+              }
+            }
 
             return (
               <div
                 key={span.id}
                 data-id={span.id}
-                className={`span-item ${isSelected ? "is-selected" : ""}`}
+                className={`span-item ${isSelected ? "is-selected" : ""}${hasBreaks ? " has-breaks" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}`}
                 style={{
                   left: `${span.left + (spanChildPlacement[span.id] ? -2 : 0)}px`,
                   width: `${span.width + (spanChildPlacement[span.id] ? 2 : 0) + (mergePlacement ? 2 : 0)}px`,
                   top: `${span.top}px`,
-                  background: span.color || "var(--element-bg)",
+                  height: `${span.spanHeight ?? 20}px`,
+                  background: hasBreaks ? "transparent" : (span.color || "var(--element-bg)"),
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelect(span.id);
                 }}
               >
-                <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
-                <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                  {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
-                </span>
+                {hasBreaks ? (
+                  segments.map((seg, i) => {
+                    const segTextColor = getReadableTextColor(seg.color);
+                    const segFontClass = seg.size === "thick" ? " span-thick" : "";
+                    const containerH = span.spanHeight ?? 20;
+                    const segTop = Math.round((containerH - seg.height) / 2);
+                    const prevH = i > 0 ? segments[i - 1].height : seg.height;
+                    const nextH = i < segments.length - 1 ? segments[i + 1].height : seg.height;
+                    const tallerThanPrev = seg.height > prevH;
+                    const tallerThanNext = seg.height > nextH;
+                    const r = seg.size === "thick" ? "6px" : "3px";
+                    const tl = tallerThanPrev ? r : "0";
+                    const tr = tallerThanNext ? r : "0";
+                    const br = tallerThanNext ? r : "0";
+                    const bl = tallerThanPrev ? r : "0";
+                    return (
+                      <div
+                        key={i}
+                        className={`span-segment${segFontClass}`}
+                        style={{
+                          left: `${seg.leftPx}px`,
+                          width: `${seg.widthPx}px`,
+                          height: `${seg.height}px`,
+                          top: `${segTop}px`,
+                          background: seg.color,
+                          borderRadius: `${tl} ${tr} ${br} ${bl}`,
+                        }}
+                      >
+                        <>
+                          <span className="span-title" style={{ color: segTextColor }}>{seg.label}</span>
+                          <span className="span-years" style={{ color: segTextColor, opacity: 0.7 }}>
+                            {formatYear(seg.startYear, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {formatYear(seg.endYear, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                          </span>
+                        </>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <>
+                    <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
+                    <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
+                      {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                    </span>
+                  </>
+                )}
                 {(() => {
                   const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
                     .filter((tag) => pinnedTags.includes(tag));
@@ -1745,7 +1835,30 @@ const TimelineView = forwardRef(function TimelineView({
               : null;
 
             const fallbackTargetY = BASE_LINE_Y;
-            const targetY = parentSpan ? parentSpan.top : fallbackTargetY;
+            let targetY = parentSpan ? parentSpan.top : fallbackTargetY;
+
+            // Adjust targetY for spans with breaks of mixed sizes
+            if (parentSpan && Array.isArray(parentSpan.breaks) && parentSpan.breaks.length > 0) {
+              const containerH = parentSpan.spanHeight ?? 20;
+              const segH = (size) => size === "thick" ? 43 : size === "thin" ? 10 : 20;
+              const sortedBrks = [...parentSpan.breaks].sort((a, b) => a.year - b.year);
+              let hitSize = parentSpan.spanSize || "normal"; // default: first segment
+              const evDate = event.date;
+              if (evDate >= sortedBrks[sortedBrks.length - 1].year) {
+                const lastBrk = sortedBrks[sortedBrks.length - 1];
+                hitSize = lastBrk.size || parentSpan.spanSize || "normal";
+              } else {
+                for (let bi = sortedBrks.length - 1; bi >= 0; bi--) {
+                  if (evDate >= sortedBrks[bi].year) {
+                    hitSize = sortedBrks[bi].size || parentSpan.spanSize || "normal";
+                    break;
+                  }
+                }
+              }
+              const hitH = segH(hitSize);
+              const segTop = Math.round((containerH - hitH) / 2);
+              targetY = parentSpan.top + segTop;
+            }
 
             const eventBottom = event.top + (event._boxHeight || 29);
 
@@ -1856,32 +1969,103 @@ const TimelineView = forwardRef(function TimelineView({
           })}
         </div>
 
-        {(() => {
-          // Per-tick label visibility based on actual pixel distance from last shown label
-          const MIN_LABEL_GAP = 8;
-          const CHAR_WIDTH = 5.5; // approximate at 9px font
-          let lastLabelRight = -Infinity;
+        {file.showGrid && (() => {
+          const MIN_GRID_GAP = 6;
+          const getLocalYearScale = (year) => {
+            const section = normalizedScaleSections.find(
+              (s) => year >= s.start && year <= s.end
+            );
+            return section ? Math.max(section.scale, 0.0001) : 1;
+          };
+          let lastGridPx = -Infinity;
           return ticks.map((tick) => {
             const px = yearToPx(tick.value);
+            const localScale = getLocalYearScale(tick.value);
+            const dynamicGridGap = localScale < 1 ? MIN_GRID_GAP / localScale : MIN_GRID_GAP;
+            if (px < lastGridPx + dynamicGridGap) return null;
+            lastGridPx = px;
+            return (
+              <div
+                key={`grid-${tick.value}`}
+                className="grid-line"
+                style={{
+                  left: `${px}px`,
+                  height: `${calculatedHeight * 2}px`,
+                }}
+              />
+            );
+          });
+        })()}
+
+        {(() => {
+          const safeScale = Math.max(currentScale, 0.01);
+          const MIN_LABEL_GAP = 8 / safeScale;
+          const CHAR_WIDTH = 5.5;
+          const MIN_TICK_GAP = 6;
+          const getLocalYearScale = (year) => {
+            const section = normalizedScaleSections.find(
+              (s) => year >= s.start && year <= s.end
+            );
+            return section ? Math.max(section.scale, 0.0001) : 1;
+          };
+          const preferredLabelBases = [1, 2, 5, 10, 50, 100];
+          const pickDynamicPreferredStep = (targetStep) => {
+            if (!Number.isFinite(targetStep) || targetStep <= 0) return 1;
+            const exponent = Math.floor(Math.log10(targetStep));
+            let best = null;
+            for (let e = exponent - 2; e <= exponent + 2; e += 1) {
+              const scale = Math.pow(10, e);
+              for (const base of preferredLabelBases) {
+                const candidate = base * scale;
+                if (candidate < targetStep) continue;
+                if (best === null || candidate < best) {
+                  best = candidate;
+                }
+              }
+            }
+            if (best !== null) return best;
+            return preferredLabelBases[preferredLabelBases.length - 1] * Math.pow(10, exponent + 1);
+          };
+          const targetLabelSpacingPx = 85;
+          const yearsPerPxAtZoom = 1 / Math.max(PX_PER_YEAR * safeScale, 0.000001);
+          let lastLabelRight = -Infinity;
+          let lastTickPx = -Infinity;
+          return ticks.map((tick) => {
+            const px = yearToPx(tick.value);
+            const localScale = getLocalYearScale(tick.value);
+            const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
+            const showTick = px >= lastTickPx + dynamicTickGap;
+            if (!showTick) return null;
+            lastTickPx = px;
+            const dynamicPreferredYearLabelStep = pickDynamicPreferredStep(
+              yearsPerPxAtZoom * targetLabelSpacingPx
+            );
             const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
             const halfWidth = (label.length * CHAR_WIDTH) / 2;
             const labelLeft = px - halfWidth;
-            const showLabel = labelLeft >= lastLabelRight + MIN_LABEL_GAP;
+            const roundedYear = Math.round(tick.value);
+            const isWholeYear = Math.abs(tick.value - roundedYear) < 1e-6;
+            const nearestMultiple = Math.round(roundedYear / dynamicPreferredYearLabelStep);
+            const isStepMultiple =
+              Math.abs(roundedYear - nearestMultiple * dynamicPreferredYearLabelStep) < 1e-6;
+            const isPreferredYearLabel = file.useMonths
+              ? true
+              : isWholeYear && isStepMultiple;
+            const showLabel = isPreferredYearLabel && labelLeft >= lastLabelRight + MIN_LABEL_GAP;
             if (showLabel) {
               lastLabelRight = px + halfWidth;
             }
-            if (!showLabel) return null;
             return (
               <div
                 key={tick.value}
                 className="tick"
                 style={{
-                  left: `${yearToPx(tick.value)}px`,
+                  left: `${px}px`,
                   top: `${BASE_LINE_Y - 5}px`,
                 }}
               >
                 <div className="tick-line" />
-                <div className="tick-label">{label}</div>
+                {showLabel && <div className="tick-label">{label}</div>}
               </div>
             );
           });

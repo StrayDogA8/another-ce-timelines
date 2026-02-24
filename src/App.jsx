@@ -1018,6 +1018,8 @@ function App() {
     layout,
     branchOrdering,
     fixedEventHeight,
+    hideDecimals,
+    showGrid,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1053,6 +1055,8 @@ function App() {
         layout,
         branchOrdering,
         fixedEventHeight,
+        hideDecimals,
+        showGrid,
       };
 
       // Clean up legacy breaks field when saving with new scaleSections
@@ -1064,6 +1068,8 @@ function App() {
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
+      if (!hideDecimals) delete nextFile.hideDecimals;
+      if (!showGrid) delete nextFile.showGrid;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {

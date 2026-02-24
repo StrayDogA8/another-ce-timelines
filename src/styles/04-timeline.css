@@ -89,6 +89,15 @@
   color: var(--dark-bg);
 }
 
+.grid-line {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: var(--dark-bg);
+  opacity: 0.12;
+  pointer-events: none;
+}
+
 .connectors-layer,
 .event-lines-layer,
 .spans-layer,
@@ -117,6 +126,43 @@
 
 .span-title { margin-left: 5px; color: var(--active-bg); }
 .span-years { margin-left: 7px; color: var(--element-bg); }
+
+.span-item.has-breaks {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.span-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.span-segment .span-title { margin-left: 5px; }
+.span-segment .span-years { margin-left: 5px; }
+
+.span-thin { overflow: visible; z-index: 10; }
+
+.span-thin-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 600;
+  pointer-events: none;
+  padding: 1px 4px 1px;
+  border-radius: 3px 3px 0 0;
+}
+
+.span-thick { font-size: 15px; border-radius: 6px; }
+.span-thick .span-title { margin-left: 8px; }
+.span-thick .span-years { margin-left: 9px; }
 
 .span-connector-top,
 .span-connector-bottom {
