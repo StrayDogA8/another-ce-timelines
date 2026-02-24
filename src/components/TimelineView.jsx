@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -50,6 +50,7 @@ const TimelineView = forwardRef(function TimelineView({
 }, ref) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
+  const gridLabelsRef = useRef(null);
   const scaleRef = useRef(1);
   const translateRef = useRef({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
@@ -521,6 +522,16 @@ const TimelineView = forwardRef(function TimelineView({
     const scale = scaleRef.current;
     timelineEl.style.transformOrigin = "0 0";
     timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    // Update grid year label positions
+    const overlay = gridLabelsRef.current;
+    if (overlay) {
+      const labels = overlay.children;
+      for (let i = 0; i < labels.length; i++) {
+        const el = labels[i];
+        const basePx = Number(el.dataset.px);
+        el.style.left = `${x + basePx * scale + 4}px`;
+      }
+    }
   };
 
   const queueSliderValue = (nextValue) => {
@@ -1436,6 +1447,55 @@ const TimelineView = forwardRef(function TimelineView({
       onClick={() => handleSelect(null)} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
+      {file.showGrid && (
+        <div ref={gridLabelsRef} className="grid-year-labels-overlay">
+          {(() => {
+            const MIN_TICK_GAP = 6;
+            const getLocalYearScale = (year) => {
+              const section = normalizedScaleSections.find(
+                (s) => year >= s.start && year <= s.end
+              );
+              return section ? Math.max(section.scale, 0.0001) : 1;
+            };
+            const tx = translateRef.current.x;
+            const scale = scaleRef.current;
+            const SCREEN_LABEL_WIDTH = 14;
+            const MIN_SCREEN_GAP = 20;
+            let lastScreenX = -Infinity;
+            let lastTickPx = -Infinity;
+            return ticks.map((tick) => {
+              const px = yearToPx(tick.value);
+              const localScale = getLocalYearScale(tick.value);
+              const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
+              if (px < lastTickPx + dynamicTickGap) return null;
+              lastTickPx = px;
+              const screenX = tx + px * scale;
+              if (screenX < lastScreenX + SCREEN_LABEL_WIDTH + MIN_SCREEN_GAP) return null;
+              lastScreenX = screenX;
+              const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
+              return (
+                <Fragment key={`grid-label-${tick.value}`}>
+                  <div
+                    className="grid-year-label grid-year-label-top"
+                    data-px={px}
+                    style={{ left: `${screenX + 4}px` }}
+                  >
+                    {label}
+                  </div>
+                  <div
+                    className="grid-year-label grid-year-label-bottom"
+                    data-px={px}
+                    style={{ left: `${screenX + 4}px` }}
+                  >
+                    {label}
+                  </div>
+                </Fragment>
+              );
+            });
+          })()}
+        </div>
+      )}
+
       <div
         ref={timelineRef}
         className="timeline"
@@ -1969,38 +2029,10 @@ const TimelineView = forwardRef(function TimelineView({
           })}
         </div>
 
-        {file.showGrid && (() => {
-          const MIN_GRID_GAP = 6;
-          const getLocalYearScale = (year) => {
-            const section = normalizedScaleSections.find(
-              (s) => year >= s.start && year <= s.end
-            );
-            return section ? Math.max(section.scale, 0.0001) : 1;
-          };
-          let lastGridPx = -Infinity;
-          return ticks.map((tick) => {
-            const px = yearToPx(tick.value);
-            const localScale = getLocalYearScale(tick.value);
-            const dynamicGridGap = localScale < 1 ? MIN_GRID_GAP / localScale : MIN_GRID_GAP;
-            if (px < lastGridPx + dynamicGridGap) return null;
-            lastGridPx = px;
-            return (
-              <div
-                key={`grid-${tick.value}`}
-                className="grid-line"
-                style={{
-                  left: `${px}px`,
-                  height: `${calculatedHeight * 2}px`,
-                }}
-              />
-            );
-          });
-        })()}
-
         {(() => {
           const safeScale = Math.max(currentScale, 0.01);
-          const MIN_LABEL_GAP = 8 / safeScale;
-          const CHAR_WIDTH = 5.5;
+          const MIN_LABEL_GAP = 8;
+          const CHAR_WIDTH = 7.5;
           const MIN_TICK_GAP = 6;
           const getLocalYearScale = (year) => {
             const section = normalizedScaleSections.find(
@@ -2055,18 +2087,26 @@ const TimelineView = forwardRef(function TimelineView({
             if (showLabel) {
               lastLabelRight = px + halfWidth;
             }
+            const roundedPx = Math.round(px);
             return (
-              <div
-                key={tick.value}
-                className="tick"
-                style={{
-                  left: `${px}px`,
-                  top: `${BASE_LINE_Y - 5}px`,
-                }}
-              >
-                <div className="tick-line" />
-                {showLabel && <div className="tick-label">{label}</div>}
-              </div>
+              <Fragment key={tick.value}>
+                {file.showGrid && (
+                  <div
+                    className="grid-line"
+                    style={{ left: `${roundedPx}px` }}
+                  />
+                )}
+                <div
+                  className="tick"
+                  style={{
+                    left: `${roundedPx}px`,
+                    top: `${BASE_LINE_Y - 5}px`,
+                  }}
+                >
+                  <div className="tick-line" />
+                  {showLabel && <div className="tick-label">{label}</div>}
+                </div>
+              </Fragment>
             );
           });
         })()}

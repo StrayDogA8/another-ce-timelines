@@ -386,7 +386,6 @@ export function layoutSpans({
       }
     }
 
-    // Record intervals in occupied lanes
     spanLaneEnds[lane] = right;
     if (!spanLaneIntervals[lane]) spanLaneIntervals[lane] = [];
     spanLaneIntervals[lane].push({ startPx: left, endPx: right });
@@ -410,13 +409,11 @@ export function layoutSpans({
       });
     }
 
-    // Compute top and visual height
     const topLane = thick ? lane + 1 : lane;
     const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
     const spanHeight = thick
       ? CSS_SPAN_HEIGHT + SPAN_HEIGHT + SPAN_VERTICAL_GAP
       : thin ? Math.round(CSS_SPAN_HEIGHT / 2) : CSS_SPAN_HEIGHT;
-    // For thin spans, center vertically within the lane
     const topOffset = thin ? Math.round((CSS_SPAN_HEIGHT - spanHeight) / 2) : 0;
 
     finalSpans.push({
