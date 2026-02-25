@@ -137,6 +137,37 @@
   inset: 0;
 }
 
+.group-bands-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.group-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.group-layer .spans-layer,
+.group-layer .events-layer {
+  pointer-events: none;
+}
+
+.group-layer .span-item,
+.group-layer .event {
+  pointer-events: auto;
+}
+
+.group-bg-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
 .event-lines-layer { position: relative; z-index: 3; }
 .connectors-layer { position: relative; z-index: 4; }
 .spans-layer { position: relative; z-index: 5; }
@@ -153,6 +184,11 @@
   white-space: nowrap;
   margin-bottom: 10px;
   z-index: 2;
+}
+
+.span-item.span-extension {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .span-title { margin-left: 5px; color: var(--active-bg); }
@@ -176,6 +212,15 @@
 .span-segment .span-years { margin-left: 5px; }
 
 .span-thin { overflow: visible; z-index: 10; }
+.span-thin .span-title,
+.span-thin .span-years {
+  font-size: 10px;
+}
+
+.span-thin-segment .span-title,
+.span-thin-segment .span-years {
+  font-size: 8px;
+}
 
 .span-thin-label {
   position: absolute;

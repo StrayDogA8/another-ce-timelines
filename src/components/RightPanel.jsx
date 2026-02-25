@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink } from "lucide-react";
+import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown } from "lucide-react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
@@ -19,6 +19,7 @@ export default function RightPanel({
   activeTags = [],
   onToggleTag,
   pluginFields = [],
+  onUpdateGroups,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -33,6 +34,9 @@ export default function RightPanel({
   const [spanParentQuery, setSpanParentQuery] = useState("");
   const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
   const spanParentMenuTimeoutRef = useRef(null);
+  const [extendFromQuery, setExtendFromQuery] = useState("");
+  const [isExtendFromMenuOpen, setIsExtendFromMenuOpen] = useState(false);
+  const extendFromMenuTimeoutRef = useRef(null);
   const [mergeParentQuery, setMergeParentQuery] = useState("");
   const [isMergeParentMenuOpen, setIsMergeParentMenuOpen] = useState(false);
   const mergeParentMenuTimeoutRef = useRef(null);
@@ -42,6 +46,15 @@ export default function RightPanel({
   const [tagQuery, setTagQuery] = useState("");
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const tagMenuTimeoutRef = useRef(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
+  const groupMenuTimeoutRef = useRef(null);
+  const [editSectionsOpen, setEditSectionsOpen] = useState({
+    relations: true,
+    style: true,
+    breaks: false,
+    custom: true,
+  });
   const panelRef = useRef(null);
   const TAG_MAX_LENGTH = 32;
   const ID_MAX_LENGTH = 60;
@@ -81,6 +94,8 @@ export default function RightPanel({
           setIsEditMode(false);
           setSpanParentQuery("");
           setIsSpanParentMenuOpen(false);
+          setExtendFromQuery("");
+          setIsExtendFromMenuOpen(false);
           setMergeParentQuery("");
           setIsMergeParentMenuOpen(false);
           setIsParentMenuOpen(false);
@@ -95,12 +110,23 @@ export default function RightPanel({
     if (!isEditMode) {
       setSpanParentQuery("");
       setIsSpanParentMenuOpen(false);
+      setExtendFromQuery("");
+      setIsExtendFromMenuOpen(false);
       setMergeParentQuery("");
       setIsMergeParentMenuOpen(false);
       setIsParentMenuOpen(false);
       setIsTagMenuOpen(false);
     }
   }, [isEditMode]);
+
+  useEffect(() => {
+    setEditSectionsOpen({
+      relations: true,
+      style: true,
+      breaks: false,
+      custom: true,
+    });
+  }, [selectedElement?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -183,6 +209,7 @@ export default function RightPanel({
   useEffect(() => {
     return () => {
       if (spanParentMenuTimeoutRef.current) clearTimeout(spanParentMenuTimeoutRef.current);
+      if (extendFromMenuTimeoutRef.current) clearTimeout(extendFromMenuTimeoutRef.current);
       if (mergeParentMenuTimeoutRef.current) clearTimeout(mergeParentMenuTimeoutRef.current);
       if (parentMenuTimeoutRef.current) clearTimeout(parentMenuTimeoutRef.current);
       if (tagMenuTimeoutRef.current) clearTimeout(tagMenuTimeoutRef.current);
@@ -318,6 +345,27 @@ export default function RightPanel({
     );
   }, [spanParentCandidates, spanParentQuery]);
 
+  const extendFromCandidates = useMemo(() => {
+    if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
+    return timelineData.elements
+      .filter((el) => el.type === "span" && el.id !== formData.id)
+      .map((span) => ({
+        ...span,
+        _start: getSpanNumericStart(span),
+        _end: getSpanNumericEnd(span),
+      }))
+      .filter((span) => Number.isFinite(span._end) && Math.abs(span._end - parentRange.start) < 1e-6);
+  }, [timelineData, formData, parentRange]);
+
+  const extendFromSuggestions = useMemo(() => {
+    if (!extendFromQuery.trim()) return extendFromCandidates;
+    const needle = extendFromQuery.trim().toLowerCase();
+    return extendFromCandidates.filter((span) =>
+      span.id.toLowerCase().includes(needle) ||
+      (span.title || "").toLowerCase().includes(needle)
+    );
+  }, [extendFromCandidates, extendFromQuery]);
+
   const mergeParentCandidates = useMemo(() => {
     if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
     return timelineData.elements
@@ -364,6 +412,29 @@ export default function RightPanel({
     commitDraft({ ...formData, parent: spanId });
     setSpanParentQuery("");
     setIsSpanParentMenuOpen(false);
+  };
+
+  const setExtendFrom = (spanId) => {
+    if (!spanId) return;
+    setFormData((prev) => ({ ...prev, extendFrom: spanId }));
+    commitDraft({ ...formData, extendFrom: spanId });
+    setExtendFromQuery("");
+    setIsExtendFromMenuOpen(false);
+  };
+
+  const clearExtendFrom = () => {
+    const { extendFrom: _e, ...rest } = formData;
+    setFormData(rest);
+    commitDraft(rest);
+  };
+
+  const handleExtendFromBlur = () => {
+    if (extendFromMenuTimeoutRef.current) {
+      clearTimeout(extendFromMenuTimeoutRef.current);
+    }
+    extendFromMenuTimeoutRef.current = setTimeout(() => {
+      setIsExtendFromMenuOpen(false);
+    }, 120);
   };
 
   const clearSpanParent = () => {
@@ -492,23 +563,16 @@ export default function RightPanel({
       }
     }
 
-    // Validate breaks
-    if (draft.type === "span" && Array.isArray(draft.breaks) && draft.breaks.length > 0) {
-      const spanStart = parsedStart.value;
-      const spanEnd = parsedEnd.value;
-      if (spanStart !== null && spanEnd !== null) {
-        const breakYears = [];
-        for (const brk of draft.breaks) {
-          if (brk.year == null) continue;
-          if (brk.year <= spanStart || brk.year >= spanEnd) {
-            errors.push("Break years must be between span start and end.");
-            break;
-          }
-          if (breakYears.includes(brk.year)) {
-            errors.push("Break years must be unique.");
-            break;
-          }
-          breakYears.push(brk.year);
+    if (draft.type === "span" && draft.extendFrom) {
+      const extendParent = timelineData?.elements?.find(
+        (el) => el.type === "span" && el.id === draft.extendFrom
+      );
+      if (!extendParent) {
+        errors.push(`Extend From span "${draft.extendFrom}" not found.`);
+      } else if (parsedStart.value !== null) {
+        const parentEnd = getSpanNumericEnd(extendParent);
+        if (!Number.isFinite(parentEnd) || Math.abs(parentEnd - parsedStart.value) >= 1e-6) {
+          errors.push("Extend From only works when the selected span ends exactly at this span's start.");
         }
       }
     }
@@ -546,14 +610,6 @@ export default function RightPanel({
         nextData.endLabel = parsedEnd.label;
       } else {
         delete nextData.endLabel;
-      }
-    }
-
-    // Clean up break yearInput fields
-    if (Array.isArray(nextData.breaks)) {
-      nextData.breaks = nextData.breaks.map(({ yearInput, _idx, _i, ...rest }) => rest);
-      if (nextData.breaks.length === 0) {
-        delete nextData.breaks;
       }
     }
 
@@ -921,6 +977,11 @@ export default function RightPanel({
     });
   };
 
+  const showLegacyBreaks = timelineData?.file?.allowLegacyBreaks === true;
+  const toggleEditSection = (key) => {
+    setEditSectionsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   if (!selectedElement || !formData) {
     return (
       <div className="right-panel">
@@ -1052,7 +1113,7 @@ export default function RightPanel({
                 <div className="view-separator" />
                 <button
                   type="button"
-                  className="tag-chip tag-chip-link"
+                  className="parent-link"
                   onClick={() => onSelect(formData.parent)}
                 >
                   {timelineData.elements.find(el => el.id === formData.parent)?.title || formData.parent}
@@ -1067,10 +1128,24 @@ export default function RightPanel({
                 <div className="view-separator" />
                 <button
                   type="button"
-                  className="tag-chip tag-chip-link"
+                  className="parent-link"
                   onClick={() => onSelect(formData.mergeParent)}
                 >
                   {timelineData.elements.find(el => el.id === formData.mergeParent)?.title || formData.mergeParent}
+                </button>
+              </div>
+            )}
+
+            {formData.type === "span" && formData.extendFrom && (
+              <div className="view-group">
+                <label>Extend From</label>
+                <div className="view-separator" />
+                <button
+                  type="button"
+                  className="parent-link"
+                  onClick={() => onSelect(formData.extendFrom)}
+                >
+                  {timelineData.elements.find(el => el.id === formData.extendFrom)?.title || formData.extendFrom}
                 </button>
               </div>
             )}
@@ -1104,27 +1179,18 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Breaks (spans only, view mode) */}
-            {formData.type === "span" && Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
-              <div className="view-group view-group-chips">
-                <label>Breaks</label>
-                <div className="view-separator" />
-                <div style={{ gridColumn: 3, display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {[...formData.breaks]
-                    .sort((a, b) => (a.year ?? 0) - (b.year ?? 0))
-                    .map((brk, i) => (
-                      <div key={i} className="break-view-item">
-                        <div className="break-view-info">
-                          <span className="break-view-label">{brk.label || "(no label)"}</span>
-                          <span className="break-view-year">
-                            {formatYear(brk.year, timelineData?.file?.negID, timelineData?.file?.posID, timelineData?.file?.useMonths === true, timelineData?.file?.hideDecimals)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+            {/* Group (events and spans only, view mode) */}
+            {(formData.type === "event" || formData.type === "span") && (() => {
+              const groups = timelineData?.file?.groups || [];
+              const group = groups.find((g) => g.id === formData.groupId);
+              return group ? (
+                <div className="view-group">
+                  <label>Group</label>
+                  <div className="view-separator" />
+                  <p>{group.title || group.id}</p>
                 </div>
-              </div>
-            )}
+              ) : null;
+            })()}
 
             {pluginFields
               .filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type))
@@ -1247,6 +1313,18 @@ export default function RightPanel({
               </>
             )}
 
+            {(formData.type === "event" || formData.type === "span") && (
+              <div className="rp-edit-section">
+                <button
+                  type="button"
+                  className="rp-edit-section-head"
+                  onClick={() => toggleEditSection("relations")}
+                  aria-expanded={editSectionsOpen.relations ? "true" : "false"}
+                >
+                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.relations ? " open" : ""}`} />
+                  <span className="rp-edit-section-label">Relations</span>
+                </button>
+                {editSectionsOpen.relations && <div className="rp-edit-section-body">
             {/* Parent (events only) */}
             {formData.type === "event" && (
               <div className="form-group">
@@ -1321,18 +1399,18 @@ export default function RightPanel({
                   <label htmlFor="spanParent">Parent</label>
                   <div className="edit-separator" />
                   {formData.parent ? (
-                    <div className="chip-selected-list">
-                      <div className="chip-selected-item">
+                    <div className="relation-selected-list">
+                      <div className="relation-selected-item">
                         <button
                           type="button"
-                          className="chip-selected-link"
+                          className="relation-selected-link"
                           onClick={() => onSelect(formData.parent)}
                         >
                           {timelineData.elements.find((el) => el.id === formData.parent)?.title || formData.parent}
                         </button>
                         <button
                           type="button"
-                          className="chip-selected-remove"
+                          className="relation-selected-remove"
                           onClick={clearSpanParent}
                           aria-label="Remove parent"
                         >
@@ -1398,18 +1476,18 @@ export default function RightPanel({
                   <label htmlFor="mergeParent">Merge Into</label>
                   <div className="edit-separator" />
                   {formData.mergeParent ? (
-                    <div className="chip-selected-list">
-                      <div className="chip-selected-item">
+                    <div className="relation-selected-list">
+                      <div className="relation-selected-item">
                         <button
                           type="button"
-                          className="chip-selected-link"
+                          className="relation-selected-link"
                           onClick={() => onSelect(formData.mergeParent)}
                         >
                           {timelineData.elements.find((el) => el.id === formData.mergeParent)?.title || formData.mergeParent}
                         </button>
                         <button
                           type="button"
-                          className="chip-selected-remove"
+                          className="relation-selected-remove"
                           onClick={clearMergeParent}
                           aria-label="Remove merge target"
                         >
@@ -1466,6 +1544,86 @@ export default function RightPanel({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {formData.type === "span" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="extendFrom">Extend From</label>
+                  <div className="edit-separator" />
+                  {formData.extendFrom ? (
+                    <div className="relation-selected-list">
+                      <div className="relation-selected-item">
+                        <button
+                          type="button"
+                          className="relation-selected-link"
+                          onClick={() => onSelect(formData.extendFrom)}
+                        >
+                          {timelineData.elements.find((el) => el.id === formData.extendFrom)?.title || formData.extendFrom}
+                        </button>
+                        <button
+                          type="button"
+                          className="relation-selected-remove"
+                          onClick={clearExtendFrom}
+                          aria-label="Remove extend-from link"
+                        >
+                          Ã—
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="branch-picker">
+                      <input
+                        id="extendFrom"
+                        type="text"
+                        value={extendFromQuery}
+                        onChange={(e) => {
+                          setExtendFromQuery(e.target.value);
+                          setIsExtendFromMenuOpen(true);
+                        }}
+                        onFocus={() => setIsExtendFromMenuOpen(true)}
+                        onBlur={handleExtendFromBlur}
+                        placeholder="Ends where this span starts..."
+                        className="edit-input branch-input"
+                        maxLength={ID_MAX_LENGTH}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (extendFromSuggestions.length > 0) {
+                              setExtendFrom(extendFromSuggestions[0].id);
+                            }
+                          }
+                        }}
+                      />
+                      {isExtendFromMenuOpen && extendFromQuery.trim().length > 0 && (
+                        <div className="branch-suggestions">
+                          {extendFromSuggestions.length > 0 ? (
+                            extendFromSuggestions.map((span) => (
+                              <button
+                                key={span.id}
+                                type="button"
+                                className="branch-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setExtendFrom(span.id);
+                                }}
+                              >
+                                <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                <span className="branch-suggestion-id">{span.id}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="branch-suggestion-empty">No matching contiguous spans</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+                </div>}
               </div>
             )}
 
@@ -1540,8 +1698,109 @@ export default function RightPanel({
               )}
             </div>
 
-            {/* Style Section */}
-            <div className="edit-section-label">Style</div>
+            {/* Group (events and spans only) */}
+            {(formData.type === "event" || formData.type === "span") && (() => {
+              const groups = timelineData?.file?.groups || [];
+              const filteredGroups = groups.filter((g) =>
+                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
+              );
+              const handleGroupBlur = () => {
+                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
+              };
+              const addGroup = (name) => {
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+                if (groups.some((g) => g.id === id)) {
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                } else {
+                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
+                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
+                  onUpdateGroups([...groups, newGroup]);
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                }
+                setNewGroupName("");
+                setIsGroupMenuOpen(false);
+              };
+              return (
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="groupId">Group</label>
+                    <div className="edit-separator" />
+                    <div className="branch-picker">
+                      <input
+                        id="groupId"
+                        type="text"
+                        value={newGroupName}
+                        onChange={(e) => {
+                          setNewGroupName(e.target.value);
+                          setIsGroupMenuOpen(true);
+                        }}
+                        onFocus={() => setIsGroupMenuOpen(true)}
+                        onBlur={handleGroupBlur}
+                        placeholder={groups.find((g) => g.id === formData.groupId)?.title || "Select group..."}
+                        className="edit-input branch-input"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newGroupName.trim()) addGroup(newGroupName);
+                          }
+                        }}
+                      />
+                      {isGroupMenuOpen && (
+                        <div className="branch-suggestions">
+                          {filteredGroups.map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              className={`branch-suggestion-item${g.id === formData.groupId ? " branch-suggestion-selected" : ""}`}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const next = { ...formData, groupId: g.id };
+                                setFormData(next);
+                                commitDraft(next);
+                                setNewGroupName("");
+                                setIsGroupMenuOpen(false);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">{g.title || g.id}</span>
+                            </button>
+                          ))}
+                          {newGroupName.trim() && !groups.some((g) => (g.title || g.id).toLowerCase() === newGroupName.trim().toLowerCase()) && (
+                            <button
+                              type="button"
+                              className="branch-suggestion-item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                addGroup(newGroupName);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">+ Create "{newGroupName.trim()}"</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="rp-edit-section">
+              <button
+                type="button"
+                className="rp-edit-section-head"
+                onClick={() => toggleEditSection("style")}
+                aria-expanded={editSectionsOpen.style ? "true" : "false"}
+              >
+                <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.style ? " open" : ""}`} />
+                <span className="rp-edit-section-label">Style</span>
+              </button>
+              {editSectionsOpen.style && <div className="rp-edit-section-body">
 
             {/* Color (spans and eras only) */}
             {formData.type !== "event" && (
@@ -1656,11 +1915,22 @@ export default function RightPanel({
                 </div>
               </>
             )}
+              </div>}
+            </div>
 
-            {/* Breaks (spans only) */}
-            {formData.type === "span" && (
-              <>
-                <div className="edit-section-label">Breaks</div>
+            {/* Legacy Breaks */}
+            {showLegacyBreaks && formData.type === "span" && (
+              <div className="rp-edit-section">
+                <button
+                  type="button"
+                  className="rp-edit-section-head"
+                  onClick={() => toggleEditSection("breaks")}
+                  aria-expanded={editSectionsOpen.breaks ? "true" : "false"}
+                >
+                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.breaks ? " open" : ""}`} />
+                  <span className="rp-edit-section-label">Breaks</span>
+                </button>
+                {editSectionsOpen.breaks && <div className="rp-edit-section-body">
                 <div className="breaks-list">
                   {Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
                     formData.breaks
@@ -1817,12 +2087,22 @@ export default function RightPanel({
                     + Add Break
                   </button>
                 </div>
-              </>
+                </div>}
+              </div>
             )}
 
             {pluginFields.filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type)).length > 0 && (
-              <>
-                <div className="edit-section-label">Custom</div>
+              <div className="rp-edit-section">
+                <button
+                  type="button"
+                  className="rp-edit-section-head"
+                  onClick={() => toggleEditSection("custom")}
+                  aria-expanded={editSectionsOpen.custom ? "true" : "false"}
+                >
+                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.custom ? " open" : ""}`} />
+                  <span className="rp-edit-section-label">Custom</span>
+                </button>
+                {editSectionsOpen.custom && <div className="rp-edit-section-body">
                 {pluginFields
                   .filter((f) => !f.elementTypes || f.elementTypes.includes(formData.type))
                   .map((field) => {
@@ -1887,7 +2167,8 @@ export default function RightPanel({
                       </div>
                     );
                   })}
-              </>
+                </div>}
+              </div>
             )}
 
             <div className="form-group note-form-group">

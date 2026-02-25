@@ -1,7 +1,18 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, ListChevronsDownUp, ListChevronsUpDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, ListFilter, Edit2, Trash2, SquarePlus, Tag, Eye, EyeOff } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, List, Layers3, GripVertical, Palette } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
+
+const GROUP_COLOR_PALETTE = [
+  "#ffd7d7",
+  "#ffe6bf",
+  "#fff4b8",
+  "#dff5c8",
+  "#cdeffd",
+  "#dde1ff",
+  "#efdcff",
+  "#ffd9f0",
+];
 
 function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu }) {
   const isSelected = selectedId && selectedId === item.id;
@@ -52,11 +63,12 @@ export default function Sidebar({
   hiddenTags = [],
   onToggleTag,
   onToggleHiddenTag,
-  filterScope,
-  onToggleFilterScope,
-  onClearTags,
   pinnedTags = [],
   onTogglePinnedTag,
+  onAddGroup,
+  onUpdateGroup,
+  onUpdateGroups,
+  onDeleteGroup,
   onAddEvent,
   onAddSpan,
   onAddEra,
@@ -84,21 +96,21 @@ export default function Sidebar({
   const [openEvents, setOpenEvents] = useState(true);
   const [timelineMenu, setTimelineMenu] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
-  const [filterMenu, setFilterMenu] = useState(null);
-  const [newElementMenu, setNewElementMenu] = useState(null);
+  const [sidebarTab, setSidebarTab] = useState("timeline");
   const [elementMenu, setElementMenu] = useState(null);
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [submenuPosition, setSubmenuPosition] = useState(null);
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [editingGroupTitle, setEditingGroupTitle] = useState("");
+  const [draggedGroupId, setDraggedGroupId] = useState(null);
+  const [dragOverPlacement, setDragOverPlacement] = useState(null);
   const menuRef = useRef(null);
   const submenuRef = useRef(null);
   const openTimelineRef = useRef(null);
   const submenuCloseTimer = useRef(null);
-  const filterMenuRef = useRef(null);
-  const filterButtonRef = useRef(null);
-  const newElementMenuRef = useRef(null);
-  const newElementButtonRef = useRef(null);
   const listRef = useRef(null);
   const lastScrollTopRef = useRef(0);
+  const groupColorInputRefs = useRef({});
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -131,6 +143,73 @@ export default function Sidebar({
     [events]
   );
 
+  const groups = useMemo(() => {
+    const fallback = [{ id: "g-main", title: "Main", order: 0, stack: 0, visible: true, locked: false }];
+    const raw = Array.isArray(file?.groups) && file.groups.length > 0 ? file.groups : fallback;
+    return [...raw].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [file]);
+
+  const displayGroups = useMemo(
+    () => [...groups].sort((a, b) => {
+      const stackDiff = (b.stack ?? 0) - (a.stack ?? 0); // top to bottom
+      if (stackDiff !== 0) return stackDiff;
+      return (a.order ?? 0) - (b.order ?? 0);
+    }),
+    [groups]
+  );
+
+  const commitDisplayGroupOrder = (nextDisplayGroups) => {
+    if (!Array.isArray(nextDisplayGroups) || nextDisplayGroups.length === 0) return;
+    const total = nextDisplayGroups.length;
+    const patchedById = new Map(
+      nextDisplayGroups.map((group, index) => [
+        group.id,
+        {
+          stack: total - index - 1,
+          order: index,
+        },
+      ])
+    );
+
+    const nextGroups = groups.map((group) => (
+      patchedById.has(group.id)
+        ? { ...group, ...patchedById.get(group.id) }
+        : group
+    ));
+
+    if (typeof onUpdateGroups === "function") {
+      onUpdateGroups(nextGroups);
+      return;
+    }
+    nextGroups.forEach((group) => onUpdateGroup?.(group.id, {
+      stack: group.stack,
+      order: group.order,
+    }));
+  };
+
+  const updateGroupPatch = (groupId, updates) => {
+    if (!groupId || !updates || typeof updates !== "object") return;
+    if (typeof onUpdateGroups === "function") {
+      const nextGroups = groups.map((group) =>
+        group.id === groupId ? { ...group, ...updates } : group
+      );
+      onUpdateGroups(nextGroups);
+      return;
+    }
+    onUpdateGroup?.(groupId, updates);
+  };
+
+  const groupCounts = useMemo(() => {
+    const counts = new Map();
+    (allElements || []).forEach((element) => {
+      if (element.type !== "event" && element.type !== "span") return;
+      const groupId = element.groupId;
+      if (!groupId) return;
+      counts.set(groupId, (counts.get(groupId) || 0) + 1);
+    });
+    return counts;
+  }, [allElements]);
+
   const allTags = useMemo(() => {
     const tags = new Set();
     (allElements || []).forEach((element) => {
@@ -150,22 +229,6 @@ export default function Sidebar({
     return `${left} - ${right}`;
   };
 
-  const allExpanded = openEras && openSpans && openEvents;
-
-  const handleToggleAll = () => {
-    if (allExpanded) {
-      // Collapse all
-      setOpenEras(false);
-      setOpenSpans(false);
-      setOpenEvents(false);
-    } else {
-      // Expand all
-      setOpenEras(true);
-      setOpenSpans(true);
-      setOpenEvents(true);
-    }
-  };
-
   const handleTimelineMenuClick = (e) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -182,37 +245,6 @@ export default function Sidebar({
 
   const handleElementMenuAction = (action) => {
     setElementMenu(null);
-    if (action) action();
-  };
-
-  const handleToggleFilterMenu = (e) => {
-    e.stopPropagation();
-    if (filterMenu) {
-      setFilterMenu(null);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setFilterMenu({
-      x: rect.left,
-      y: rect.bottom + 6,
-    });
-  };
-
-  const handleToggleNewElementMenu = (e) => {
-    e.stopPropagation();
-    if (newElementMenu) {
-      setNewElementMenu(null);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setNewElementMenu({
-      x: rect.left,
-      y: rect.bottom + 6,
-    });
-  };
-
-  const handleNewElementAction = (action) => {
-    setNewElementMenu(null);
     if (action) action();
   };
 
@@ -282,40 +314,6 @@ export default function Sidebar({
     };
   }, [elementMenu]);
 
-  useEffect(() => {
-    if (!filterMenu) return;
-
-    const handleClickOutside = (e) => {
-      const clickedInsideMenu = filterMenuRef.current?.contains(e.target);
-      const clickedFilterButton = filterButtonRef.current?.contains(e.target);
-      if (!clickedInsideMenu && !clickedFilterButton) {
-        setFilterMenu(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [filterMenu]);
-
-  useEffect(() => {
-    if (!newElementMenu) return;
-
-    const handleClickOutside = (e) => {
-      const clickedInsideMenu = newElementMenuRef.current?.contains(e.target);
-      const clickedButton = newElementButtonRef.current?.contains(e.target);
-      if (!clickedInsideMenu && !clickedButton) {
-        setNewElementMenu(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [newElementMenu]);
-
   useLayoutEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = lastScrollTopRef.current;
@@ -353,6 +351,34 @@ export default function Sidebar({
   };
 
   const rowProps = { selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu };
+
+  const startGroupTitleEdit = (group) => {
+    setEditingGroupId(group.id);
+    setEditingGroupTitle(group.title || group.id || "");
+  };
+
+  const cancelGroupTitleEdit = () => {
+    setEditingGroupId(null);
+    setEditingGroupTitle("");
+  };
+
+  const commitGroupTitleEdit = (groupId) => {
+    const group = groups.find((item) => item.id === groupId);
+    if (!group) {
+      cancelGroupTitleEdit();
+      return;
+    }
+    const trimmedTitle = editingGroupTitle.trim();
+    if (trimmedTitle && trimmedTitle !== (group.title || group.id)) {
+      updateGroupPatch(groupId, { title: trimmedTitle });
+    }
+    cancelGroupTitleEdit();
+  };
+
+  const openGroupColorPicker = (groupId) => {
+    const input = groupColorInputRefs.current[groupId];
+    if (input) input.click();
+  };
 
   return (
     <div className="sidebar-root">
@@ -513,36 +539,36 @@ export default function Sidebar({
       {!isCollapsed && (
         <>
         <div className="sidebar-add-container">
-        <div className="sidebar-add-buttons">
+          <div className="sidebar-tabs">
             <button
-              className="sidebar-add-button"
-              onClick={handleToggleNewElementMenu}
-              title="New Element"
-              ref={newElementButtonRef}
-            >
-              <SquarePlus size={17} strokeWidth={2} />
-            </button>
-            <button
-              className="sidebar-add-button"
-              onClick={handleToggleAll}
-              title={allExpanded ? "Collapse All" : "Expand All"}
-            >
-              {allExpanded ? (
-                <ListChevronsDownUp size={17} strokeWidth={2} />
-              ) : (
-                <ListChevronsUpDown size={17} strokeWidth={2} />
-              )}
-            </button>
-            <button
-              className="sidebar-add-button"
               type="button"
-              aria-label="Filter list"
-              title="Filter list"
-              onClick={handleToggleFilterMenu}
-              ref={filterButtonRef}
+              className={`sidebar-tab-button${sidebarTab === "timeline" ? " is-active" : ""}`}
+              onClick={() => setSidebarTab("timeline")}
+              aria-label="Timeline tab"
+              title="Timeline"
             >
-              <ListFilter size={17} strokeWidth={2} />
+              <List size={15} strokeWidth={2.2} />
             </button>
+            <button
+              type="button"
+              className={`sidebar-tab-button${sidebarTab === "tags" ? " is-active" : ""}`}
+              onClick={() => setSidebarTab("tags")}
+              aria-label="Tags tab"
+              title="Tags"
+            >
+              <Tag size={15} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              className={`sidebar-tab-button${sidebarTab === "groups" ? " is-active" : ""}`}
+              onClick={() => setSidebarTab("groups")}
+              aria-label="Groups tab"
+              title="Groups"
+            >
+              <Layers3 size={15} strokeWidth={2.2} />
+            </button>
+          </div>
+          <div className="sidebar-add-buttons">
             {pluginActions.map((action) => {
               const IconComponent = action.icon;
               let icon;
@@ -566,20 +592,33 @@ export default function Sidebar({
           </div>
         </div>
 
-      <div className="sidebar-content" ref={listRef}>
+      <div className={`sidebar-content${sidebarTab === "tags" ? " is-tags-tab" : ""}`} ref={listRef}>
+        {sidebarTab === "timeline" ? (
+        <>
           {/* ERAS */}
           <div className="sb-section">
-            <button
-              className="sb-section-head"
-              onClick={() => setOpenEras((v) => !v)}
-            >
-              <ChevronDown
-                className={`sb-caret ${openEras ? "open" : ""}`}
-                size={16}
-                strokeWidth={2}
-              />
-              <span className="sb-section-label">Eras</span>
-            </button>
+            <div className="sb-section-head">
+              <button
+                className="sb-section-toggle"
+                onClick={() => setOpenEras((v) => !v)}
+              >
+                <ChevronDown
+                  className={`sb-caret ${openEras ? "open" : ""}`}
+                  size={16}
+                  strokeWidth={2}
+                />
+                <span className="sb-section-label">Eras</span>
+              </button>
+              <button
+                className="sb-section-add"
+                type="button"
+                title="Add Era"
+                aria-label="Add Era"
+                onClick={() => onAddEra?.()}
+              >
+                <Plus size={18} strokeWidth={2.5} />
+              </button>
+            </div>
             {openEras && (
               <div className="sb-section-body">
                 {eraRows.map((e) => (
@@ -596,17 +635,28 @@ export default function Sidebar({
           </div>
 
           <div className="sb-section">
-            <button
-              className="sb-section-head"
-              onClick={() => setOpenSpans((v) => !v)}
-            >
-              <ChevronDown
-                className={`sb-caret ${openSpans ? "open" : ""}`}
-                size={16}
-                strokeWidth={2}
-              />
-              <span className="sb-section-label">Spans</span>
-            </button>
+            <div className="sb-section-head">
+              <button
+                className="sb-section-toggle"
+                onClick={() => setOpenSpans((v) => !v)}
+              >
+                <ChevronDown
+                  className={`sb-caret ${openSpans ? "open" : ""}`}
+                  size={16}
+                  strokeWidth={2}
+                />
+                <span className="sb-section-label">Spans</span>
+              </button>
+              <button
+                className="sb-section-add"
+                type="button"
+                title="Add Span"
+                aria-label="Add Span"
+                onClick={() => onAddSpan?.()}
+              >
+                <Plus size={18} strokeWidth={2.5} />
+              </button>
+            </div>
             {openSpans && (
               <div className="sb-section-body">
                 {spanRows.map((s) => (
@@ -623,17 +673,28 @@ export default function Sidebar({
           </div>
 
           <div className="sb-section">
-            <button
-              className="sb-section-head"
-              onClick={() => setOpenEvents((v) => !v)}
-            >
-              <ChevronDown
-                className={`sb-caret ${openEvents ? "open" : ""}`}
-                size={16}
-                strokeWidth={2}
-              />
-              <span className="sb-section-label">Events</span>
-            </button>
+            <div className="sb-section-head">
+              <button
+                className="sb-section-toggle"
+                onClick={() => setOpenEvents((v) => !v)}
+              >
+                <ChevronDown
+                  className={`sb-caret ${openEvents ? "open" : ""}`}
+                  size={16}
+                  strokeWidth={2}
+                />
+                <span className="sb-section-label">Events</span>
+              </button>
+              <button
+                className="sb-section-add"
+                type="button"
+                title="Add Event"
+                aria-label="Add Event"
+                onClick={() => onAddEvent?.()}
+              >
+                <Plus size={18} strokeWidth={2.5} />
+              </button>
+            </div>
             {openEvents && (
               <div className="sb-section-body">
                 {eventRows.map((ev) => (
@@ -648,133 +709,194 @@ export default function Sidebar({
               </div>
             )}
           </div>
+        </>
+        ) : sidebarTab === "tags" ? (
+          <div className="sidebar-tags-panel">
+            <div className="sidebar-tags-dropdown">
+              {allTags.length === 0 && (
+                <div className="filter-menu-empty">No tags found</div>
+              )}
+              {allTags.map((tag) => {
+                const isShown = activeTags.includes(tag);
+                const isHidden = hiddenTags.includes(tag);
+                const isPinned = pinnedTags.includes(tag);
+                return (
+                  <div key={tag} className="filter-menu-item filter-menu-item-with-pin">
+                    <span className="filter-menu-label">{tag}</span>
+                    <div className="filter-menu-actions">
+                      <button
+                        type="button"
+                        className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                        onClick={() => onToggleTag?.(tag)}
+                        aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                        title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
+                      >
+                        <Eye size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
+                        onClick={() => onToggleHiddenTag?.(tag)}
+                        aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                        title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                      >
+                        <EyeOff size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
+                        onClick={() => onTogglePinnedTag?.(tag)}
+                        aria-label={isPinned ? "Remove label" : "Use as label"}
+                        title={isPinned ? "Remove label" : "Use as label"}
+                      >
+                        <Tag size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="sidebar-groups-panel">
+            <div className="sidebar-groups-toolbar">
+              <button
+                className="sidebar-group-add-btn"
+                type="button"
+                onClick={() => onAddGroup?.()}
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                <span>Add Group</span>
+              </button>
+            </div>
+            <div className="sidebar-groups-list">
+              {displayGroups.map((group) => {
+                const count = groupCounts.get(group.id) || 0;
+                const canDelete = displayGroups.length > 1;
+                return (
+                  <div
+                    key={group.id}
+                    className={`sidebar-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
+                    draggable={editingGroupId !== group.id}
+                    onDragStart={(e) => {
+                      setDraggedGroupId(group.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", group.id);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (draggedGroupId && draggedGroupId !== group.id) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const position = e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
+                        setDragOverPlacement({ id: group.id, position });
+                        e.dataTransfer.dropEffect = "move";
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget)) {
+                        setDragOverPlacement((prev) => (prev?.id === group.id ? null : prev));
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const sourceId = draggedGroupId || e.dataTransfer.getData("text/plain");
+                      const targetId = group.id;
+                      const position = dragOverPlacement?.id === group.id ? dragOverPlacement.position : "top";
+                      if (!sourceId || sourceId === targetId) {
+                        setDraggedGroupId(null);
+                        setDragOverPlacement(null);
+                        return;
+                      }
+                      const fromIndex = displayGroups.findIndex((item) => item.id === sourceId);
+                      const toIndex = displayGroups.findIndex((item) => item.id === targetId);
+                      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+                        setDraggedGroupId(null);
+                        setDragOverPlacement(null);
+                        return;
+                      }
+                      const reordered = [...displayGroups];
+                      const [moved] = reordered.splice(fromIndex, 1);
+                      let insertIndex = toIndex + (position === "bottom" ? 1 : 0);
+                      if (fromIndex < insertIndex) insertIndex -= 1;
+                      reordered.splice(insertIndex, 0, moved);
+                      commitDisplayGroupOrder(reordered);
+                      setDraggedGroupId(null);
+                      setDragOverPlacement(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedGroupId(null);
+                      setDragOverPlacement(null);
+                    }}
+                  >
+                    <div className="sidebar-group-main">
+                      <div className="sidebar-group-title-row">
+                        <GripVertical size={13} className="sidebar-group-drag-handle" />
+                        {editingGroupId === group.id ? (
+                          <input
+                            className="sidebar-group-title-input"
+                            type="text"
+                            value={editingGroupTitle}
+                            onChange={(e) => setEditingGroupTitle(e.target.value)}
+                            onBlur={() => commitGroupTitleEdit(group.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitGroupTitleEdit(group.id);
+                              if (e.key === "Escape") cancelGroupTitleEdit();
+                            }}
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="sidebar-group-title">{group.title || group.id}</div>
+                        )}
+                        <div className="sidebar-group-inline-actions">
+                          <button
+                            type="button"
+                            className="filter-menu-icon-btn"
+                            title="Rename group"
+                            aria-label="Rename group"
+                            onClick={() => startGroupTitleEdit(group)}
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="filter-menu-icon-btn"
+                            title="Group color"
+                            aria-label="Group color"
+                            onClick={() => openGroupColorPicker(group.id)}
+                          >
+                            <Palette size={12} />
+                            <input
+                              ref={(node) => { groupColorInputRefs.current[group.id] = node; }}
+                              className="sidebar-group-inline-color-input"
+                              type="color"
+                              value={group.bgColor || GROUP_COLOR_PALETTE[(group.order ?? 0) % GROUP_COLOR_PALETTE.length]}
+                              onChange={(e) => updateGroupPatch(group.id, { bgColor: e.target.value })}
+                              tabIndex={-1}
+                              aria-hidden="true"
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            className="filter-menu-icon-btn"
+                            title={canDelete ? "Delete group" : "Cannot delete the last group"}
+                            aria-label={canDelete ? "Delete group" : "Cannot delete the last group"}
+                            disabled={!canDelete}
+                            onClick={() => onDeleteGroup?.(group.id)}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="sidebar-group-meta">{count} item{count === 1 ? "" : "s"}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         </div>
         </>
-      )}
-
-      {filterMenu && (
-        <div
-          ref={filterMenuRef}
-          className="timeline-context-menu sidebar-filter-menu"
-          style={{
-            position: 'fixed',
-            left: `${filterMenu.x}px`,
-            top: `${filterMenu.y}px`,
-          }}
-        >
-          <div className="filter-menu-dropdown">
-            {allTags.length === 0 && (
-              <div className="filter-menu-empty">No tags found</div>
-            )}
-            {allTags.map((tag) => {
-              const isShown = activeTags.includes(tag);
-              const isHidden = hiddenTags.includes(tag);
-              const isPinned = pinnedTags.includes(tag);
-              return (
-                <div key={tag} className="context-menu-item filter-menu-item filter-menu-item-with-pin">
-                  <span className="filter-menu-label">{tag}</span>
-                  <div className="filter-menu-actions">
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleTag?.(tag);
-                      }}
-                      aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                      title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                    >
-                      <Eye size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleHiddenTag?.(tag);
-                      }}
-                      aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
-                      title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
-                    >
-                      <EyeOff size={12} />
-                    </button>
-                  <button
-                    type="button"
-                    className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTogglePinnedTag?.(tag);
-                    }}
-                    aria-label={isPinned ? "Remove label" : "Use as label"}
-                    title={isPinned ? "Remove label" : "Use as label"}
-                  >
-                    <Tag size={12} />
-                  </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="filter-menu-divider" />
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.events ?? true}
-              onChange={() => onToggleFilterScope?.("events")}
-            />
-            <span>Apply to events</span>
-          </label>
-          <label className="context-menu-item filter-menu-item">
-            <input
-              type="checkbox"
-              checked={filterScope?.spans ?? true}
-              onChange={() => onToggleFilterScope?.("spans")}
-            />
-            <span>Apply to spans</span>
-          </label>
-          <div className="filter-menu-divider" />
-          <button
-            className="context-menu-item"
-            type="button"
-            onClick={() => onClearTags?.()}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      {newElementMenu && (
-        <div
-          ref={newElementMenuRef}
-          className="timeline-context-menu"
-          style={{
-            position: "fixed",
-            left: `${newElementMenu.x}px`,
-            top: `${newElementMenu.y}px`,
-          }}
-        >
-          <button
-            className="context-menu-item"
-            onClick={() => handleNewElementAction(() => onAddEvent?.())}
-          >
-            <RectangleHorizontal size={16} />
-            <span>Add Event</span>
-          </button>
-          <button
-            className="context-menu-item"
-            onClick={() => handleNewElementAction(() => onAddSpan?.())}
-          >
-            <RectangleEllipsis size={16} />
-            <span>Add Span</span>
-          </button>
-          <button
-            className="context-menu-item"
-            onClick={() => handleNewElementAction(() => onAddEra?.())}
-          >
-            <SquareSplitHorizontal size={16} />
-            <span>Add Era</span>
-          </button>
-        </div>
       )}
 
       {elementMenu?.element && (
@@ -813,9 +935,6 @@ export default function Sidebar({
           </button>
         </div>
       )}
-
-
-
 
     </div>
   );

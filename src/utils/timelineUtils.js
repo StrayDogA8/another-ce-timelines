@@ -90,10 +90,28 @@ export function pickStep(range) {
 // Pattern: -1, +1, -2, +2, -3, +3, ...
 export function buildSpanChildPlacement(spans, branchOrdering = "later-first") {
   const placement = {};
+  const spanById = Object.fromEntries(spans.map((span) => [span.id, span]));
+  const isContiguous = (left, right) =>
+    Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) < 1e-6;
+
+  // Extension links: child starts exactly when parent ends.
+  for (const span of spans) {
+    if (!span.extendFrom) continue;
+    const parent = spanById[span.extendFrom];
+    if (!parent) continue;
+    if (!isContiguous(parent.end, span.start)) continue;
+    placement[span.id] = {
+      parentId: parent.id,
+      offset: 0,
+      priority: -1,
+      mode: "extend",
+    };
+  }
 
   // Group children by their parent
   const childrenByParent = {};
   for (const span of spans) {
+    if (placement[span.id]?.mode === "extend") continue;
     if (span.parent) {
       if (!childrenByParent[span.parent]) childrenByParent[span.parent] = [];
       childrenByParent[span.parent].push(span.id);
@@ -189,12 +207,7 @@ export function layoutSpans({
   const sizeRank = (size) => size === "thick" ? 2 : size === "thin" ? 0 : 1;
   const getEffectiveSize = (s) => {
     if (!s) return "normal";
-    let maxRank = sizeRank(s.spanSize);
-    if (Array.isArray(s.breaks)) {
-      for (const brk of s.breaks) {
-        maxRank = Math.max(maxRank, sizeRank(brk.size));
-      }
-    }
+    const maxRank = sizeRank(s.spanSize);
     return maxRank === 2 ? "thick" : maxRank === 0 ? "thin" : "normal";
   };
   const isThickSpan = (s) => getEffectiveSize(s) === "thick";
@@ -291,7 +304,7 @@ export function layoutSpans({
     return true;
   }
 
-  function familyFitsAtLane(span, baseLane, start, end) {
+  function familyFitsAtLane(span, baseLane) {
     const rootId = span.id;
     const { minOffset, maxOffset } = getFamilyOffsets(rootId);
 
@@ -350,7 +363,17 @@ export function layoutSpans({
     const thick = isThickSpan(span);
     const thin = isThinSpan(span);
 
-    if (placement) {
+    if (placement?.mode === "extend") {
+      const parentLane = spanLaneById[placement.parentId];
+      if (parentLane !== undefined) {
+        lane = parentLane;
+      } else {
+        lane = 0;
+        while (!spanFitsAllNeededLanes(lane, span, rootId)) {
+          lane++;
+        }
+      }
+    } else if (placement) {
       const parentLane = spanLaneById[placement.parentId];
       if (parentLane !== undefined) {
         const direction = placement.offset > 0 ? 1 : -1;
@@ -381,7 +404,7 @@ export function layoutSpans({
       }
     } else {
       lane = 0;
-      while (!familyFitsAtLane(span, lane, span.start, span.end)) {
+      while (!familyFitsAtLane(span, lane)) {
         lane++;
       }
     }

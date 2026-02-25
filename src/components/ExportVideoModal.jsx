@@ -303,8 +303,10 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
         } else {
           ctx.clearRect(0, 0, outputW, outputH);
         }
+
         const vpLeft = sourceRegionStart + progress * totalPanPx;
         const vpTop = yOffset;
+
         const srcX = Math.max(0, vpLeft);
         const srcY = Math.max(0, vpTop);
         const srcRight = Math.min(sourceFullWidth, vpLeft + cropWidth);

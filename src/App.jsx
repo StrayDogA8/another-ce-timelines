@@ -69,7 +69,85 @@ const RESERVED_FIELD_IDS = new Set([
   "__proto__", "constructor", "prototype", "toString", "valueOf",
 ]);
 
+const DEFAULT_GROUP_ID = "g-main";
+const DEFAULT_GROUP = {
+  id: DEFAULT_GROUP_ID,
+  title: "Main",
+  order: 0,
+  stack: 0,
+  visible: true,
+  locked: false,
+};
+
 function App() {
+  const normalizeTimelineData = useCallback((data) => {
+    if (!data || typeof data !== "object") return data;
+
+    const elements = Array.isArray(data.elements) ? data.elements : [];
+    const groupsRaw = Array.isArray(data.file?.groups) ? data.file.groups : [];
+    const sourceGroups = groupsRaw.length > 0 ? groupsRaw : [DEFAULT_GROUP];
+    const groups = sourceGroups.map((group, index) => {
+      const fallbackId = index === 0 ? DEFAULT_GROUP_ID : `g-${index + 1}`;
+      return {
+        ...DEFAULT_GROUP,
+        ...group,
+        id: group?.id || fallbackId,
+        title: group?.title || (index === 0 ? "Main" : `Group ${index + 1}`),
+        order: Number.isFinite(group?.order) ? group.order : index,
+        stack: Number.isFinite(group?.stack) ? group.stack : index,
+        visible: group?.visible !== false,
+        locked: group?.locked === true,
+      };
+    });
+    const groupIdSet = new Set(groups.map((group) => group?.id).filter(Boolean));
+    const defaultGroupId = groups[0]?.id || DEFAULT_GROUP_ID;
+
+    // Migrate old parent-defined branches/forks/merges to child-defined parent/mergeParent.
+    const branchParentMap = {};
+    const mergeParentMap = {};
+    for (const el of elements) {
+      if (el.type !== "span") continue;
+      const branches = Array.isArray(el.branches) ? el.branches : [];
+      const forks = Array.isArray(el.forks) ? el.forks : [];
+      const allBranches = Array.from(new Set([...branches, ...forks]));
+      for (const childId of allBranches) {
+        branchParentMap[childId] = el.id;
+      }
+      const merges = Array.isArray(el.merges) ? el.merges : [];
+      for (const childId of merges) {
+        mergeParentMap[childId] = el.id;
+      }
+    }
+
+    const nextElements = elements.map((element) => {
+      const next = { ...element };
+      const needsGroupId = next.type === "event" || next.type === "span";
+      if (needsGroupId && !groupIdSet.has(next.groupId)) {
+        next.groupId = defaultGroupId;
+      }
+
+      if (next.type !== "span") return next;
+
+      const { branches: _b, forks: _f, merges: _m, ...rest } = next;
+      if (!rest.parent && branchParentMap[element.id]) {
+        rest.parent = branchParentMap[element.id];
+      }
+      if (!rest.mergeParent && mergeParentMap[element.id]) {
+        rest.mergeParent = mergeParentMap[element.id];
+      }
+      return rest;
+    });
+
+    return {
+      ...data,
+      file: {
+        ...(data.file || {}),
+        groups,
+      },
+      elements: nextElements,
+    };
+  }, []);
+
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 600;
@@ -128,10 +206,6 @@ function App() {
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
   const [returnToProjectSettings, setReturnToProjectSettings] = useState(false);
   const [isProjectSettingsCovered, setIsProjectSettingsCovered] = useState(false);
-  const [filterScope, setFilterScope] = useState({
-    events: true,
-    spans: true,
-  });
 
   const HISTORY_LIMIT = 100;
   const historyRef = useRef({ past: [], future: [] });
@@ -322,7 +396,7 @@ function App() {
 
   const pluginApi = useMemo(() => createPluginApi({
     getTimeline: () => timelineDataRef.current,
-    setTimeline: (next) => setTimelineData(next),
+    setTimeline: (next) => setTimelineData(normalizeTimelineData(next)),
     saveTimeline: async (data) => {
       const target = data ?? timelineDataRef.current;
       if (!target?.file) {
@@ -345,7 +419,15 @@ function App() {
     unregisterAction,
     registerField,
     unregisterField,
-  }), [registerView, unregisterView, registerAction, unregisterAction, registerField, unregisterField]);
+  }), [
+    registerView,
+    unregisterView,
+    registerAction,
+    unregisterAction,
+    registerField,
+    unregisterField,
+    normalizeTimelineData,
+  ]);
 
   // pluginApi is passed explicitly to plugins via scopedApi — no global exposure
 
@@ -714,16 +796,105 @@ function App() {
     setActiveTags((prev) => prev.filter((value) => value !== tag));
   };
 
-  const handleToggleFilterScope = (key) => {
-    setFilterScope((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
   const handleClearTags = () => {
     setActiveTags([]);
     setHiddenTags([]);
+  };
+
+  const handleAddGroup = () => {
+    setTimelineData((prevData) => {
+      const existing = Array.isArray(prevData.file?.groups) ? prevData.file.groups : [];
+      const existingIds = new Set(existing.map((group) => group?.id).filter(Boolean));
+      let nextIndex = existing.length + 1;
+      let nextId = `g-${nextIndex}`;
+      while (existingIds.has(nextId)) {
+        nextIndex += 1;
+        nextId = `g-${nextIndex}`;
+      }
+
+      const nextGroup = {
+        id: nextId,
+        title: `Group ${nextIndex}`,
+        order: existing.length,
+        stack: existing.length,
+        visible: true,
+        locked: false,
+      };
+
+      const updatedData = {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          groups: [...existing, nextGroup],
+        },
+      };
+
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
+  const handleUpdateGroup = (groupId, updates) => {
+    if (!groupId || !updates || typeof updates !== "object") return;
+    setTimelineData((prevData) => {
+      const existing = Array.isArray(prevData.file?.groups) ? prevData.file.groups : [];
+      const baseGroups = existing.length > 0 ? existing : [DEFAULT_GROUP];
+      const nextGroups = baseGroups.map((group) => (
+        group.id === groupId ? { ...group, ...updates } : group
+      ));
+      const hasMatch = baseGroups.some((group) => group.id === groupId);
+      const finalGroups = hasMatch
+        ? nextGroups
+        : [...nextGroups, { ...DEFAULT_GROUP, id: groupId, ...updates }];
+      const updatedData = {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          groups: finalGroups,
+        },
+      };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
+  const handleDeleteGroup = (groupId) => {
+    if (!groupId) return;
+    setTimelineData((prevData) => {
+      const existing = Array.isArray(prevData.file?.groups) ? prevData.file.groups : [];
+      const baseGroups = existing.length > 0 ? existing : [DEFAULT_GROUP];
+      if (baseGroups.length <= 1) return prevData;
+
+      const remainingGroups = baseGroups.filter((group) => group.id !== groupId);
+      if (remainingGroups.length === 0) return prevData;
+      const fallbackGroupId = remainingGroups[0].id;
+
+      const nextElements = (prevData.elements || []).map((element) => {
+        if ((element.type === "event" || element.type === "span") && element.groupId === groupId) {
+          return { ...element, groupId: fallbackGroupId };
+        }
+        return element;
+      });
+
+      const normalizedGroups = remainingGroups.map((group, index) => ({
+        ...group,
+        order: index,
+      }));
+
+      const updatedData = {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          groups: normalizedGroups,
+        },
+        elements: nextElements,
+      };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
   };
 
   const handleFilterByTag = (tag) => {
@@ -818,11 +989,13 @@ function App() {
     const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
     const eventBaseId = generateIdFromTitle("New Event", "event");
     const eventId = makeUniqueId(eventBaseId, timelineData.elements);
+    const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newEvent = {
       id: eventId,
       type: "event",
       title: "New Event",
       date: clampedYear,
+      groupId: defaultGroupId,
       parents: [],
       eventLineStyle: "solid",
       eventBorderStyle: "solid",
@@ -856,12 +1029,14 @@ function App() {
 
     const spanBaseId = generateIdFromTitle("New Span", "span");
     const spanId = makeUniqueId(spanBaseId, timelineData.elements);
+    const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newSpan = {
       id: spanId,
       type: "span",
       title: "New Span",
       start,
       end,
+      groupId: defaultGroupId,
       color: "#A6977E",
     };
 
@@ -934,6 +1109,7 @@ function App() {
 
       if (original.type === "span") {
         delete baseCopy.parent;
+        delete baseCopy.extendFrom;
         delete baseCopy.mergeParent;
       }
 
@@ -961,9 +1137,10 @@ function App() {
           };
         }
 
-        if (el.type === "span" && (el.parent === elementId || el.mergeParent === elementId)) {
+        if (el.type === "span" && (el.parent === elementId || el.extendFrom === elementId || el.mergeParent === elementId)) {
           const cleaned = { ...el };
           if (cleaned.parent === elementId) delete cleaned.parent;
+          if (cleaned.extendFrom === elementId) delete cleaned.extendFrom;
           if (cleaned.mergeParent === elementId) delete cleaned.mergeParent;
           return cleaned;
         }
@@ -1088,6 +1265,21 @@ function App() {
     });
   };
 
+  const handleUpdateGroups = (nextGroups) => {
+    setTimelineData((prevData) => {
+      const updatedData = {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          groups: nextGroups,
+        },
+      };
+      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
   const handleDownloadJSON = () => {
     const dataStr = JSON.stringify(timelineData, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
@@ -1123,46 +1315,6 @@ function App() {
 
       const loadedTimeline = await window.electron.loadTimeline(timelineId);
       console.log('Loaded timeline from Electron file system');
-
-      const normalizeTimelineData = (data) => {
-        const elements = data.elements || [];
-
-        // Migrate old parent-defined branches/forks/merges to child-defined parent/mergeParent.
-        // Build maps: childId -> parentId for branches, childId -> parentId for merges.
-        const branchParentMap = {};
-        const mergeParentMap = {};
-        for (const el of elements) {
-          if (el.type !== "span") continue;
-          const branches = Array.isArray(el.branches) ? el.branches : [];
-          const forks = Array.isArray(el.forks) ? el.forks : [];
-          const allBranches = Array.from(new Set([...branches, ...forks]));
-          for (const childId of allBranches) {
-            branchParentMap[childId] = el.id;
-          }
-          const merges = Array.isArray(el.merges) ? el.merges : [];
-          for (const childId of merges) {
-            mergeParentMap[childId] = el.id;
-          }
-        }
-
-        const nextElements = elements.map((element) => {
-          if (element.type !== "span") return element;
-          const { branches: _b, forks: _f, merges: _m, ...rest } = element;
-          // Preserve existing child-defined fields; fill from old parent-defined arrays
-          if (!rest.parent && branchParentMap[element.id]) {
-            rest.parent = branchParentMap[element.id];
-          }
-          if (!rest.mergeParent && mergeParentMap[element.id]) {
-            rest.mergeParent = mergeParentMap[element.id];
-          }
-          return rest;
-        });
-        return {
-          ...data,
-          elements: nextElements,
-        };
-      };
-
       // Update the timeline data
       setTimelineData(normalizeTimelineData(loadedTimeline));
       setCurrentTimelineId(timelineId);
@@ -1207,6 +1359,7 @@ function App() {
         endLabel: timelineConfig.endLabel,
         layout: timelineConfig.layout || "Horizontal",
         branchOrdering: timelineConfig.branchOrdering || "later-first",
+        groups: [DEFAULT_GROUP],
       },
       elements: []
     };
@@ -1653,12 +1806,6 @@ function App() {
       if (element.type !== "event" && element.type !== "span") {
         return true;
       }
-      if (element.type === "event" && !filterScope.events) {
-        return true;
-      }
-      if (element.type === "span" && !filterScope.spans) {
-        return true;
-      }
       const tags = Array.isArray(element.tags) ? element.tags : [];
 
       if (tags.some((tag) => hideSet.has(tag))) {
@@ -1671,7 +1818,7 @@ function App() {
 
       return tags.some((tag) => showSet.has(tag));
     });
-  }, [timelineData, activeTags, hiddenTags, filterScope]);
+  }, [timelineData, activeTags, hiddenTags]);
 
   const filteredTimelineData = useMemo(() => ({
     ...timelineData,
@@ -1814,11 +1961,13 @@ function App() {
           hiddenTags={hiddenTags}
           onToggleTag={handleToggleTag}
           onToggleHiddenTag={handleToggleHiddenTag}
-          filterScope={filterScope}
-          onToggleFilterScope={handleToggleFilterScope}
           onClearTags={handleClearTags}
           pinnedTags={pinnedTags}
           onTogglePinnedTag={handleTogglePinnedTag}
+          onAddGroup={handleAddGroup}
+          onUpdateGroup={handleUpdateGroup}
+          onUpdateGroups={handleUpdateGroups}
+          onDeleteGroup={handleDeleteGroup}
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
@@ -1907,8 +2056,6 @@ function App() {
             isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
             leftPanelWidth={currentLeftWidth}
             isLeftPanelOpen={!isLeftCollapsed}
-            filterScope={filterScope}
-            onToggleFilterScope={handleToggleFilterScope}
             activeTags={activeTags}
             hiddenTags={hiddenTags}
             allTags={allTags}
@@ -2031,6 +2178,7 @@ function App() {
                 activeTags={activeTags}
                 onToggleTag={handleToggleTag}
                 pluginFields={pluginFields}
+                onUpdateGroups={handleUpdateGroups}
               />
             </aside>
           )}

@@ -49,6 +49,9 @@ export function updateElementReferences(timelineData, oldId, newId) {
       if (element.parent === oldId) {
         updated.parent = newId;
       }
+      if (element.extendFrom === oldId) {
+        updated.extendFrom = newId;
+      }
       if (element.mergeParent === oldId) {
         updated.mergeParent = newId;
       }

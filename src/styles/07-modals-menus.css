@@ -134,8 +134,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -143,6 +143,11 @@
   cursor: pointer;
   opacity: 0.55;
   transition: all 0.15s ease;
+}
+
+.filter-menu-icon-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .filter-menu-icon-btn:hover,
