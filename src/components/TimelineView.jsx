@@ -34,17 +34,6 @@ const withAlpha = (hex, alpha) => {
   return value;
 };
 
-const GROUP_COLOR_PALETTE = [
-  "#ffd7d7",
-  "#ffe6bf",
-  "#fff4b8",
-  "#dff5c8",
-  "#cdeffd",
-  "#dde1ff",
-  "#efdcff",
-  "#ffd9f0",
-];
-
 const TimelineView = forwardRef(function TimelineView({
   selectedId,
   onSelect,
@@ -322,10 +311,11 @@ const TimelineView = forwardRef(function TimelineView({
     const SPAN_HEIGHT = 23;
     const SPAN_OFFSET = 14;
     const SPAN_GAP = 6;
-    const SPAN_VERTICAL_GAP = 0;
+    const SPAN_VERTICAL_GAP = 2;
 
     // events
-    const EVENT_WIDTH = 160;
+    const compactEvents = Boolean(file?.compactEvents);
+    const EVENT_WIDTH = compactEvents ? 130 : 160;
     const EVENT_GAP = 15;
     const LANE_SPACING = 37;
     const BOX_OFFSET = 50;
@@ -351,6 +341,11 @@ const TimelineView = forwardRef(function TimelineView({
       if (stackDiff !== 0) return stackDiff;
       return (a.order ?? 0) - (b.order ?? 0);
     });
+    const globalSpanChildPlacement = buildSpanChildPlacement(
+      adjustedSpans,
+      timelineData?.file?.branchOrdering || "later-first"
+    );
+    const globalSpanMergePlacement = buildSpanMergePlacement(adjustedSpans);
 
     // First pass: calculate with temporary BASE_LINE_Y to determine content extent
     const TEMP_BASE_LINE_Y = 500;
@@ -358,22 +353,15 @@ const TimelineView = forwardRef(function TimelineView({
     const GROUP_BAND_PADDING_Y = 8;
     const EMPTY_GROUP_HEIGHT = EVENT_MIN_HEIGHT;
     const tempGroupLayoutsRaw = groupsByStack.map((group, index) => {
-      const spansInGroupRaw = adjustedSpans.filter((span) => span.groupId === group.id);
-      const groupSpanIdSet = new Set(spansInGroupRaw.map((span) => span.id));
-      const spansInGroup = spansInGroupRaw.map((span) => {
-        const next = { ...span };
-        if (next.parent && !groupSpanIdSet.has(next.parent)) delete next.parent;
-        if (next.extendFrom && !groupSpanIdSet.has(next.extendFrom)) delete next.extendFrom;
-        if (next.mergeParent && !groupSpanIdSet.has(next.mergeParent)) delete next.mergeParent;
-        return next;
-      });
+      const spansInGroup = adjustedSpans.filter((span) => span.groupId === group.id);
       const eventsInGroup = adjustedEvents.filter((event) => event.groupId === group.id);
-
-      const groupSpanChildPlacement = buildSpanChildPlacement(
-        spansInGroup,
-        timelineData?.file?.branchOrdering || "later-first"
+      const spanIdsInGroup = new Set(spansInGroup.map((span) => span.id));
+      const groupSpanChildPlacement = Object.fromEntries(
+        Object.entries(globalSpanChildPlacement).filter(([childId]) => spanIdsInGroup.has(childId))
       );
-      const groupSpanMergePlacement = buildSpanMergePlacement(spansInGroup);
+      const groupSpanMergePlacement = Object.fromEntries(
+        Object.entries(globalSpanMergePlacement).filter(([childId]) => spanIdsInGroup.has(childId))
+      );
 
       const { finalSpans: tempSpans, spanLaneEnds } = layoutSpans({
         spans: spansInGroup,
@@ -402,6 +390,7 @@ const TimelineView = forwardRef(function TimelineView({
         EVENT_GAP,
         LANE_SPACING,
         BOX_OFFSET,
+        compactEvents,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
       const eventBottoms = tempEvents.map((event) => event.top + (event._boxHeight || 29));
@@ -486,6 +475,7 @@ const TimelineView = forwardRef(function TimelineView({
         LANE_SPACING,
         BOX_OFFSET,
         fixedEventHeight: Boolean(file.fixedEventHeight),
+        compactEvents,
         fontFamily: resolvedFont,
       });
 
@@ -579,13 +569,11 @@ const TimelineView = forwardRef(function TimelineView({
 
     const groupLayouts = [...groupLayoutsByStack].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-    const spanChildPlacement = {};
-    const spanMergePlacement = {};
+    const spanChildPlacement = globalSpanChildPlacement;
+    const spanMergePlacement = globalSpanMergePlacement;
     const finalSpans = [];
     const finalEvents = [];
     groupLayouts.forEach((group) => {
-      Object.assign(spanChildPlacement, group.spanChildPlacement);
-      Object.assign(spanMergePlacement, group.spanMergePlacement);
       finalSpans.push(...group.finalSpans);
       finalEvents.push(...group.finalEvents);
     });
@@ -652,21 +640,13 @@ const TimelineView = forwardRef(function TimelineView({
 
     return {
       file,
-      events,
-      adjustedEvents,
-      adjustedSpans,
-      adjustedEras,
       groupLayouts,
       spanChildPlacement,
       spanMergePlacement,
       finalSpans,
       finalEvents,
       finalEras,
-      minYear,
-      maxYear,
-      range,
       PX_PER_YEAR,
-      step,
       timelineWidth,
       yearToPx,
       calculatedHeight,
@@ -684,6 +664,82 @@ const TimelineView = forwardRef(function TimelineView({
     () => new Map(finalSpans.map((span) => [span.id, span])),
     [finalSpans]
   );
+  const groupLayoutById = useMemo(
+    () => new Map(groupLayouts.map((group) => [group.id, group])),
+    [groupLayouts]
+  );
+  const extensionParentRoundedSet = useMemo(() => {
+    const ids = new Set();
+    finalSpans.forEach((childSpan) => {
+      const placement = spanChildPlacement[childSpan.id];
+      if (!placement || placement.mode !== "extend") return;
+      const parentSpan = finalSpanById.get(placement.parentId);
+      if (!parentSpan) return;
+      const childH = childSpan.spanHeight ?? 20;
+      const parentH = parentSpan.spanHeight ?? 20;
+      const parentIsLarger = parentH > childH + 0.1;
+      if (parentIsLarger && parentSpan.spanSize !== "thin") {
+        ids.add(parentSpan.id);
+      }
+    });
+    return ids;
+  }, [finalSpans, spanChildPlacement, finalSpanById]);
+  const spanRenderTopById = useMemo(() => {
+    const tops = new Map(finalSpans.map((span) => [span.id, span.top]));
+    const adjacency = new Map();
+    finalSpans.forEach((span) => adjacency.set(span.id, new Set()));
+    finalSpans.forEach((span) => {
+      const placement = spanChildPlacement[span.id];
+      if (!placement || placement.mode !== "extend") return;
+      const parentId = placement.parentId;
+      if (!adjacency.has(parentId)) return;
+      adjacency.get(span.id)?.add(parentId);
+      adjacency.get(parentId)?.add(span.id);
+    });
+
+    const visited = new Set();
+    finalSpans.forEach((startSpan) => {
+      if (visited.has(startSpan.id)) return;
+      const stack = [startSpan.id];
+      const componentIds = [];
+      while (stack.length > 0) {
+        const id = stack.pop();
+        if (!id || visited.has(id)) continue;
+        visited.add(id);
+        componentIds.push(id);
+        adjacency.get(id)?.forEach((nextId) => {
+          if (!visited.has(nextId)) stack.push(nextId);
+        });
+      }
+      if (componentIds.length <= 1) return;
+
+      const componentSpans = componentIds
+        .map((id) => finalSpanById.get(id))
+        .filter(Boolean);
+      if (componentSpans.length <= 1) return;
+
+      // Keep the largest span fixed in its lane; center smaller spans around it.
+      const anchor = componentSpans.reduce((best, current) => {
+        const bestH = best?.spanHeight ?? 20;
+        const currentH = current?.spanHeight ?? 20;
+        return currentH > bestH ? current : best;
+      }, componentSpans[0]);
+      const anchorH = anchor?.spanHeight ?? 20;
+      const anchorTop = tops.get(anchor.id) ?? anchor.top;
+      const anchorCenter = anchorTop + anchorH / 2;
+
+      componentSpans.forEach((span) => {
+        const spanH = span.spanHeight ?? 20;
+        if (span.id === anchor.id || spanH >= anchorH - 0.1) {
+          tops.set(span.id, span.top);
+          return;
+        }
+        tops.set(span.id, anchorCenter - spanH / 2);
+      });
+    });
+
+    return tops;
+  }, [finalSpans, spanChildPlacement, finalSpanById]);
   const groupBandBoxes = useMemo(() => {
     return groupLayouts.map((group) => {
       if (Number.isFinite(group.extentTop) && Number.isFinite(group.extentBottom)) {
@@ -706,7 +762,45 @@ const TimelineView = forwardRef(function TimelineView({
       };
     });
   }, [groupLayouts, BASE_LINE_Y]);
+  const groupBandBottomById = useMemo(() => {
+    const map = new Map();
+    groupBandBoxes.forEach((box) => {
+      if (!box?.groupId) return;
+      map.set(box.groupId, box.top + box.height);
+    });
+    return map;
+  }, [groupBandBoxes]);
   const renderLegacyLayers = file?.debugLegacyLayers === true;
+
+  useEffect(() => {
+    const timelineEl = timelineRef.current;
+    if (!timelineEl) return;
+    let rafId = null;
+    rafId = requestAnimationFrame(() => {
+      const spanNodes = timelineEl.querySelectorAll(".span-item");
+      spanNodes.forEach((spanNode) => {
+        // Measure with years visible so the decision is consistent.
+        spanNode.classList.remove("hide-span-years");
+        const titleNode = spanNode.querySelector(".span-title");
+        const yearsNode = spanNode.querySelector(".span-years");
+        if (!titleNode || !yearsNode) return;
+        const isTitleTruncated = titleNode.scrollWidth - titleNode.clientWidth > 1;
+        spanNode.classList.toggle("hide-span-years", isTitleTruncated);
+      });
+    });
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [
+    finalSpans,
+    groupLayouts,
+    renderLegacyLayers,
+    selectedId,
+    file?.useMonths,
+    file?.hideDecimals,
+    file?.negID,
+    file?.posID,
+  ]);
 
   // Notify parent of height changes
   useEffect(() => {
@@ -1866,17 +1960,22 @@ const TimelineView = forwardRef(function TimelineView({
             // Calculate actual visual distance for connector height and offset
             let connectorHeight = undefined;
             let connectorTransform = undefined;
-            const parentSpan = finalSpans.find(s => s.id === placement.parentId);
-            const isTopChild = parentSpan ? span.top < parentSpan.top : placement.offset > 0;
-            const isBottomChild = parentSpan ? span.top > parentSpan.top : placement.offset < 0;
+            const parentSpan = finalSpanById.get(placement.parentId);
+            const spanTop = spanRenderTopById.get(span.id) ?? span.top;
+            const parentTopRender = parentSpan ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top) : undefined;
+            const isTopChild = parentSpan ? spanTop < parentTopRender : placement.offset > 0;
+            const isBottomChild = parentSpan ? spanTop > parentTopRender : placement.offset < 0;
             const connectorOffsetX = spanH + 1;
             const laneDifference = parentSpan ? Math.abs(span.lane - parentSpan.lane) : 0;
-            if (parentSpan && laneDifference >= 1) {
-              const childTop = span.top;
-              const parentTop = parentSpan.top;
+            if (parentSpan && Number.isFinite(parentTopRender)) {
+              const childTop = spanTop;
+              const parentTop = parentTopRender;
               const deltaTop = parentTop - childTop;
               const parentH = parentSpan.spanHeight ?? 20;
-              if (laneDifference === 1) {
+              if (Math.abs(deltaTop) < 0.5) {
+                connectorHeight = "0px";
+                connectorTransform = undefined;
+              } else if (laneDifference <= 1) {
                 if (deltaTop >= 0) {
                   // Top child, 1 lane
                   connectorHeight = `${deltaTop + 1}px`;
@@ -1891,18 +1990,19 @@ const TimelineView = forwardRef(function TimelineView({
                   // Top child, >1 lane
                   const extraTrim = Math.round(spanH / 2) + 2;
                   connectorHeight = `${Math.max(0, deltaTop + spanH - extraTrim)}px`;
-                  connectorTransform = `translate(-${connectorOffsetX}px, 0px)`;
+                  connectorTransform = "translate(0px, 0px)";
                 } else {
                   // Bottom child, >1 lane
                   const parentTrim = Math.round(parentH / 2) + 2;
                   connectorHeight = `${Math.max(0, -deltaTop + spanH - parentTrim)}px`;
-                  connectorTransform = `translate(-${connectorOffsetX}px, ${deltaTop + parentTrim}px)`;
+                  connectorTransform = `translate(0px, ${deltaTop + parentTrim}px)`;
                 }
               }
             }
 
-            const connectorLeft =
-              span.left - (laneDifference === 1 ? connectorOffsetX : 0);
+            const connectorLeft = span.left - connectorOffsetX;
+            const connectorThickness = spanH + 1;
+            const connectorZIndex = 3000 - connectorThickness * 10 - Math.min(laneDifference, 20);
 
             return (
               <div
@@ -1910,8 +2010,8 @@ const TimelineView = forwardRef(function TimelineView({
                 style={{
                   position: 'absolute',
                   left: `${connectorLeft}px`,
-                  top: `${span.top}px`,
-                  zIndex: 1000 - laneDifference,
+                  top: `${spanTop}px`,
+                  zIndex: connectorZIndex,
                   pointerEvents: 'none',
                 }}
               >
@@ -1940,13 +2040,53 @@ const TimelineView = forwardRef(function TimelineView({
               </div>
             );
           })}
+          {/* Extension connectors - align mixed-size extension chains by center */}
+          {finalSpans.map((span) => {
+            const placement = spanChildPlacement[span.id];
+            if (!placement || placement.mode !== "extend") return null;
+            const parentSpan = finalSpanById.get(placement.parentId);
+            if (!parentSpan) return null;
+
+            const spanH = span.spanHeight ?? 20;
+            const parentH = parentSpan.spanHeight ?? 20;
+            const childTop = spanRenderTopById.get(span.id) ?? span.top;
+            const parentTop = spanRenderTopById.get(parentSpan.id) ?? parentSpan.top;
+            const childCenter = childTop + spanH / 2;
+            const parentCenter = parentTop + parentH / 2;
+            const centerDelta = childCenter - parentCenter;
+            if (Math.abs(centerDelta) < 0.75) return null;
+
+            const connectorTop = Math.min(childCenter, parentCenter);
+            const connectorHeight = Math.abs(centerDelta);
+            const connectorWidth = Math.max(3, Math.min(7, Math.round(Math.min(spanH, parentH) * 0.28)));
+            const connectorLeft = span.left - Math.floor(connectorWidth / 2);
+            const connectorColor = span.color || parentSpan.color || "var(--element-bg)";
+            const connectorZIndex = 3000 - connectorWidth * 10;
+
+            return (
+              <div
+                key={`extension-connector-${span.id}`}
+                style={{
+                  position: "absolute",
+                  left: `${connectorLeft}px`,
+                  top: `${connectorTop}px`,
+                  width: `${connectorWidth}px`,
+                  height: `${connectorHeight}px`,
+                  borderRadius: `${Math.ceil(connectorWidth / 2)}px`,
+                  backgroundColor: connectorColor,
+                  pointerEvents: "none",
+                  zIndex: connectorZIndex,
+                }}
+              />
+            );
+          })}
           {/* Merge connectors - at the END of child spans, flipped horizontally */}
           {finalSpans.map((span) => {
             const mergePlacement = spanMergePlacement[span.id];
             if (!mergePlacement) return null;
 
             const mergeSpanH = span.spanHeight ?? 20;
-            const mergeParent = finalSpans.find(s => s.id === mergePlacement.parentId);
+            const mergeParent = finalSpanById.get(mergePlacement.parentId);
             if (!mergeParent) return null;
 
             const laneDifference = Math.abs(span.lane - mergeParent.lane);
@@ -1958,8 +2098,8 @@ const TimelineView = forwardRef(function TimelineView({
             let mergeConnectorHeight = undefined;
             let mergeConnectorOffset = undefined;
             if (laneDifference >= 1) {
-              const childTop = span.top;
-              const parentTop = mergeParent.top;
+              const parentTop = spanRenderTopById.get(mergeParent.id) ?? mergeParent.top;
+              const childTop = spanRenderTopById.get(span.id) ?? span.top;
               const deltaTop = parentTop - childTop;
               const parentH = mergeParent.spanHeight ?? 20;
               if (laneDifference === 1) {
@@ -1987,6 +2127,7 @@ const TimelineView = forwardRef(function TimelineView({
             const mergeAnchorAdjust = Math.max(0, Math.round((21 - mergeConnectorWidth) / 2));
             const thinMergeNudgeX = span.spanSize === "thin" ? 5 : 0;
             const connectorLeft = span.left + span.width - mergeAnchorAdjust + thinMergeNudgeX;
+            const mergeConnectorZIndex = 3000 - mergeConnectorWidth * 10 - Math.min(laneDifference, 20);
 
             return (
               <div
@@ -1994,8 +2135,8 @@ const TimelineView = forwardRef(function TimelineView({
                 style={{
                   position: 'absolute',
                   left: `${connectorLeft}px`,
-                  top: `${span.top}px`,
-                  zIndex: 1000 - laneDifference,
+                  top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
+                  zIndex: mergeConnectorZIndex,
                   pointerEvents: 'none',
                 }}
               >
@@ -2036,8 +2177,12 @@ const TimelineView = forwardRef(function TimelineView({
             .map((group) => {
               const box = groupBandBoxes.find((item) => item.groupId === group.id);
               if (!box) return null;
-              const bandColor =
-                group.bgColor || GROUP_COLOR_PALETTE[(group.order ?? 0) % GROUP_COLOR_PALETTE.length];
+              const bandBackground = group.bgColor
+                ? withAlpha(group.bgColor, 0.34)
+                : "color-mix(in srgb, var(--active-bg) 34%, transparent)";
+              const bandBorder = group.bgColor
+                ? `var(--timeline-line-thickness) solid ${withAlpha(group.bgColor, 0.86)}`
+                : "var(--timeline-line-thickness) solid color-mix(in srgb, var(--active-bg) 82%, transparent)";
               return (
                 <div
                   key={`group-bg-${group.id}`}
@@ -2045,8 +2190,8 @@ const TimelineView = forwardRef(function TimelineView({
                   style={{
                     top: `${box.top}px`,
                     height: `${box.height}px`,
-                    backgroundColor: withAlpha(bandColor, 0.34),
-                    border: `1px solid ${withAlpha(bandColor, 0.86)}`,
+                    backgroundColor: bandBackground,
+                    border: bandBorder,
                   }}
                 />
               );
@@ -2071,17 +2216,29 @@ const TimelineView = forwardRef(function TimelineView({
                     const mergePlacement = spanMergePlacement[span.id];
                     const placement = spanChildPlacement[span.id];
                     const isExtension = placement?.mode === "extend";
+                    const extensionParent = isExtension ? finalSpanById.get(placement.parentId) : null;
+                    const spanH = span.spanHeight ?? 20;
+                    const parentH = extensionParent ? (extensionParent.spanHeight ?? 20) : 20;
+                    const extensionChildLarger =
+                      isExtension &&
+                      !!extensionParent &&
+                      spanH > parentH + 0.1 &&
+                      span.spanSize !== "thin";
+                    const extensionParentLarger = extensionParentRoundedSet.has(span.id);
+                    const hideSpanDetails = span.hideDetails === true;
+                    const hideSpanName = hideSpanDetails || span.hideName === true;
+                    const hideSpanYears = hideSpanDetails || span.hideYears === true;
                     const childInset = placement ? (isExtension ? 1 : 2) : 0;
 
                     return (
                       <div
                         key={span.id}
                         data-id={span.id}
-                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}`}
+                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}`}
                         style={{
                           left: `${span.left - childInset}px`,
                           width: `${span.width + childInset + (mergePlacement ? 2 : 0)}px`,
-                          top: `${span.top}px`,
+                          top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                           height: `${span.spanHeight ?? 20}px`,
                           background: span.color || "var(--element-bg)",
                         }}
@@ -2091,10 +2248,14 @@ const TimelineView = forwardRef(function TimelineView({
                         }}
                       >
                         <>
-                          <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
-                          <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                            {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
-                          </span>
+                          {!hideSpanName && (
+                            <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
+                          )}
+                          {!hideSpanYears && (
+                            <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
+                              {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                            </span>
+                          )}
                         </>
                         {(() => {
                           const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
@@ -2120,9 +2281,17 @@ const TimelineView = forwardRef(function TimelineView({
                     const parentId = event.parents?.[0];
                     const parentSpan = parentId ? finalSpanById.get(parentId) : null;
                     const parentColor = parentSpan?.color;
+                    const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
                     const isSelected = selectedId === event.id;
                     const eventBorderStyle = event.eventBorderStyle || "solid";
-                    const borderColor = parentColor || "var(--element-bg)";
+                    const groupBlendBase = groupColor || "var(--active-bg)";
+                    const mixedGroupColor =
+                      `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+                    const borderColor = parentColor || (
+                      file?.eventLinesToGroupBottom === true
+                        ? mixedGroupColor
+                        : "var(--element-bg)"
+                    );
                     const borderValue =
                       eventBorderStyle === "none"
                         ? "none"
@@ -2131,7 +2300,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={event.id}
                         data-id={event.id}
-                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}`}
+                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}`}
                         style={{
                           left: `${event._x}px`,
                           top: `${event.top}px`,
@@ -2178,17 +2347,29 @@ const TimelineView = forwardRef(function TimelineView({
             const mergePlacement = spanMergePlacement[span.id];
             const placement = spanChildPlacement[span.id];
             const isExtension = placement?.mode === "extend";
+            const extensionParent = isExtension ? finalSpanById.get(placement.parentId) : null;
+            const spanH = span.spanHeight ?? 20;
+            const parentH = extensionParent ? (extensionParent.spanHeight ?? 20) : 20;
+            const extensionChildLarger =
+              isExtension &&
+              !!extensionParent &&
+              spanH > parentH + 0.1 &&
+              span.spanSize !== "thin";
+            const extensionParentLarger = extensionParentRoundedSet.has(span.id);
+            const hideSpanDetails = span.hideDetails === true;
+            const hideSpanName = hideSpanDetails || span.hideName === true;
+            const hideSpanYears = hideSpanDetails || span.hideYears === true;
             const childInset = placement ? (isExtension ? 1 : 2) : 0;
 
             return (
               <div
                 key={span.id}
                 data-id={span.id}
-                className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}`}
+                className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}`}
                 style={{
                   left: `${span.left - childInset}px`,
                   width: `${span.width + childInset + (mergePlacement ? 2 : 0)}px`,
-                  top: `${span.top}px`,
+                  top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                   height: `${span.spanHeight ?? 20}px`,
                   background: span.color || "var(--element-bg)",
                 }}
@@ -2198,10 +2379,14 @@ const TimelineView = forwardRef(function TimelineView({
                 }}
               >
                 <>
-                  <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
-                  <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                    {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
-                  </span>
+                  {!hideSpanName && (
+                    <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
+                  )}
+                  {!hideSpanYears && (
+                    <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
+                      {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                    </span>
+                  )}
                 </>
                 {(() => {
                   const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
@@ -2230,19 +2415,35 @@ const TimelineView = forwardRef(function TimelineView({
 
             const parentId = event.parents?.[0];
             const parentSpan = parentId
-              ? finalSpans.find((span) => span.id === parentId)
+              ? finalSpanById.get(parentId)
               : null;
 
-            const fallbackTargetY = BASE_LINE_Y;
-            let targetY = parentSpan ? parentSpan.top : fallbackTargetY;
+            const fallbackTargetY =
+              file?.eventLinesToGroupBottom === true
+                ? (groupBandBottomById.get(event.groupId) ?? BASE_LINE_Y)
+                : BASE_LINE_Y;
+            let targetY = parentSpan
+              ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top)
+              : fallbackTargetY;
 
             const eventBottom = event.top + (event._boxHeight || 29);
 
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
-            const lineColor = parentColor || 'var(--element-bg)';
+            const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
+            const groupBlendBase = groupColor || "var(--active-bg)";
+            const mixedGroupColor =
+              `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+            const lineColor = parentColor || (
+              file?.eventLinesToGroupBottom === true
+                ? mixedGroupColor
+                : "var(--element-bg)"
+            );
             const isDashed = eventLineStyle === "dashed";
             const isDotted = eventLineStyle === "dotted";
+            const groupConnectedUnparented =
+              file?.eventLinesToGroupBottom === true && !parentSpan;
+            const dotYOffset = groupConnectedUnparented ? 2 : 0;
 
             return (
               <div
@@ -2278,7 +2479,7 @@ const TimelineView = forwardRef(function TimelineView({
                   style={{
                     position: 'absolute',
                     left: '50%',
-                    top: `${lineHeight}px`,
+                    top: `${lineHeight + dotYOffset}px`,
                     transform: 'translate(-50%, -50%)',
                     width: '8px',
                     height: '8px',
@@ -2294,13 +2495,21 @@ const TimelineView = forwardRef(function TimelineView({
           {finalEvents.map((event) => {
             const parentId = event.parents?.[0];
             const parentSpan = parentId
-              ? finalSpans.find((span) => span.id === parentId)
+              ? finalSpanById.get(parentId)
               : null;
 
             const parentColor = parentSpan?.color;
+            const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
             const isSelected = selectedId === event.id;
             const eventBorderStyle = event.eventBorderStyle || "solid";
-            const borderColor = parentColor || "var(--element-bg)";
+            const groupBlendBase = groupColor || "var(--active-bg)";
+            const mixedGroupColor =
+              `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+            const borderColor = parentColor || (
+              file?.eventLinesToGroupBottom === true
+                ? mixedGroupColor
+                : "var(--element-bg)"
+            );
             const borderValue =
               eventBorderStyle === "none"
                 ? "none"
@@ -2309,7 +2518,7 @@ const TimelineView = forwardRef(function TimelineView({
               <div
                 key={event.id}
                 data-id={event.id}
-                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}`}
+                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}`}
                 style={{
                   left: `${event._x}px`,
                   top: `${event.top}px`,

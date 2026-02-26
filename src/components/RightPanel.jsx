@@ -1313,6 +1313,169 @@ export default function RightPanel({
               </>
             )}
 
+            {/* Tags */}
+            <div className="form-group">
+              <div className="edit-row">
+                <label htmlFor="tags">Tags</label>
+                <div className="edit-separator" />
+                <div className="branch-picker tag-picker">
+                    <input
+                      id="tags"
+                      type="text"
+                      value={tagQuery}
+                      onChange={(e) => {
+                        setTagQuery(e.target.value);
+                        setIsTagMenuOpen(true);
+                        if (validationErrors.length) setValidationErrors([]);
+                      }}
+                      onFocus={() => setIsTagMenuOpen(true)}
+                      onBlur={handleTagBlur}
+                      placeholder="Add a tag..."
+                      className="edit-input branch-input"
+                      maxLength={TAG_MAX_LENGTH}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = tagQuery.trim();
+                          if (trimmed) addTag(trimmed);
+                      }
+                    }}
+                  />
+                  {isTagMenuOpen && tagSuggestions.length > 0 && (
+                    <div className="branch-suggestions">
+                      {tagSuggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className="branch-suggestion-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            addTag(tag);
+                          }}
+                        >
+                          <span className="branch-suggestion-title">{tag}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
+                <div className="chip-selected-list">
+                  {formData.tags.map((tag) => {
+                    return (
+                    <div
+                      key={tag}
+                      className="chip-selected-item"
+                    >
+                      <span className="chip-selected-text">{tag}</span>
+                        <button
+                          type="button"
+                          className="chip-selected-remove"
+                          onClick={() => removeTag(tag)}
+                          aria-label={`Remove ${tag}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Group (events and spans only) */}
+            {(formData.type === "event" || formData.type === "span") && (() => {
+              const groups = timelineData?.file?.groups || [];
+              const filteredGroups = groups.filter((g) =>
+                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
+              );
+              const handleGroupBlur = () => {
+                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
+              };
+              const addGroup = (name) => {
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+                if (groups.some((g) => g.id === id)) {
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                } else {
+                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
+                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
+                  onUpdateGroups([...groups, newGroup]);
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                }
+                setNewGroupName("");
+                setIsGroupMenuOpen(false);
+              };
+              return (
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="groupId">Group</label>
+                    <div className="edit-separator" />
+                    <div className="branch-picker">
+                      <input
+                        id="groupId"
+                        type="text"
+                        value={newGroupName}
+                        onChange={(e) => {
+                          setNewGroupName(e.target.value);
+                          setIsGroupMenuOpen(true);
+                        }}
+                        onFocus={() => setIsGroupMenuOpen(true)}
+                        onBlur={handleGroupBlur}
+                        placeholder={groups.find((g) => g.id === formData.groupId)?.title || "Select group..."}
+                        className="edit-input branch-input"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newGroupName.trim()) addGroup(newGroupName);
+                          }
+                        }}
+                      />
+                      {isGroupMenuOpen && (
+                        <div className="branch-suggestions">
+                          {filteredGroups.map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              className={`branch-suggestion-item${g.id === formData.groupId ? " branch-suggestion-selected" : ""}`}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const next = { ...formData, groupId: g.id };
+                                setFormData(next);
+                                commitDraft(next);
+                                setNewGroupName("");
+                                setIsGroupMenuOpen(false);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">{g.title || g.id}</span>
+                            </button>
+                          ))}
+                          {newGroupName.trim() && !groups.some((g) => (g.title || g.id).toLowerCase() === newGroupName.trim().toLowerCase()) && (
+                            <button
+                              type="button"
+                              className="branch-suggestion-item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                addGroup(newGroupName);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">+ Create "{newGroupName.trim()}"</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {(formData.type === "event" || formData.type === "span") && (
               <div className="rp-edit-section">
                 <button
@@ -1568,7 +1731,7 @@ export default function RightPanel({
                           onClick={clearExtendFrom}
                           aria-label="Remove extend-from link"
                         >
-                          Ã—
+                          ×
                         </button>
                       </div>
                     </div>
@@ -1626,169 +1789,6 @@ export default function RightPanel({
                 </div>}
               </div>
             )}
-
-            {/* Tags */}
-            <div className="form-group">
-              <div className="edit-row">
-                <label htmlFor="tags">Tags</label>
-                <div className="edit-separator" />
-                <div className="branch-picker tag-picker">
-                    <input
-                      id="tags"
-                      type="text"
-                      value={tagQuery}
-                      onChange={(e) => {
-                        setTagQuery(e.target.value);
-                        setIsTagMenuOpen(true);
-                        if (validationErrors.length) setValidationErrors([]);
-                      }}
-                      onFocus={() => setIsTagMenuOpen(true)}
-                      onBlur={handleTagBlur}
-                      placeholder="Add a tag..."
-                      className="edit-input branch-input"
-                      maxLength={TAG_MAX_LENGTH}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const trimmed = tagQuery.trim();
-                          if (trimmed) addTag(trimmed);
-                      }
-                    }}
-                  />
-                  {isTagMenuOpen && tagSuggestions.length > 0 && (
-                    <div className="branch-suggestions">
-                      {tagSuggestions.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className="branch-suggestion-item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            addTag(tag);
-                          }}
-                        >
-                          <span className="branch-suggestion-title">{tag}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
-                <div className="chip-selected-list">
-                  {formData.tags.map((tag) => {
-                    return (
-                    <div
-                      key={tag}
-                      className="chip-selected-item"
-                    >
-                      <span className="chip-selected-text">{tag}</span>
-                        <button
-                          type="button"
-                          className="chip-selected-remove"
-                          onClick={() => removeTag(tag)}
-                          aria-label={`Remove ${tag}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Group (events and spans only) */}
-            {(formData.type === "event" || formData.type === "span") && (() => {
-              const groups = timelineData?.file?.groups || [];
-              const filteredGroups = groups.filter((g) =>
-                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
-              );
-              const handleGroupBlur = () => {
-                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
-              };
-              const addGroup = (name) => {
-                const trimmed = name.trim();
-                if (!trimmed) return;
-                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-                if (groups.some((g) => g.id === id)) {
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                } else {
-                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
-                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
-                  onUpdateGroups([...groups, newGroup]);
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                }
-                setNewGroupName("");
-                setIsGroupMenuOpen(false);
-              };
-              return (
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label htmlFor="groupId">Group</label>
-                    <div className="edit-separator" />
-                    <div className="branch-picker">
-                      <input
-                        id="groupId"
-                        type="text"
-                        value={newGroupName}
-                        onChange={(e) => {
-                          setNewGroupName(e.target.value);
-                          setIsGroupMenuOpen(true);
-                        }}
-                        onFocus={() => setIsGroupMenuOpen(true)}
-                        onBlur={handleGroupBlur}
-                        placeholder={groups.find((g) => g.id === formData.groupId)?.title || "Select group..."}
-                        className="edit-input branch-input"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (newGroupName.trim()) addGroup(newGroupName);
-                          }
-                        }}
-                      />
-                      {isGroupMenuOpen && (
-                        <div className="branch-suggestions">
-                          {filteredGroups.map((g) => (
-                            <button
-                              key={g.id}
-                              type="button"
-                              className={`branch-suggestion-item${g.id === formData.groupId ? " branch-suggestion-selected" : ""}`}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const next = { ...formData, groupId: g.id };
-                                setFormData(next);
-                                commitDraft(next);
-                                setNewGroupName("");
-                                setIsGroupMenuOpen(false);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">{g.title || g.id}</span>
-                            </button>
-                          ))}
-                          {newGroupName.trim() && !groups.some((g) => (g.title || g.id).toLowerCase() === newGroupName.trim().toLowerCase()) && (
-                            <button
-                              type="button"
-                              className="branch-suggestion-item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                addGroup(newGroupName);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">+ Create "{newGroupName.trim()}"</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
             <div className="rp-edit-section">
               <button
@@ -1865,6 +1865,29 @@ export default function RightPanel({
                       <option value="normal">Normal</option>
                       <option value="thick">Thick</option>
                     </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formData.type === "span" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="hideSpanDetails">Hide Details</label>
+                  <div className="edit-separator" />
+                  <div className="edit-checkbox-wrap">
+                    <input
+                      id="hideSpanDetails"
+                      type="checkbox"
+                      checked={formData.hideDetails === true || (formData.hideName === true && formData.hideYears === true)}
+                      onChange={(e) => {
+                        const next = { ...formData, hideDetails: e.target.checked };
+                        delete next.hideName;
+                        delete next.hideYears;
+                        setFormData(next);
+                        commitDraft(next);
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -2247,4 +2270,5 @@ export default function RightPanel({
     </div>
   );
 }
+
 

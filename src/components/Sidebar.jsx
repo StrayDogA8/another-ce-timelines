@@ -3,16 +3,45 @@ import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Ima
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
-const GROUP_COLOR_PALETTE = [
-  "#ffd7d7",
-  "#ffe6bf",
-  "#fff4b8",
-  "#dff5c8",
-  "#cdeffd",
-  "#dde1ff",
-  "#efdcff",
-  "#ffd9f0",
-];
+const DEFAULT_GROUP_COLOR = "#d9d9d9";
+
+const expandShortHex = (value) =>
+  value
+    .split("")
+    .map((char) => char + char)
+    .join("");
+
+const normalizeHexColor = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  const short = /^#([0-9a-f]{3})$/i.exec(trimmed);
+  if (short) return `#${expandShortHex(short[1]).toLowerCase()}`;
+  const full = /^#([0-9a-f]{6})$/i.exec(trimmed);
+  if (full) return `#${full[1].toLowerCase()}`;
+  return null;
+};
+
+const rgbToHex = (value) => {
+  if (typeof value !== "string") return null;
+  const match = /^rgba?\(([^)]+)\)$/i.exec(value.trim());
+  if (!match) return null;
+  const channels = match[1].split(",").slice(0, 3).map((part) => Number.parseFloat(part.trim()));
+  if (channels.length !== 3 || channels.some((channel) => Number.isNaN(channel))) return null;
+  const [r, g, b] = channels.map((channel) =>
+    Math.max(0, Math.min(255, Math.round(channel)))
+  );
+  return `#${[r, g, b]
+    .map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+
+const normalizeColorForInput = (value) => normalizeHexColor(value) || rgbToHex(value);
+
+const resolveThemeGroupColor = () => {
+  if (typeof window === "undefined") return null;
+  const computed = getComputedStyle(document.documentElement).getPropertyValue("--active-bg");
+  return normalizeColorForInput(computed);
+};
 
 function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu }) {
   const isSelected = selectedId && selectedId === item.id;
@@ -104,6 +133,7 @@ export default function Sidebar({
   const [editingGroupTitle, setEditingGroupTitle] = useState("");
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverPlacement, setDragOverPlacement] = useState(null);
+  const [openGroupContents, setOpenGroupContents] = useState({});
   const menuRef = useRef(null);
   const submenuRef = useRef(null);
   const openTimelineRef = useRef(null);
@@ -111,6 +141,7 @@ export default function Sidebar({
   const listRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const groupColorInputRefs = useRef({});
+  const themeGroupColor = resolveThemeGroupColor() || DEFAULT_GROUP_COLOR;
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -208,6 +239,30 @@ export default function Sidebar({
       counts.set(groupId, (counts.get(groupId) || 0) + 1);
     });
     return counts;
+  }, [allElements]);
+
+  const groupElements = useMemo(() => {
+    const grouped = new Map();
+    (allElements || []).forEach((element) => {
+      if (element.type !== "event" && element.type !== "span") return;
+      if (!element.groupId) return;
+      const current = grouped.get(element.groupId) || [];
+      current.push(element);
+      grouped.set(element.groupId, current);
+    });
+
+    grouped.forEach((elements, groupId) => {
+      const sorted = [...elements].sort((a, b) => {
+        const aStart = a.type === "event" ? a.date : a.start;
+        const bStart = b.type === "event" ? b.date : b.start;
+        if (aStart !== bStart) return aStart - bStart;
+        if (a.type !== b.type) return a.type === "span" ? -1 : 1;
+        return (a.title || a.id).localeCompare(b.title || b.id);
+      });
+      grouped.set(groupId, sorted);
+    });
+
+    return grouped;
   }, [allElements]);
 
   const allTags = useMemo(() => {
@@ -378,6 +433,13 @@ export default function Sidebar({
   const openGroupColorPicker = (groupId) => {
     const input = groupColorInputRefs.current[groupId];
     if (input) input.click();
+  };
+
+  const toggleGroupContents = (groupId) => {
+    setOpenGroupContents((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
   };
 
   return (
@@ -773,10 +835,14 @@ export default function Sidebar({
               {displayGroups.map((group) => {
                 const count = groupCounts.get(group.id) || 0;
                 const canDelete = displayGroups.length > 1;
+                const groupTint = normalizeColorForInput(group.bgColor) || themeGroupColor;
+                const itemsInGroup = groupElements.get(group.id) || [];
+                const isGroupOpen = !!openGroupContents[group.id];
                 return (
                   <div
                     key={group.id}
                     className={`sidebar-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
+                    style={{ "--group-tint": groupTint }}
                     draggable={editingGroupId !== group.id}
                     onDragStart={(e) => {
                       setDraggedGroupId(group.id);
@@ -869,7 +935,7 @@ export default function Sidebar({
                               ref={(node) => { groupColorInputRefs.current[group.id] = node; }}
                               className="sidebar-group-inline-color-input"
                               type="color"
-                              value={group.bgColor || GROUP_COLOR_PALETTE[(group.order ?? 0) % GROUP_COLOR_PALETTE.length]}
+                              value={normalizeColorForInput(group.bgColor) || themeGroupColor}
                               onChange={(e) => updateGroupPatch(group.id, { bgColor: e.target.value })}
                               tabIndex={-1}
                               aria-hidden="true"
@@ -887,8 +953,57 @@ export default function Sidebar({
                           </button>
                         </div>
                       </div>
-                      <div className="sidebar-group-meta">{count} item{count === 1 ? "" : "s"}</div>
+                      <div className="sidebar-group-meta-row">
+                        <button
+                          type="button"
+                          className="sidebar-group-expand-btn"
+                          aria-label={isGroupOpen ? "Collapse group items" : "Expand group items"}
+                          title={isGroupOpen ? "Collapse" : "Expand"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleGroupContents(group.id);
+                          }}
+                          disabled={itemsInGroup.length === 0}
+                        >
+                          {isGroupOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        </button>
+                        <div className="sidebar-group-meta">{count} item{count === 1 ? "" : "s"}</div>
+                      </div>
                     </div>
+                    {isGroupOpen && itemsInGroup.length > 0 && (
+                      <div className="sidebar-group-elements">
+                        {itemsInGroup.map((element) => (
+                          <button
+                            key={element.id}
+                            type="button"
+                            className={`sidebar-group-element-row${selectedId === element.id ? " is-selected" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (listRef.current) {
+                                lastScrollTopRef.current = listRef.current.scrollTop;
+                              }
+                              onSelect?.(element.id);
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setElementMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                element,
+                              });
+                            }}
+                          >
+                            <span className="sidebar-group-element-title">{element.title || element.id}</span>
+                            <span className="sidebar-group-element-range">
+                              {element.type === "event"
+                                ? (element.dateLabel ?? fmtYear(element.date))
+                                : formatRange(element.start, element.end, element.startLabel, element.endLabel)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

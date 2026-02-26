@@ -18,14 +18,13 @@ import {
   chooseNotesSubfolder,
   listFonts,
   openFontsFolder,
-  renameNote,
   deleteNote,
   renameTimeline,
   listPlugins,
   openPluginsFolder,
   readPluginModule,
 } from "./utils/electronApi";
-import { updateElementWithNewId, makeUniqueId, generateIdFromTitle } from "./utils/idUtils";
+import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
@@ -942,7 +941,6 @@ function App() {
     const originalId = updatedElement.id;
 
     setTimelineData((prevData) => {
-      const originalElement = prevData.elements.find((el) => el.id === originalId);
       const nextElement = { ...updatedElement };
       if (!nextElement.dateLabel) delete nextElement.dateLabel;
       if (!nextElement.startLabel) delete nextElement.startLabel;
@@ -952,20 +950,6 @@ function App() {
       delete nextElement.endInput;
 
       const updatedData = updateElementWithNewId(prevData, nextElement, originalId);
-
-      const newId = updatedData.elements.find(el =>
-        el.title === updatedElement.title && el.type === updatedElement.type
-      )?.id;
-
-      if (newId && newId !== originalId) {
-        setSelectedId(newId);
-        if (originalElement?.noteFile) {
-          const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-          const oldFilename = originalElement.noteFile;
-          const newFilename = `${newId}.md`;
-          renameNote({ timelineId, oldFilename, newFilename }).catch(console.error);
-        }
-      }
 
       
       const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
@@ -987,8 +971,7 @@ function App() {
       timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
     const baseYear = Number.isFinite(viewportYear) ? viewportYear : fallbackMid;
     const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
-    const eventBaseId = generateIdFromTitle("New Event", "event");
-    const eventId = makeUniqueId(eventBaseId, timelineData.elements);
+    const eventId = generateUniqueRandomElementId(timelineData.elements, "event");
     const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newEvent = {
       id: eventId,
@@ -1027,8 +1010,7 @@ function App() {
     const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
     const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
 
-    const spanBaseId = generateIdFromTitle("New Span", "span");
-    const spanId = makeUniqueId(spanBaseId, timelineData.elements);
+    const spanId = generateUniqueRandomElementId(timelineData.elements, "span");
     const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newSpan = {
       id: spanId,
@@ -1065,8 +1047,7 @@ function App() {
     const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
     const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
 
-    const eraBaseId = generateIdFromTitle("New Era", "era");
-    const eraId = makeUniqueId(eraBaseId, timelineData.elements);
+    const eraId = generateUniqueRandomElementId(timelineData.elements, "era");
     const newEra = {
       id: eraId,
       type: "era",
@@ -1098,8 +1079,7 @@ function App() {
       if (!original) return prevData;
 
       const nextTitle = `${original.title} Copy`;
-      const baseId = generateIdFromTitle(nextTitle, original.type);
-      const nextId = makeUniqueId(baseId, prevData.elements);
+      const nextId = generateUniqueRandomElementId(prevData.elements, original.type);
 
       const baseCopy = {
         ...original,
@@ -1195,6 +1175,8 @@ function App() {
     layout,
     branchOrdering,
     fixedEventHeight,
+    compactEvents,
+    eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
   }) => {
@@ -1232,6 +1214,8 @@ function App() {
         layout,
         branchOrdering,
         fixedEventHeight,
+        compactEvents,
+        eventLinesToGroupBottom,
         hideDecimals,
         showGrid,
       };
@@ -1245,6 +1229,8 @@ function App() {
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
+      if (!compactEvents) delete nextFile.compactEvents;
+      if (!eventLinesToGroupBottom) delete nextFile.eventLinesToGroupBottom;
       if (!hideDecimals) delete nextFile.hideDecimals;
       if (!showGrid) delete nextFile.showGrid;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;

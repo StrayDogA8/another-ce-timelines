@@ -549,6 +549,7 @@ export function layoutEvents({
   LANE_SPACING,
   BOX_OFFSET,
   fixedEventHeight,
+  compactEvents = false,
   fontFamily,
 }) {
   const laidOut = [...events]
@@ -558,6 +559,9 @@ export function layoutEvents({
   // Create an offscreen probe matching .event styling for accurate height measurement
   const probe = document.createElement("div");
   probe.className = "event";
+  if (compactEvents) {
+    probe.classList.add("event-compact");
+  }
   const probeTitle = document.createElement("div");
   probeTitle.className = "event-title";
   const probeDate = document.createElement("div");

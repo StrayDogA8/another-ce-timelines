@@ -34,6 +34,8 @@ export default function SettingsModal({
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
+  const [compactEvents, setCompactEvents] = useState(false);
+  const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
@@ -174,6 +176,8 @@ export default function SettingsModal({
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
+        setCompactEvents(Boolean(timelineData.file.compactEvents));
+        setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
         setValidationErrors([]);
@@ -258,6 +262,8 @@ export default function SettingsModal({
           layout,
           branchOrdering,
           fixedEventHeight,
+          compactEvents,
+          eventLinesToGroupBottom,
           hideDecimals,
           showGrid,
         });
@@ -284,6 +290,8 @@ export default function SettingsModal({
     scaleSections,
     branchOrdering,
     fixedEventHeight,
+    compactEvents,
+    eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
   ]);
@@ -681,6 +689,42 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={fixedEventHeight}
                       onChange={(e) => setFixedEventHeight(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Event Line Anchoring */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Connect Event Lines to Group</div>
+                  <div className="settings-row-description">For unparented events, connect to the bottom of the event's group band instead of the main timeline line.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={eventLinesToGroupBottom}
+                      onChange={(e) => setEventLinesToGroupBottom(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Compact Events */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Compact Events</div>
+                  <div className="settings-row-description">Render event boxes with smaller size and smaller text.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={compactEvents}
+                      onChange={(e) => setCompactEvents(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

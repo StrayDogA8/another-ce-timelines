@@ -28,6 +28,35 @@ export function makeUniqueId(baseId, elements, excludeId) {
   return nextId;
 }
 
+const RANDOM_ID_RETRY_LIMIT = 1024;
+
+const getRandomDigits = (length = 12) => {
+  const max = 10 ** length;
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = new Uint32Array(1);
+    crypto.getRandomValues(bytes);
+    return String(bytes[0] % max).padStart(length, "0");
+  }
+  return String(Math.floor(Math.random() * max)).padStart(length, "0");
+};
+
+export function generateUniqueRandomElementId(elements, type = "item", excludeId) {
+  const ids = new Set((elements || []).map((el) => String(el.id)));
+  if (excludeId) ids.delete(String(excludeId));
+  const prefix = String(type || "item").trim().toLowerCase();
+
+  for (let i = 0; i < RANDOM_ID_RETRY_LIMIT; i += 1) {
+    const candidate = `${prefix}-${getRandomDigits(12)}`;
+    if (!ids.has(candidate)) return candidate;
+  }
+
+  let fallback = `${prefix}-${Date.now()}`;
+  while (ids.has(fallback)) {
+    fallback = `${prefix}-${Number(fallback.split("-").pop()) + 1}`;
+  }
+  return fallback;
+}
+
 /**
  * Update all references to an element ID throughout the timeline data
  * @param {Object} timelineData 
@@ -74,38 +103,11 @@ export function updateElementReferences(timelineData, oldId, newId) {
  * @returns {Object} 
  */
 export function updateElementWithNewId(timelineData, updatedElement, originalId) {
-  const titleChanged = timelineData.elements.find(el => el.id === originalId)?.title !== updatedElement.title;
-
-  if (!titleChanged) {
-    return {
-      ...timelineData,
-      elements: timelineData.elements.map(el =>
-        el.id === originalId ? updatedElement : el
-      ),
-    };
-  }
-
-  const baseId = generateIdFromTitle(updatedElement.title, updatedElement.type);
-  const newId = makeUniqueId(baseId, timelineData.elements, originalId);
-
-  const elementWithNewId = {
-    ...updatedElement,
-    id: newId,
-  };
-
-  const originalElement = timelineData.elements.find(el => el.id === originalId);
-  if (originalElement?.noteFile) {
-    elementWithNewId.noteFile = `${newId}.md`;
-  }
-
-  const elementsWithUpdatedElement = timelineData.elements.map(el =>
-    el.id === originalId ? elementWithNewId : el
-  );
-
   const dataWithUpdatedElement = {
     ...timelineData,
-    elements: elementsWithUpdatedElement,
+    elements: timelineData.elements.map((el) =>
+      el.id === originalId ? updatedElement : el
+    ),
   };
-
-  return updateElementReferences(dataWithUpdatedElement, originalId, newId);
+  return dataWithUpdatedElement;
 }
