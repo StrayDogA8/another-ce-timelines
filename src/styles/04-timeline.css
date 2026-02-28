@@ -141,7 +141,7 @@
 .group-bands-layer {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   pointer-events: none;
 }
 
@@ -203,6 +203,50 @@
   border-bottom-right-radius: 6px;
 }
 
+.span-item.span-thin-connector-child {
+  overflow: visible;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.span-item.span-thin-connector-child::before {
+  content: '';
+  position: absolute;
+  right: calc(100% - 1px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 11px;
+  height: 10px;
+  background: var(--span-fill);
+}
+
+.span-item.span-thin-connector-merge-out {
+  overflow: visible;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.span-item.span-thin-connector-merge-out::after {
+  content: '';
+  position: absolute;
+  left: calc(100% - 1px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 11px;
+  height: 10px;
+  background: var(--span-fill);
+}
+
+.span-item.span-thick.span-thin-connector-child {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.span-item.span-thick.span-thin-connector-merge-out {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
 .span-title {
   margin-left: 5px;
   color: var(--active-bg);
@@ -216,12 +260,8 @@
 .span-years {
   margin-left: 7px;
   color: var(--element-bg);
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 45%;
-  overflow: hidden;
+  flex: 0 0 auto;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .span-item.hide-span-years .span-years {

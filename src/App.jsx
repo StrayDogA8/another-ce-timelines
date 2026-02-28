@@ -1176,6 +1176,7 @@ function App() {
     branchOrdering,
     fixedEventHeight,
     compactEvents,
+    thinConnectors,
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
@@ -1215,6 +1216,7 @@ function App() {
         branchOrdering,
         fixedEventHeight,
         compactEvents,
+        thinConnectors,
         eventLinesToGroupBottom,
         hideDecimals,
         showGrid,
@@ -1230,6 +1232,7 @@ function App() {
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
       if (!compactEvents) delete nextFile.compactEvents;
+      if (!thinConnectors) delete nextFile.thinConnectors;
       if (!eventLinesToGroupBottom) delete nextFile.eventLinesToGroupBottom;
       if (!hideDecimals) delete nextFile.hideDecimals;
       if (!showGrid) delete nextFile.showGrid;

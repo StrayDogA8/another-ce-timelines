@@ -35,6 +35,7 @@ export default function SettingsModal({
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
   const [compactEvents, setCompactEvents] = useState(false);
+  const [thinConnectors, setThinConnectors] = useState(false);
   const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
@@ -177,6 +178,7 @@ export default function SettingsModal({
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
         setCompactEvents(Boolean(timelineData.file.compactEvents));
+        setThinConnectors(Boolean(timelineData.file.thinConnectors));
         setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
@@ -263,6 +265,7 @@ export default function SettingsModal({
           branchOrdering,
           fixedEventHeight,
           compactEvents,
+          thinConnectors,
           eventLinesToGroupBottom,
           hideDecimals,
           showGrid,
@@ -291,6 +294,7 @@ export default function SettingsModal({
     branchOrdering,
     fixedEventHeight,
     compactEvents,
+    thinConnectors,
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
@@ -725,6 +729,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={compactEvents}
                       onChange={(e) => setCompactEvents(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Thin Connectors */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Thin Connectors</div>
+                  <div className="settings-row-description">Render span connectors with thin-style width and rounded thin endpoints.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={thinConnectors}
+                      onChange={(e) => setThinConnectors(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

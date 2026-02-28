@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -15,23 +15,37 @@ import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsi
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
-const withAlpha = (hex, alpha) => {
-  if (typeof hex !== "string") return `rgba(0, 0, 0, ${alpha})`;
-  const value = hex.trim();
-  const short = /^#([0-9a-f]{3})$/i.exec(value);
+const parseHexRGB = (hex) => {
+  if (typeof hex !== "string") return null;
+  const v = hex.trim();
+  const short = /^#([0-9a-f]{3})$/i.exec(v);
   if (short) {
     const [r, g, b] = short[1].split("").map((c) => parseInt(c + c, 16));
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    return [r, g, b];
   }
-  const full = /^#([0-9a-f]{6})$/i.exec(value);
+  const full = /^#([0-9a-f]{6})$/i.exec(v);
   if (full) {
-    const raw = full[1];
-    const r = parseInt(raw.slice(0, 2), 16);
-    const g = parseInt(raw.slice(2, 4), 16);
-    const b = parseInt(raw.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    return [parseInt(full[1].slice(0, 2), 16), parseInt(full[1].slice(2, 4), 16), parseInt(full[1].slice(4, 6), 16)];
   }
-  return value;
+  return null;
+};
+
+const withAlpha = (hex, alpha) => {
+  const rgb = parseHexRGB(hex);
+  if (rgb) return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+  return typeof hex === "string" ? hex : `rgba(0, 0, 0, ${alpha})`;
+};
+
+// Blend two hex colors in sRGB (replacement for CSS color-mix to avoid html2canvas issues)
+const blendColors = (hex1, hex2, weight1 = 0.5) => {
+  const c1 = parseHexRGB(hex1);
+  const c2 = parseHexRGB(hex2);
+  if (!c1 || !c2) return hex1 || hex2 || "#888888";
+  const w = Math.min(1, Math.max(0, weight1));
+  const r = Math.round(c1[0] * w + c2[0] * (1 - w));
+  const g = Math.round(c1[1] * w + c2[1] * (1 - w));
+  const b = Math.round(c1[2] * w + c2[2] * (1 - w));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 };
 
 const TimelineView = forwardRef(function TimelineView({
@@ -357,10 +371,14 @@ const TimelineView = forwardRef(function TimelineView({
       const eventsInGroup = adjustedEvents.filter((event) => event.groupId === group.id);
       const spanIdsInGroup = new Set(spansInGroup.map((span) => span.id));
       const groupSpanChildPlacement = Object.fromEntries(
-        Object.entries(globalSpanChildPlacement).filter(([childId]) => spanIdsInGroup.has(childId))
+        Object.entries(globalSpanChildPlacement).filter(
+          ([childId, placement]) => spanIdsInGroup.has(childId) && spanIdsInGroup.has(placement.parentId)
+        )
       );
       const groupSpanMergePlacement = Object.fromEntries(
-        Object.entries(globalSpanMergePlacement).filter(([childId]) => spanIdsInGroup.has(childId))
+        Object.entries(globalSpanMergePlacement).filter(
+          ([childId, placement]) => spanIdsInGroup.has(childId) && spanIdsInGroup.has(placement.parentId)
+        )
       );
 
       const { finalSpans: tempSpans, spanLaneEnds } = layoutSpans({
@@ -772,25 +790,19 @@ const TimelineView = forwardRef(function TimelineView({
   }, [groupBandBoxes]);
   const renderLegacyLayers = file?.debugLegacyLayers === true;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const timelineEl = timelineRef.current;
     if (!timelineEl) return;
-    let rafId = null;
-    rafId = requestAnimationFrame(() => {
-      const spanNodes = timelineEl.querySelectorAll(".span-item");
-      spanNodes.forEach((spanNode) => {
-        // Measure with years visible so the decision is consistent.
-        spanNode.classList.remove("hide-span-years");
-        const titleNode = spanNode.querySelector(".span-title");
-        const yearsNode = spanNode.querySelector(".span-years");
-        if (!titleNode || !yearsNode) return;
-        const isTitleTruncated = titleNode.scrollWidth - titleNode.clientWidth > 1;
-        spanNode.classList.toggle("hide-span-years", isTitleTruncated);
-      });
+    const spanNodes = timelineEl.querySelectorAll(".span-item");
+    spanNodes.forEach((spanNode) => {
+      // Measure with years visible so the decision is consistent.
+      spanNode.classList.remove("hide-span-years");
+      const titleNode = spanNode.querySelector(".span-title");
+      const yearsNode = spanNode.querySelector(".span-years");
+      if (!titleNode || !yearsNode) return;
+      const isTitleTruncated = titleNode.scrollWidth - titleNode.clientWidth > 1;
+      spanNode.classList.toggle("hide-span-years", isTitleTruncated);
     });
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-    };
   }, [
     finalSpans,
     groupLayouts,
@@ -1310,12 +1322,23 @@ const TimelineView = forwardRef(function TimelineView({
 
       const targetH = exportPngOptions?.targetHeight;
 
+      const elFullWidth = timelineEl.scrollWidth;
+      const exportHeight = calculatedHeight + 100;
+      // Clamp so canvas pixel dimensions stay within browser limits
+      const MAX_CANVAS_DIM = 16384;
+      const maxScale = Math.min(
+        MAX_CANVAS_DIM / elFullWidth,
+        MAX_CANVAS_DIM / exportHeight,
+      );
+      const safeScale = Math.min(scale, maxScale);
       const canvas = await html2canvas(timelineEl, {
         backgroundColor: bgColor,
-        scale,
+        scale: safeScale,
         logging: false,
-        height: calculatedHeight + 100,
-        windowHeight: calculatedHeight + 100,
+        width: elFullWidth,
+        height: exportHeight,
+        windowWidth: elFullWidth,
+        windowHeight: exportHeight,
       });
 
       if (exportPngOptions?.transparentBg || exportPngOptions?.customBg) {
@@ -1713,15 +1736,21 @@ const TimelineView = forwardRef(function TimelineView({
         const elWidth = timelineEl.scrollWidth;
         const elHeight = calculatedHeight + 100;
 
+        // Clamp scale so canvas pixel dimensions stay within browser limits
+        const MAX_CANVAS_DIM = 16384;
+        const previewScale = Math.min(1, MAX_CANVAS_DIM / elWidth, MAX_CANVAS_DIM / elHeight);
+
         const previewBgColor = options?.transparentBg
           ? null
           : (options?.customBg || originalPrimaryBg);
 
         const canvas = await html2canvas(timelineEl, {
           backgroundColor: previewBgColor,
-          scale: 1,
+          scale: previewScale,
           logging: false,
+          width: elWidth,
           height: elHeight,
+          windowWidth: elWidth,
           windowHeight: elHeight,
         });
 
@@ -1736,6 +1765,9 @@ const TimelineView = forwardRef(function TimelineView({
         const minYear = file?.start ?? 0;
         const maxYear = file?.end ?? 2024;
 
+        // Use original (unscaled) element width for coordinate mapping
+        const coordWidth = elWidth;
+
         return {
           imageUrl: canvas.toDataURL('image/png'),
           canvasWidth: canvas.width,
@@ -1747,10 +1779,10 @@ const TimelineView = forwardRef(function TimelineView({
           maxYear,
           yearToPercent: (year) => {
             const px = yearToPx(year);
-            return (px / canvas.width) * 100;
+            return (px / coordWidth) * 100;
           },
           percentToYear: (percent) => {
-            const px = (percent / 100) * canvas.width;
+            const px = (percent / 100) * coordWidth;
             const compressedYear = (px - TIMELINE_PADDING) / PX_PER_YEAR + compressedMin;
             const clampedCompressed = Math.min(Math.max(compressedYear, compressedMin), compressedMax);
             const year = decompressYear(clampedCompressed);
@@ -1781,6 +1813,11 @@ const TimelineView = forwardRef(function TimelineView({
       pendingSliderValueRef.current = null;
     };
   }, []);
+
+  // Resolve CSS variables to hex for inline styles (avoids color-mix / color() which html2canvas can't parse)
+  const rootStyles = getComputedStyle(document.documentElement);
+  const resolvedActiveBg = rootStyles.getPropertyValue('--active-bg').trim();
+  const resolvedElementBg = rootStyles.getPropertyValue('--element-bg').trim();
 
   return (
     <div
@@ -1954,55 +1991,66 @@ const TimelineView = forwardRef(function TimelineView({
             const spanH = span.spanHeight ?? 20;
             const placement = spanChildPlacement[span.id];
             const isChild = !!placement && placement.mode !== "extend";
+            const thinConnectorMode = file?.thinConnectors === true;
+            const connectorThicknessBase = thinConnectorMode ? 11 : (spanH + 1);
 
             if (!isChild) return null;
 
             // Calculate actual visual distance for connector height and offset
             let connectorHeight = undefined;
             let connectorTransform = undefined;
+            let proximityPenalty = 2000;
             const parentSpan = finalSpanById.get(placement.parentId);
             const spanTop = spanRenderTopById.get(span.id) ?? span.top;
             const parentTopRender = parentSpan ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top) : undefined;
             const isTopChild = parentSpan ? spanTop < parentTopRender : placement.offset > 0;
             const isBottomChild = parentSpan ? spanTop > parentTopRender : placement.offset < 0;
-            const connectorOffsetX = spanH + 1;
+            const connectorOffsetX = connectorThicknessBase;
             const laneDifference = parentSpan ? Math.abs(span.lane - parentSpan.lane) : 0;
             if (parentSpan && Number.isFinite(parentTopRender)) {
               const childTop = spanTop;
               const parentTop = parentTopRender;
               const deltaTop = parentTop - childTop;
+              proximityPenalty = Math.min(2000, Math.abs(Math.round(deltaTop)));
               const parentH = parentSpan.spanHeight ?? 20;
+              // Thin connector mode: treat as connecting to a thin span
+              const thinH = Math.round(spanH / 2);
+              const childTrimPx = (thinConnectorMode && span.spanSize !== "thin")
+                ? (spanH - thinH) / 2 : 0;
               if (Math.abs(deltaTop) < 0.5) {
                 connectorHeight = "0px";
                 connectorTransform = undefined;
               } else if (laneDifference <= 1) {
                 if (deltaTop >= 0) {
                   // Top child, 1 lane
-                  connectorHeight = `${deltaTop + 1}px`;
+                  connectorHeight = `${Math.max(0, deltaTop + 1 - childTrimPx)}px`;
+                  if (childTrimPx > 0) connectorTransform = `translateY(${childTrimPx}px)`;
                 } else {
                   // Bottom child, 1 lane
                   const transformY = deltaTop + parentH - 1;
-                  connectorHeight = `${-deltaTop + spanH - parentH + 1}px`;
+                  connectorHeight = `${Math.max(0, -deltaTop + spanH - parentH + 1 - childTrimPx)}px`;
                   connectorTransform = `translateY(${transformY}px)`;
                 }
               } else {
                 if (deltaTop >= 0) {
                   // Top child, >1 lane
                   const extraTrim = Math.round(spanH / 2) + 2;
-                  connectorHeight = `${Math.max(0, deltaTop + spanH - extraTrim)}px`;
-                  connectorTransform = "translate(0px, 0px)";
+                  connectorHeight = `${Math.max(0, deltaTop + spanH - extraTrim - childTrimPx)}px`;
+                  connectorTransform = childTrimPx > 0
+                    ? `translateY(${childTrimPx}px)` : "translate(0px, 0px)";
                 } else {
                   // Bottom child, >1 lane
                   const parentTrim = Math.round(parentH / 2) + 2;
-                  connectorHeight = `${Math.max(0, -deltaTop + spanH - parentTrim)}px`;
+                  connectorHeight = `${Math.max(0, -deltaTop + spanH - parentTrim - childTrimPx)}px`;
                   connectorTransform = `translate(0px, ${deltaTop + parentTrim}px)`;
                 }
               }
             }
 
             const connectorLeft = span.left - connectorOffsetX;
-            const connectorThickness = spanH + 1;
-            const connectorZIndex = 3000 - connectorThickness * 10 - Math.min(laneDifference, 20);
+            const connectorThickness = connectorThicknessBase;
+            const connectorZIndex = 5000 - proximityPenalty * 2 - connectorThickness * 10;
+            const thinRadius = thinConnectorMode ? Math.round(connectorThicknessBase * 0.45) : undefined;
 
             return (
               <div
@@ -2022,7 +2070,8 @@ const TimelineView = forwardRef(function TimelineView({
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
                       transform: connectorTransform,
-                      width: `${spanH + 1}px`,
+                      width: `${connectorThicknessBase}px`,
+                      ...(thinRadius != null && { borderTopLeftRadius: `${thinRadius}px` }),
                     }}
                   />
                 )}
@@ -2033,7 +2082,8 @@ const TimelineView = forwardRef(function TimelineView({
                       backgroundColor: span.color || "var(--element-bg)",
                       paddingTop: connectorHeight,
                       transform: connectorTransform,
-                      width: `${spanH + 1}px`,
+                      width: `${connectorThicknessBase}px`,
+                      ...(thinRadius != null && { borderBottomLeftRadius: `${thinRadius}px` }),
                     }}
                   />
                 )}
@@ -2058,10 +2108,13 @@ const TimelineView = forwardRef(function TimelineView({
 
             const connectorTop = Math.min(childCenter, parentCenter);
             const connectorHeight = Math.abs(centerDelta);
-            const connectorWidth = Math.max(3, Math.min(7, Math.round(Math.min(spanH, parentH) * 0.28)));
+            const connectorWidth = file?.thinConnectors === true
+              ? 3
+              : Math.max(3, Math.min(7, Math.round(Math.min(spanH, parentH) * 0.28)));
             const connectorLeft = span.left - Math.floor(connectorWidth / 2);
             const connectorColor = span.color || parentSpan.color || "var(--element-bg)";
-            const connectorZIndex = 3000 - connectorWidth * 10;
+            const proximityPenalty = Math.min(2000, Math.abs(Math.round(centerDelta)));
+            const connectorZIndex = 5000 - proximityPenalty * 2 - connectorWidth * 10;
 
             return (
               <div
@@ -2088,46 +2141,59 @@ const TimelineView = forwardRef(function TimelineView({
             const mergeSpanH = span.spanHeight ?? 20;
             const mergeParent = finalSpanById.get(mergePlacement.parentId);
             if (!mergeParent) return null;
+            const thinConnectorMode = file?.thinConnectors === true;
 
+            // Use actual rendered positions for direction detection (works across groups)
+            const childTop = spanRenderTopById.get(span.id) ?? span.top;
+            const parentTop = spanRenderTopById.get(mergeParent.id) ?? mergeParent.top;
+            const deltaTop = parentTop - childTop;
+
+            // Skip if same position (no vertical distance to span)
+            if (Math.abs(deltaTop) < 0.5) return null;
+
+            const isAboveParent = deltaTop > 0; // child is above (lower top value)
+            const isBelowParent = deltaTop < 0;
             const laneDifference = Math.abs(span.lane - mergeParent.lane);
-            const isAboveParent = span.lane > mergeParent.lane; // higher lane = above
-            const isBelowParent = span.lane < mergeParent.lane;
-
-            if (laneDifference === 0) return null; // same lane, no connector needed
 
             let mergeConnectorHeight = undefined;
             let mergeConnectorOffset = undefined;
-            if (laneDifference >= 1) {
-              const parentTop = spanRenderTopById.get(mergeParent.id) ?? mergeParent.top;
-              const childTop = spanRenderTopById.get(span.id) ?? span.top;
-              const deltaTop = parentTop - childTop;
-              const parentH = mergeParent.spanHeight ?? 20;
-              if (laneDifference === 1) {
-                if (deltaTop >= 0) {
-                  mergeConnectorHeight = `${deltaTop + 1}px`;
-                } else {
-                  const transformY = deltaTop + parentH - 1;
-                  mergeConnectorHeight = `${-deltaTop + mergeSpanH - parentH + 1}px`;
-                  mergeConnectorOffset = `${transformY}px`;
-                }
+            const proximityPenalty = Math.min(2000, Math.abs(Math.round(deltaTop)));
+            const parentH = mergeParent.spanHeight ?? 20;
+            // Thin connector mode: treat as connecting to a thin span
+            const mergeThinH = Math.round(mergeSpanH / 2);
+            const mergeTrimPx = (thinConnectorMode && span.spanSize !== "thin")
+              ? (mergeSpanH - mergeThinH) / 2 : 0;
+            // Extend connector into parent's neck area when parent is also in thin mode
+            const mergeParentTrimPx = (thinConnectorMode && mergeParent.spanSize !== "thin")
+              ? (parentH - Math.round(parentH / 2)) / 2 : 0;
+
+            if (laneDifference <= 1) {
+              if (deltaTop >= 0) {
+                mergeConnectorHeight = `${Math.max(0, deltaTop + 1 - mergeTrimPx + mergeParentTrimPx)}px`;
+                if (mergeTrimPx > 0) mergeConnectorOffset = `${mergeTrimPx}px`;
               } else {
-                if (deltaTop >= 0) {
-                  const extraTrim = Math.round(mergeSpanH / 2) + 2;
-                  mergeConnectorHeight = `${Math.max(0, deltaTop + mergeSpanH - extraTrim)}px`;
-                  mergeConnectorOffset = "0px";
-                } else {
-                  const parentTrim = Math.round(parentH / 2) + 2;
-                  mergeConnectorHeight = `${Math.max(0, -deltaTop + mergeSpanH - parentTrim)}px`;
-                  mergeConnectorOffset = `${deltaTop + parentTrim}px`;
-                }
+                const transformY = deltaTop + parentH - 1 - mergeParentTrimPx;
+                mergeConnectorHeight = `${Math.max(0, -deltaTop + mergeSpanH - parentH + 1 - mergeTrimPx + mergeParentTrimPx)}px`;
+                mergeConnectorOffset = `${transformY}px`;
+              }
+            } else {
+              if (deltaTop >= 0) {
+                const extraTrim = Math.round(mergeSpanH / 2) + 2;
+                mergeConnectorHeight = `${Math.max(0, deltaTop + mergeSpanH - extraTrim - mergeTrimPx + mergeParentTrimPx)}px`;
+                mergeConnectorOffset = mergeTrimPx > 0 ? `${mergeTrimPx}px` : "0px";
+              } else {
+                const parentTrim = Math.round(parentH / 2) + 2;
+                mergeConnectorHeight = `${Math.max(0, -deltaTop + mergeSpanH - parentTrim - mergeTrimPx + mergeParentTrimPx)}px`;
+                mergeConnectorOffset = `${deltaTop + parentTrim - mergeParentTrimPx}px`;
               }
             }
 
-            const mergeConnectorWidth = Math.max(11, mergeSpanH + 1);
+            const mergeConnectorWidth = thinConnectorMode ? 11 : Math.max(11, mergeSpanH + 1);
             const mergeAnchorAdjust = Math.max(0, Math.round((21 - mergeConnectorWidth) / 2));
-            const thinMergeNudgeX = span.spanSize === "thin" ? 5 : 0;
+            const thinMergeNudgeX = thinConnectorMode || span.spanSize === "thin" ? 5 : 0;
             const connectorLeft = span.left + span.width - mergeAnchorAdjust + thinMergeNudgeX;
-            const mergeConnectorZIndex = 3000 - mergeConnectorWidth * 10 - Math.min(laneDifference, 20);
+            const mergeConnectorZIndex = 5000 - proximityPenalty * 2 - mergeConnectorWidth * 10;
+            const mergeThinRadius = thinConnectorMode ? Math.round(mergeConnectorWidth * 0.45) : undefined;
 
             return (
               <div
@@ -2135,7 +2201,7 @@ const TimelineView = forwardRef(function TimelineView({
                 style={{
                   position: 'absolute',
                   left: `${connectorLeft}px`,
-                  top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
+                  top: `${childTop}px`,
                   zIndex: mergeConnectorZIndex,
                   pointerEvents: 'none',
                 }}
@@ -2150,6 +2216,7 @@ const TimelineView = forwardRef(function TimelineView({
                       transform: mergeConnectorOffset
                         ? `translateY(${mergeConnectorOffset})`
                         : undefined,
+                      ...(mergeThinRadius != null && { borderTopRightRadius: `${mergeThinRadius}px` }),
                     }}
                   />
                 )}
@@ -2163,6 +2230,7 @@ const TimelineView = forwardRef(function TimelineView({
                       transform: mergeConnectorOffset
                         ? `translateY(${mergeConnectorOffset})`
                         : undefined,
+                      ...(mergeThinRadius != null && { borderBottomRightRadius: `${mergeThinRadius}px` }),
                     }}
                   />
                 )}
@@ -2177,12 +2245,9 @@ const TimelineView = forwardRef(function TimelineView({
             .map((group) => {
               const box = groupBandBoxes.find((item) => item.groupId === group.id);
               if (!box) return null;
-              const bandBackground = group.bgColor
-                ? withAlpha(group.bgColor, 0.34)
-                : "color-mix(in srgb, var(--active-bg) 34%, transparent)";
-              const bandBorder = group.bgColor
-                ? `var(--timeline-line-thickness) solid ${withAlpha(group.bgColor, 0.86)}`
-                : "var(--timeline-line-thickness) solid color-mix(in srgb, var(--active-bg) 82%, transparent)";
+              const bandBackground = withAlpha(group.bgColor || resolvedActiveBg, 0.34);
+              const bandBorderColor = withAlpha(group.bgColor || resolvedActiveBg, 0.86);
+              const bandBorder = `var(--timeline-line-thickness) solid ${bandBorderColor}`;
               return (
                 <div
                   key={`group-bg-${group.id}`}
@@ -2229,15 +2294,28 @@ const TimelineView = forwardRef(function TimelineView({
                     const hideSpanName = hideSpanDetails || span.hideName === true;
                     const hideSpanYears = hideSpanDetails || span.hideYears === true;
                     const childInset = placement ? (isExtension ? 1 : 2) : 0;
+                    const isBranchChild = !!placement && placement.mode !== "extend";
+                    const thinConnectorChild =
+                      file?.thinConnectors === true &&
+                      isBranchChild &&
+                      span.spanSize !== "thin";
+                    const thinConnectorMergeOut =
+                      file?.thinConnectors === true &&
+                      !!mergePlacement &&
+                      span.spanSize !== "thin";
+                    const neckLeft = thinConnectorChild ? 10 : 0;
+                    const neckRight = thinConnectorMergeOut ? 10 : 0;
+                    const mergeInset = mergePlacement ? 2 : 0;
 
                     return (
                       <div
                         key={span.id}
                         data-id={span.id}
-                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}`}
+                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}`}
                         style={{
-                          left: `${span.left - childInset}px`,
-                          width: `${span.width + childInset + (mergePlacement ? 2 : 0)}px`,
+                          "--span-fill": span.color || "var(--element-bg)",
+                          left: `${span.left - childInset + neckLeft}px`,
+                          width: `${span.width + childInset + mergeInset - neckLeft - neckRight}px`,
                           top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                           height: `${span.spanHeight ?? 20}px`,
                           background: span.color || "var(--element-bg)",
@@ -2284,9 +2362,8 @@ const TimelineView = forwardRef(function TimelineView({
                     const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
                     const isSelected = selectedId === event.id;
                     const eventBorderStyle = event.eventBorderStyle || "solid";
-                    const groupBlendBase = groupColor || "var(--active-bg)";
-                    const mixedGroupColor =
-                      `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+                    const groupBlendBase = groupColor || resolvedActiveBg;
+                    const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
                     const borderColor = parentColor || (
                       file?.eventLinesToGroupBottom === true
                         ? mixedGroupColor
@@ -2360,15 +2437,28 @@ const TimelineView = forwardRef(function TimelineView({
             const hideSpanName = hideSpanDetails || span.hideName === true;
             const hideSpanYears = hideSpanDetails || span.hideYears === true;
             const childInset = placement ? (isExtension ? 1 : 2) : 0;
+            const isBranchChild = !!placement && placement.mode !== "extend";
+            const thinConnectorChild =
+              file?.thinConnectors === true &&
+              isBranchChild &&
+              span.spanSize !== "thin";
+            const thinConnectorMergeOut =
+              file?.thinConnectors === true &&
+              !!mergePlacement &&
+              span.spanSize !== "thin";
+            const neckLeft = thinConnectorChild ? 10 : 0;
+            const neckRight = thinConnectorMergeOut ? 10 : 0;
+            const mergeInset = mergePlacement ? 2 : 0;
 
             return (
               <div
                 key={span.id}
                 data-id={span.id}
-                className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}`}
+                className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}`}
                 style={{
-                  left: `${span.left - childInset}px`,
-                  width: `${span.width + childInset + (mergePlacement ? 2 : 0)}px`,
+                  "--span-fill": span.color || "var(--element-bg)",
+                  left: `${span.left - childInset + neckLeft}px`,
+                  width: `${span.width + childInset + mergeInset - neckLeft - neckRight}px`,
                   top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                   height: `${span.spanHeight ?? 20}px`,
                   background: span.color || "var(--element-bg)",
@@ -2431,13 +2521,12 @@ const TimelineView = forwardRef(function TimelineView({
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
             const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
-            const groupBlendBase = groupColor || "var(--active-bg)";
-            const mixedGroupColor =
-              `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+            const groupBlendBase = groupColor || resolvedActiveBg;
+            const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
             const lineColor = parentColor || (
               file?.eventLinesToGroupBottom === true
                 ? mixedGroupColor
-                : "var(--element-bg)"
+                : resolvedElementBg
             );
             const isDashed = eventLineStyle === "dashed";
             const isDotted = eventLineStyle === "dotted";
@@ -2502,13 +2591,12 @@ const TimelineView = forwardRef(function TimelineView({
             const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
             const isSelected = selectedId === event.id;
             const eventBorderStyle = event.eventBorderStyle || "solid";
-            const groupBlendBase = groupColor || "var(--active-bg)";
-            const mixedGroupColor =
-              `color-mix(in srgb, ${groupBlendBase} 60%, var(--element-bg) 40%)`;
+            const groupBlendBase = groupColor || resolvedActiveBg;
+            const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
             const borderColor = parentColor || (
               file?.eventLinesToGroupBottom === true
                 ? mixedGroupColor
-                : "var(--element-bg)"
+                : resolvedElementBg
             );
             const borderValue =
               eventBorderStyle === "none"
