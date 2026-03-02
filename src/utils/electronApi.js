@@ -201,6 +201,20 @@ export async function getNotesBaseDir() {
   }
 }
 
+export async function fetchWikipedia({ url }) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    return await window.electron.fetchWikipedia({ url });
+  } catch (error) {
+    console.error('Error fetching Wikipedia:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function chooseTimelinesDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

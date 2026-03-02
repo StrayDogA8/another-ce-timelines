@@ -499,6 +499,27 @@ ipcMain.handle('add-existing-note', async (event, { timelineId } = {}) => {
   }
 });
 
+ipcMain.handle('fetch-wikipedia', async (event, { url }) => {
+  try {
+    if (!url || typeof url !== 'string') {
+      return { success: false, error: 'Missing URL' };
+    }
+    const parsed = new URL(url);
+    if (!/^[a-z]{2,3}\.wikipedia\.org$/.test(parsed.hostname)) {
+      return { success: false, error: 'Invalid Wikipedia URL' };
+    }
+    const response = await net.fetch(url);
+    if (!response.ok) {
+      return { success: false, error: `Wikipedia returned ${response.status}` };
+    }
+    const html = await response.text();
+    return { success: true, html };
+  } catch (error) {
+    console.error('Error fetching Wikipedia:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('read-note', async (event, { timelineId, filename }) => {
   try {
     if (!timelineId || !filename) {

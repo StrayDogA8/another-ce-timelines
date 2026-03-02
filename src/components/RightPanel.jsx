@@ -4,7 +4,7 @@ import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
+import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, fetchWikipedia } from "../utils/electronApi";
 
 export default function RightPanel({
   onSelect,
@@ -49,6 +49,11 @@ export default function RightPanel({
   const [newGroupName, setNewGroupName] = useState("");
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const groupMenuTimeoutRef = useRef(null);
+  const [wikiContent, setWikiContent] = useState("");
+  const [isWikiLoading, setIsWikiLoading] = useState(false);
+  const [wikiError, setWikiError] = useState("");
+  const wikiCacheRef = useRef(new Map());
+  const WIKI_SANITIZE_VERSION = "mapfix-2";
   const [editSectionsOpen, setEditSectionsOpen] = useState({
     relations: true,
     style: true,
@@ -66,6 +71,21 @@ export default function RightPanel({
     return /^[a-z0-9_-]+\.md$/i.test(name) && !name.includes('..');
   };
   const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");
+
+  const parseWikipediaUrl = (url) => {
+    try {
+      const parsed = new URL(url);
+      const match = parsed.hostname.match(/^([a-z]{2,3})\.wikipedia\.org$/);
+      if (!match) return null;
+      const lang = match[1];
+      const pathMatch = parsed.pathname.match(/^\/wiki\/(.+)$/);
+      if (!pathMatch) return null;
+      const title = decodeURIComponent(pathMatch[1]);
+      return { lang, title };
+    } catch {
+      return null;
+    }
+  };
 
   const pushValidationError = (message) => {
     if (!message) return;
@@ -162,6 +182,15 @@ export default function RightPanel({
       isMounted = false;
     };
   }, [selectedElement, timelineData]);
+
+  useEffect(() => {
+    if (!selectedElement?.wikiUrl) {
+      setWikiContent("");
+      setWikiError("");
+      return;
+    }
+    fetchWikiContent(selectedElement.wikiUrl);
+  }, [selectedElement?.wikiUrl]);
 
   useEffect(() => {
     let isMounted = true;
@@ -724,6 +753,185 @@ export default function RightPanel({
     onUpdate?.(next);
   };
 
+  const sanitizeWikiHtml = (html, lang = "en") => {
+    const sanitized = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: [
+        "a", "abbr", "b", "blockquote", "br", "caption", "cite", "code",
+        "col", "colgroup", "dd", "del", "details", "dfn", "div", "dl", "dt",
+        "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "h6",
+        "hr", "i", "img", "ins", "kbd", "li", "mark", "ol", "p", "pre",
+        "q", "s", "samp", "section", "small", "span", "strong", "sub",
+        "summary", "sup", "table", "tbody", "td", "tfoot", "th", "thead",
+        "time", "tr", "u", "ul", "var", "wbr",
+      ],
+      ALLOWED_ATTR: [
+        "href", "target", "rel", "src", "alt", "title", "class", "id",
+        "colspan", "rowspan", "scope", "headers", "width", "height",
+        "loading", "decoding",
+      ],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ["style", "script", "iframe", "object", "embed", "form"],
+      KEEP_CONTENT: true,
+    });
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(sanitized, "text/html");
+    doc.body.querySelectorAll("a").forEach((node) => {
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noopener noreferrer");
+      const href = node.getAttribute("href");
+      if (href && href.startsWith("/wiki/")) {
+        node.setAttribute("href", `https://${lang}.wikipedia.org${href}`);
+      } else if (href && href.startsWith("./")) {
+        node.setAttribute("href", `https://${lang}.wikipedia.org/wiki/${href.slice(2)}`);
+      }
+    });
+    doc.body.querySelectorAll("img").forEach((node) => {
+      const src = node.getAttribute("src");
+      if (src && src.startsWith("//")) {
+        node.setAttribute("src", `https:${src}`);
+      }
+      if (!node.getAttribute("loading")) {
+        node.setAttribute("loading", "lazy");
+      }
+    });
+
+    // Remove embedded map widgets and coordinate/map-link blocks that render as noisy lists in-panel.
+    const mapLikeSelectors = [
+      ".mw-kartographer-map",
+      ".mw-kartographer-maplink",
+      ".mw-kartographer-container",
+      ".locmap",
+      ".maptable",
+      ".maplink",
+      ".mapframe",
+      ".coordinates",
+      ".geo-inline-hidden",
+      ".plainlist .geo",
+      ".plainlist .geo-inline",
+    ];
+    doc.body.querySelectorAll(mapLikeSelectors.join(",")).forEach((node) => {
+      const removableWrapper = node.closest("li, tr, figure, p, div");
+      if (removableWrapper && removableWrapper !== doc.body && removableWrapper.textContent?.trim() === node.textContent?.trim()) {
+        removableWrapper.remove();
+      } else {
+        node.remove();
+      }
+    });
+    doc.body.querySelectorAll('a[href*="geohack"], a[href*="openstreetmap"], a[href*="maplink"], a[href*="maps.wikimedia"]').forEach((node) => {
+      const removableWrapper = node.closest("li, tr, p, div");
+      if (removableWrapper && /map|coordinate|openstreetmap|geohack/i.test(removableWrapper.textContent || "")) {
+        removableWrapper.remove();
+      } else {
+        node.remove();
+      }
+    });
+    doc.body.querySelectorAll(".infobox tr").forEach((row) => {
+      const rowText = (row.textContent || "").toLowerCase();
+      const hasMapMarkers = Boolean(
+        row.querySelector(
+          '.mw-kartographer-map, .mw-kartographer-maplink, .mw-kartographer-container, .locmap, .maptable, .mapframe, .coordinates, .geo, a[href*="geohack"], a[href*="openstreetmap"], a[href*="maps.wikimedia"]'
+        )
+      );
+      const looksLikeLocationList =
+        row.querySelector(".plainlist, ul, ol") &&
+        /map|location|locations|coordinates|coord\./.test(rowText);
+      if (hasMapMarkers || looksLikeLocationList) {
+        row.remove();
+      }
+    });
+
+    return doc.body.innerHTML;
+  };
+
+  const fetchWikiContent = async (url) => {
+    if (!url) return;
+
+    const cacheKey = `${WIKI_SANITIZE_VERSION}:${url}`;
+    if (wikiCacheRef.current.has(cacheKey)) {
+      setWikiContent(wikiCacheRef.current.get(cacheKey));
+      setWikiError("");
+      return;
+    }
+
+    const parsed = parseWikipediaUrl(url);
+    if (!parsed) {
+      setWikiError("Invalid Wikipedia URL");
+      setWikiContent("");
+      return;
+    }
+
+    setIsWikiLoading(true);
+    setWikiError("");
+
+    try {
+      const apiUrl = `https://${parsed.lang}.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(parsed.title)}`;
+      const result = await fetchWikipedia({ url: apiUrl });
+      if (!result?.success) {
+        throw new Error(result?.error || "Unknown error");
+      }
+      const sanitized = sanitizeWikiHtml(result.html, parsed.lang);
+      wikiCacheRef.current.set(cacheKey, sanitized);
+      setWikiContent(sanitized);
+    } catch (err) {
+      setWikiError(`Failed to load Wikipedia article: ${err.message}`);
+      setWikiContent("");
+    } finally {
+      setIsWikiLoading(false);
+    }
+  };
+
+  const [wikiUrlInput, setWikiUrlInput] = useState("");
+  const [isWikiUrlInputOpen, setIsWikiUrlInputOpen] = useState(false);
+  const [wikiUrlInputError, setWikiUrlInputError] = useState("");
+  const wikiUrlInputRef = useRef(null);
+
+  const handleOpenWikiInput = () => {
+    setWikiUrlInput(formData.wikiUrl || "");
+    setWikiUrlInputError("");
+    setIsWikiUrlInputOpen(true);
+    setTimeout(() => wikiUrlInputRef.current?.focus(), 0);
+  };
+
+  const handleWikiUrlSubmit = () => {
+    const trimmed = wikiUrlInput.trim();
+    if (!trimmed) {
+      setIsWikiUrlInputOpen(false);
+      setWikiUrlInputError("");
+      return;
+    }
+    if (!parseWikipediaUrl(trimmed)) {
+      setWikiUrlInputError("Enter a valid Wikipedia URL (e.g., https://en.wikipedia.org/wiki/Ancient_Greece)");
+      return;
+    }
+    const next = { ...formData, wikiUrl: trimmed };
+    setFormData(next);
+    commitDraft(next);
+    setIsWikiUrlInputOpen(false);
+    setWikiUrlInputError("");
+  };
+
+  const handleWikiUrlKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleWikiUrlSubmit();
+    } else if (e.key === "Escape") {
+      setIsWikiUrlInputOpen(false);
+      setWikiUrlInputError("");
+    }
+  };
+
+  const handleRemoveWikiUrl = () => {
+    const next = { ...formData };
+    delete next.wikiUrl;
+    setFormData(next);
+    setWikiContent("");
+    setWikiError("");
+    setIsWikiUrlInputOpen(false);
+    setWikiUrlInputError("");
+    commitDraft(next);
+  };
+
   const renderNoteMarkdown = (content, isLoading) => {
     const raw = isLoading ? "_Loading note..._" : content || "";
     const withUnderline = raw.replace(/__(.+?)__/g, "<u>$1</u>");
@@ -1211,6 +1419,34 @@ export default function RightPanel({
                     __html: renderNoteMarkdown(noteContent, isNoteLoading),
                   }}
                 />
+              </>
+            )}
+
+            {timelineData?.file?.useWikipedia && formData.wikiUrl && (
+              <>
+                <div className="note-divider" />
+                <div className="wiki-header">
+                  <span className="wiki-header-label">Wikipedia</span>
+                  <a
+                    className="wiki-header-link"
+                    href={formData.wikiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in browser"
+                  >
+                    Open article
+                  </a>
+                </div>
+                {isWikiLoading ? (
+                  <div className="wiki-loading">Loading Wikipedia article...</div>
+                ) : wikiError ? (
+                  <div className="wiki-error">{wikiError}</div>
+                ) : (
+                  <div
+                    className="wiki-render"
+                    dangerouslySetInnerHTML={{ __html: wikiContent }}
+                  />
+                )}
               </>
             )}
           </div>
@@ -2207,6 +2443,11 @@ export default function RightPanel({
                   >
                     Add Existing Note
                   </button>
+                  {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
+                    <button type="button" className="btn-secondary btn-note" onClick={handleOpenWikiInput}>
+                      Add Wikipedia
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="note-editor">
@@ -2260,6 +2501,62 @@ export default function RightPanel({
                     placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
                     rows={8}
                   />
+                </div>
+              )}
+              {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
+                <div className="wiki-url-display">
+                  <div className="wiki-url-row">
+                    <span className="wiki-url-label">Wikipedia</span>
+                    <button
+                      type="button"
+                      className="wiki-url-remove"
+                      onClick={() => { setIsWikiUrlInputOpen(false); setWikiUrlInputError(""); }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <input
+                    ref={wikiUrlInputRef}
+                    type="text"
+                    className={`edit-input wiki-url-input${wikiUrlInputError ? " settings-input-error" : ""}`}
+                    value={wikiUrlInput}
+                    onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
+                    onKeyDown={handleWikiUrlKeyDown}
+                    placeholder="https://en.wikipedia.org/wiki/..."
+                  />
+                  {wikiUrlInputError && (
+                    <div className="wiki-url-error">{wikiUrlInputError}</div>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary btn-note"
+                    onClick={handleWikiUrlSubmit}
+                    style={{ marginTop: 4 }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+              {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (
+                <div className="wiki-url-display">
+                  <div className="wiki-url-row">
+                    <span className="wiki-url-label">Wikipedia</span>
+                    <button
+                      type="button"
+                      className="wiki-url-change"
+                      onClick={handleOpenWikiInput}
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      className="wiki-url-remove"
+                      onClick={handleRemoveWikiUrl}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="wiki-url-value">{formData.wikiUrl}</div>
                 </div>
               )}
             </div>

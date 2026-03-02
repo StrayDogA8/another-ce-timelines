@@ -39,6 +39,7 @@ export default function SettingsModal({
   const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [useWikipedia, setUseWikipedia] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -182,6 +183,7 @@ export default function SettingsModal({
         setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
+        setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setValidationErrors([]);
         setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
@@ -269,6 +271,7 @@ export default function SettingsModal({
           eventLinesToGroupBottom,
           hideDecimals,
           showGrid,
+          useWikipedia,
         });
       }
     }, 300);
@@ -298,6 +301,7 @@ export default function SettingsModal({
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
+    useWikipedia,
   ]);
 
   if (!isOpen) return null;
@@ -783,6 +787,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={showGrid}
                       onChange={(e) => setShowGrid(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Wikipedia Integration */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Wikipedia Integration</div>
+                  <div className="settings-row-description">Enable attaching Wikipedia articles to timeline elements.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useWikipedia}
+                      onChange={(e) => setUseWikipedia(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

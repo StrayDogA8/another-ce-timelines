@@ -1180,6 +1180,7 @@ function App() {
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
+    useWikipedia,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1220,6 +1221,7 @@ function App() {
         eventLinesToGroupBottom,
         hideDecimals,
         showGrid,
+        useWikipedia,
       };
 
       // Clean up legacy breaks field when saving with new scaleSections
@@ -1236,6 +1238,7 @@ function App() {
       if (!eventLinesToGroupBottom) delete nextFile.eventLinesToGroupBottom;
       if (!hideDecimals) delete nextFile.hideDecimals;
       if (!showGrid) delete nextFile.showGrid;
+      if (!useWikipedia) delete nextFile.useWikipedia;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {

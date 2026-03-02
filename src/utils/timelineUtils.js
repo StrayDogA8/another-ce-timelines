@@ -219,6 +219,26 @@ export function layoutSpans({
     return true;
   }
 
+  // Check a span AND its entire extend chain at the given lane.
+  // Extend children inherit the same lane as their parent, so they must also fit there.
+  function spanWithExtendsFitsAtLane(spanId, lane, rootId) {
+    const s = spanById[spanId];
+    if (!s || !spanFitsAllNeededLanes(lane, s, rootId)) return false;
+    const stk = [spanId];
+    while (stk.length > 0) {
+      const cur = stk.pop();
+      for (const childId of (parentToChildren[cur] || [])) {
+        const cp = spanChildPlacement[childId];
+        if (cp?.mode === "extend") {
+          const es = spanById[childId];
+          if (!es || !spanFitsAllNeededLanes(lane, es, rootId)) return false;
+          stk.push(childId);
+        }
+      }
+    }
+    return true;
+  }
+
   const familyOffsetsCache = new Map();
   const getFamilyOffsets = (rootId) => {
     if (familyOffsetsCache.has(rootId)) return familyOffsetsCache.get(rootId);
@@ -310,7 +330,9 @@ export function layoutSpans({
 
     if (baseLane + minOffset < 0) return false;
 
-    if (!spanFitsAllNeededLanes(baseLane, span, rootId)) return false;
+    // Check root span + its extend chain (all at baseLane, offset=0).
+    // The loop below skips offset=0, so we check the extend chain separately.
+    if (!spanWithExtendsFitsAtLane(span.id, baseLane, rootId)) return false;
 
     for (let offset = minOffset; offset <= maxOffset; offset++) {
       if (offset === 0) continue;
@@ -322,8 +344,8 @@ export function layoutSpans({
       for (const childId of childIds) {
         const childPlacement = spanChildPlacement[childId];
         if (childPlacement && childPlacement.offset === offset) {
-          const child = spanById[childId];
-          if (child && !spanFitsAllNeededLanes(childLane, child, rootId)) {
+          // Check the branch child AND its extend chain at childLane.
+          if (!spanWithExtendsFitsAtLane(childId, childLane, rootId)) {
             return false;
           }
         }
@@ -382,13 +404,13 @@ export function layoutSpans({
         while (true) {
           if (searchLane < 0) {
             searchLane = parentLane + 1;
-            while (!spanFitsAllNeededLanes(searchLane, span, rootId)) {
+            while (!spanWithExtendsFitsAtLane(span.id, searchLane, rootId)) {
               searchLane++;
             }
             break;
           }
 
-          if (spanFitsAllNeededLanes(searchLane, span, rootId)) {
+          if (spanWithExtendsFitsAtLane(span.id, searchLane, rootId)) {
             break;
           }
 
