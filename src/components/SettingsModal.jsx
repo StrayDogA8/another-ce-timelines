@@ -2,6 +2,7 @@ import { ArrowLeft, Plus, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, clamp, detailToSlider, sliderToDetail } from "../utils/sliderUtils";
+import { sanitizeTitle, loadScaleSections, validateScaleSection } from "../utils/validation";
 import "../styles/07-modals-menus.css";
 
 export default function SettingsModal({
@@ -48,47 +49,6 @@ export default function SettingsModal({
   const detailSliderRef = useRef(null);
   const lastFilePathRef = useRef(null);
   const backdropPointerDownRef = useRef(false);
-
-  const sanitizeTitle = (value) => String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  // Convert stored scale sections (numeric) to editable (strings for inputs)
-  const loadScaleSections = (stored = [], legacyBreaks = []) => {
-    const source = Array.isArray(stored) && stored.length > 0
-      ? stored
-      : Array.isArray(legacyBreaks) && legacyBreaks.length > 0
-        ? legacyBreaks.map((b) => ({ ...b, scale: 0 }))
-        : [];
-    if (source.length === 0) return [];
-    return source.map((item) => ({
-      start: String(item?.start ?? ""),
-      end: String(item?.end ?? ""),
-      scale: String(item?.scale ?? "0"),
-    }));
-  };
-
-  // Validate a single scale section entry
-  const validateScaleSection = (item) => {
-    const startRaw = item?.start?.trim() || "";
-    const endRaw = item?.end?.trim() || "";
-    const scaleRaw = item?.scale?.trim() || "";
-    if (!startRaw && !endRaw && !scaleRaw) return null;
-    if (!startRaw || !endRaw) return "Both start and end required";
-
-    const parsedStart = parseTimelineInput(startRaw);
-    const parsedEnd = parseTimelineInput(endRaw);
-    if (!Number.isFinite(parsedStart.value)) return "Invalid start date";
-    if (!Number.isFinite(parsedEnd.value)) return "Invalid end date";
-    if (parsedStart.value === parsedEnd.value) return "Start and end must differ";
-
-    const scaleNum = Number(scaleRaw);
-    if (!Number.isFinite(scaleNum) || scaleNum < 0 || scaleNum > 2) return "Scale must be 0–2";
-    return null;
-  };
 
   // Convert editable scale sections (strings) to numeric for saving
   const saveScaleSections = (editable = []) => {

@@ -11,42 +11,10 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { withAlpha, blendColors } from "../utils/colorUtils";
 import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff } from "lucide-react";
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
-
-const parseHexRGB = (hex) => {
-  if (typeof hex !== "string") return null;
-  const v = hex.trim();
-  const short = /^#([0-9a-f]{3})$/i.exec(v);
-  if (short) {
-    const [r, g, b] = short[1].split("").map((c) => parseInt(c + c, 16));
-    return [r, g, b];
-  }
-  const full = /^#([0-9a-f]{6})$/i.exec(v);
-  if (full) {
-    return [parseInt(full[1].slice(0, 2), 16), parseInt(full[1].slice(2, 4), 16), parseInt(full[1].slice(4, 6), 16)];
-  }
-  return null;
-};
-
-const withAlpha = (hex, alpha) => {
-  const rgb = parseHexRGB(hex);
-  if (rgb) return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
-  return typeof hex === "string" ? hex : `rgba(0, 0, 0, ${alpha})`;
-};
-
-// Blend two hex colors in sRGB (replacement for CSS color-mix to avoid html2canvas issues)
-const blendColors = (hex1, hex2, weight1 = 0.5) => {
-  const c1 = parseHexRGB(hex1);
-  const c2 = parseHexRGB(hex2);
-  if (!c1 || !c2) return hex1 || hex2 || "#888888";
-  const w = Math.min(1, Math.max(0, weight1));
-  const r = Math.round(c1[0] * w + c2[0] * (1 - w));
-  const g = Math.round(c1[1] * w + c2[1] * (1 - w));
-  const b = Math.round(c1[2] * w + c2[2] * (1 - w));
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-};
 
 const TimelineView = forwardRef(function TimelineView({
   selectedId,

@@ -138,7 +138,7 @@ export function buildSpanChildPlacement(spans, branchOrdering = "later-first") {
     // Alternate offsets around the parent: -1, +1, -2, +2, ...
     // Negative offsets appear lower on screen, positive offsets higher.
     orderedChildren.forEach((childId, index) => {
-      const magnitude = index + 1;
+      const magnitude = Math.ceil((index + 1) / 2);
       const offset = index % 2 === 0 ? -magnitude : +magnitude;
       placement[childId] = {
         parentId,

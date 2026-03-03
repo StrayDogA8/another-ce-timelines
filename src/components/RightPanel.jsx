@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown } from "lucide-react";
-import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
+import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseWikipediaUrl, buildValidatedUpdate } from "../utils/validation";
+import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, fetchWikipedia } from "../utils/electronApi";
@@ -53,7 +55,8 @@ export default function RightPanel({
   const [isWikiLoading, setIsWikiLoading] = useState(false);
   const [wikiError, setWikiError] = useState("");
   const wikiCacheRef = useRef(new Map());
-  const WIKI_SANITIZE_VERSION = "mapfix-2";
+  const wikiRenderRef = useRef(null);
+  const WIKI_SANITIZE_VERSION = "collapsible-1";
   const [editSectionsOpen, setEditSectionsOpen] = useState({
     relations: true,
     style: true,
@@ -63,29 +66,6 @@ export default function RightPanel({
   const panelRef = useRef(null);
   const TAG_MAX_LENGTH = 32;
   const ID_MAX_LENGTH = 60;
-
-  const isValidIdValue = (value) => /^[a-z0-9_-]+$/i.test(value);
-  const isValidTagValue = (value) => /^[a-z0-9 _-]+$/i.test(value);
-  const isSafeNoteFilename = (name) => {
-    if (!name || typeof name !== 'string') return false;
-    return /^[a-z0-9_-]+\.md$/i.test(name) && !name.includes('..');
-  };
-  const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");
-
-  const parseWikipediaUrl = (url) => {
-    try {
-      const parsed = new URL(url);
-      const match = parsed.hostname.match(/^([a-z]{2,3})\.wikipedia\.org$/);
-      if (!match) return null;
-      const lang = match[1];
-      const pathMatch = parsed.pathname.match(/^\/wiki\/(.+)$/);
-      if (!pathMatch) return null;
-      const title = decodeURIComponent(pathMatch[1]);
-      return { lang, title };
-    } catch {
-      return null;
-    }
-  };
 
   const pushValidationError = (message) => {
     if (!message) return;
@@ -193,6 +173,35 @@ export default function RightPanel({
   }, [selectedElement?.wikiUrl]);
 
   useEffect(() => {
+    if (!wikiRenderRef.current || !wikiContent) return;
+    const container = wikiRenderRef.current;
+    // Collapse infobox td cells with long lists (those not already wrapped by mw-collapsible)
+    container.querySelectorAll(".infobox td").forEach((td) => {
+      if (td.dataset.wikiInit) return;
+      td.dataset.wikiInit = "1";
+      if (td.querySelectorAll("li").length < 4) return;
+      const contentWrap = document.createElement("div");
+      contentWrap.className = "wiki-section-hidden";
+      while (td.firstChild) contentWrap.appendChild(td.firstChild);
+      const bracket = document.createElement("span");
+      bracket.className = "wiki-toggle-bracket";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "wiki-toggle-btn";
+      btn.textContent = "show";
+      bracket.appendChild(document.createTextNode("["));
+      bracket.appendChild(btn);
+      bracket.appendChild(document.createTextNode("]"));
+      btn.addEventListener("click", () => {
+        const nowHidden = contentWrap.classList.toggle("wiki-section-hidden");
+        btn.textContent = nowHidden ? "show" : "hide";
+      });
+      td.appendChild(bracket);
+      td.appendChild(contentWrap);
+    });
+  }, [wikiContent]);
+
+  useEffect(() => {
     let isMounted = true;
     const loadNotesBaseDir = async () => {
       const result = await getNotesBaseDir();
@@ -257,50 +266,6 @@ export default function RightPanel({
     if (field === "dateInput" || field === "parents") {
       setValidationErrors([]);
     }
-  };
-
-  const isValidHexColor = (color) => /^#[0-9A-Fa-f]{6}$/.test(color);
-
-  const normalizeColor = (color) => {
-    if (!color) return "#808080";
-    if (isValidHexColor(color)) return color;
-    // Try to salvage partial hex colors
-    const cleaned = color.replace(/[^0-9A-Fa-f#]/g, "");
-    if (isValidHexColor(cleaned)) return cleaned;
-    return "#808080";
-  };
-
-  const validateEventParents = (draft) => {
-    const errors = [];
-
-    if (draft.type === "event" && draft.parents && draft.parents.length > 0) {
-      const spans = timelineData.elements.filter(el => el.type === "span");
-      const eventDate = parseTimelineInput(draft.dateInput).value;
-
-      if (eventDate === null) {
-        errors.push("Event date must be a number or MM/DD/YYYY.");
-        return errors;
-      }
-
-      draft.parents.forEach(parentId => {
-        const parentSpan = spans.find(span => span.id === parentId);
-
-        if (!parentSpan) {
-          errors.push(`Parent span "${parentId}" not found`);
-        } else if (eventDate < parentSpan.start || eventDate > parentSpan.end) {
-          errors.push(
-            `Event date ${eventDate} is outside parent span "${parentSpan.title}" range (${parentSpan.start}-${parentSpan.end})`
-          );
-        }
-      });
-    }
-
-    return errors;
-  };
-
-  const stripInputs = (data) => {
-    const { dateInput: _dateInput, startInput: _startInput, endInput: _endInput, ...rest } = data;
-    return rest;
   };
 
   const getSpanNumericStart = (span) => {
@@ -563,90 +528,8 @@ export default function RightPanel({
     commitDraft({ ...formData, tags: nextTags });
   };
 
-  const buildValidatedUpdate = (draft) => {
-    const errors = validateEventParents(draft);
-    const parsedDate = parseTimelineInput(draft.dateInput);
-    const parsedStart = parseTimelineInput(draft.startInput);
-    const parsedEnd = parseTimelineInput(draft.endInput);
-    const useMonths = timelineData?.file?.useMonths === true;
-    const timelineStart = timelineData?.file?.start;
-    const timelineEnd = timelineData?.file?.end;
-
-    if (draft.type === "event" && parsedDate.value === null) {
-      errors.push("Event date must be a number or MM/DD/YYYY.");
-    }
-    if (draft.type !== "event" && (parsedStart.value === null || parsedEnd.value === null)) {
-      errors.push("Start and end must be numbers or MM/DD/YYYY.");
-    }
-    if (draft.type === "event" && parsedDate.value !== null) {
-      if (parsedDate.value < timelineStart || parsedDate.value > timelineEnd) {
-        errors.push("Event date must be within the timeline bounds.");
-      }
-    }
-    if (draft.type !== "event" && parsedStart.value !== null && parsedEnd.value !== null) {
-      if (parsedStart.value >= parsedEnd.value) {
-        errors.push("Start must be before End.");
-      }
-      if (parsedEnd.value <= timelineStart || parsedStart.value >= timelineEnd) {
-        errors.push("Span/Era must overlap with the timeline range.");
-      }
-    }
-
-    if (draft.type === "span" && draft.extendFrom) {
-      const extendParent = timelineData?.elements?.find(
-        (el) => el.type === "span" && el.id === draft.extendFrom
-      );
-      if (!extendParent) {
-        errors.push(`Extend From span "${draft.extendFrom}" not found.`);
-      } else if (parsedStart.value !== null) {
-        const parentEnd = getSpanNumericEnd(extendParent);
-        if (!Number.isFinite(parentEnd) || Math.abs(parentEnd - parsedStart.value) >= 1e-6) {
-          errors.push("Extend From only works when the selected span ends exactly at this span's start.");
-        }
-      }
-    }
-
-    if (errors.length > 0) {
-      return { errors, nextData: null };
-    }
-
-    const nextData = stripInputs({ ...draft });
-    if (draft.type === "event") {
-      nextData.date =
-        useMonths && parsedDate.precision !== "day"
-          ? snapToMonthGrid(parsedDate.value)
-          : parsedDate.value;
-      if (parsedDate.label) {
-        nextData.dateLabel = parsedDate.label;
-      } else {
-        delete nextData.dateLabel;
-      }
-    } else {
-      nextData.start =
-        useMonths && parsedStart.precision !== "day"
-          ? snapToMonthGrid(parsedStart.value)
-          : parsedStart.value;
-      nextData.end =
-        useMonths && parsedEnd.precision !== "day"
-          ? snapToMonthGrid(parsedEnd.value)
-          : parsedEnd.value;
-      if (parsedStart.label) {
-        nextData.startLabel = parsedStart.label;
-      } else {
-        delete nextData.startLabel;
-      }
-      if (parsedEnd.label) {
-        nextData.endLabel = parsedEnd.label;
-      } else {
-        delete nextData.endLabel;
-      }
-    }
-
-    return { errors, nextData };
-  };
-
   const commitDraft = (draft) => {
-    const { errors, nextData } = buildValidatedUpdate(draft);
+    const { errors, nextData } = buildValidatedUpdate(draft, timelineData);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return false;
@@ -839,6 +722,25 @@ export default function RightPanel({
       if (hasMapMarkers || looksLikeLocationList) {
         row.remove();
       }
+    });
+
+    // Transform mw-collapsible sections (sidebar lists) into native <details>/<summary>
+    doc.body.querySelectorAll(".mw-collapsible").forEach((collapsible) => {
+      const isOpen = !collapsible.classList.contains("mw-collapsed");
+      const titleEl = collapsible.querySelector(".sidebar-list-title");
+      const contentEl = collapsible.querySelector(".mw-collapsible-content");
+      if (!titleEl || !contentEl) return;
+      collapsible.querySelectorAll(".mw-collapsible-text").forEach((el) => el.remove());
+      const details = doc.createElement("details");
+      if (isOpen) details.open = true;
+      details.className = "wiki-sidebar-section";
+      const summary = doc.createElement("summary");
+      summary.className = "wiki-sidebar-summary";
+      while (titleEl.firstChild) summary.appendChild(titleEl.firstChild);
+      details.appendChild(summary);
+      contentEl.classList.add("wiki-sidebar-content");
+      details.appendChild(contentEl);
+      collapsible.parentNode.replaceChild(details, collapsible);
     });
 
     return doc.body.innerHTML;
@@ -1443,6 +1345,7 @@ export default function RightPanel({
                   <div className="wiki-error">{wikiError}</div>
                 ) : (
                   <div
+                    ref={wikiRenderRef}
                     className="wiki-render"
                     dangerouslySetInnerHTML={{ __html: wikiContent }}
                   />

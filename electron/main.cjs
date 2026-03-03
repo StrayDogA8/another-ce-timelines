@@ -184,6 +184,20 @@ async function createWindow() {
     }
   }
 
+  // Open all external links in the default browser instead of a new Electron window
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const appUrl = mainWindow.webContents.getURL();
+    if (url !== appUrl) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   mainWindow.webContents.on('context-menu', (event, params) => {
     if (!params.isEditable) return;
     const menu = Menu.buildFromTemplate([

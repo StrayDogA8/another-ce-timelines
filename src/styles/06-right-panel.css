@@ -1411,7 +1411,7 @@
   margin-top: 8px;
   margin-bottom: 6px;
   padding: 6px 8px;
-  background: var(--active-bg);
+  background: var(--tertiary-bg);
   border-radius: 6px;
 }
 
@@ -1632,16 +1632,17 @@
   max-width: 100%;
   height: auto;
   border-radius: 4px;
-  margin: 4px 0;
+  margin: 4px auto;
   display: block;
 }
 
 .wiki-render figure {
-  margin: 0.7rem 0;
+  margin: 0.7rem auto;
   padding: 6px;
   border: 1px solid color-mix(in srgb, var(--active-bg), transparent 30%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--tertiary-bg), transparent 20%);
+  text-align: center;
 }
 
 .wiki-render figcaption {
@@ -1888,6 +1889,143 @@
 .wiki-render .infobox .hlist li + li::before {
   content: " \00B7 ";
   color: var(--gray-2);
+}
+
+/* Sidebar ("Part of a series on" boxes) */
+.wiki-render .sidebar {
+  float: none;
+  width: 100%;
+  margin: 0.75rem 0;
+  background: var(--tertiary-bg);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 5%);
+  overflow: hidden;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--active-bg), transparent 10%);
+  border-collapse: separate !important;
+  border-spacing: 0;
+  font-size: var(--text-xs);
+}
+
+.wiki-render .sidebar td,
+.wiki-render .sidebar th {
+  border: none !important;
+  background: transparent !important;
+  padding: 0;
+}
+
+.wiki-render .sidebar-pretitle {
+  display: block;
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--gray-2);
+  padding: 8px 10px 2px;
+}
+
+.wiki-render .sidebar-title-with-pretitle {
+  display: block;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  padding: 4px 10px 8px;
+  color: var(--text-primary);
+  border-bottom: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 8%);
+}
+
+.wiki-render .sidebar-image {
+  display: block;
+  text-align: center;
+  padding: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 8%);
+}
+
+.wiki-render .sidebar-content {
+  display: block;
+  border-top: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 6%);
+  padding: 0;
+}
+
+.wiki-render .sidebar-below {
+  display: block;
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--gray-2);
+  padding: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 8%);
+}
+
+.wiki-render .sidebar-navbar {
+  display: none;
+}
+
+/* Collapsible sidebar sections (details/summary) */
+.wiki-render .wiki-sidebar-section {
+  border-top: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 6%);
+}
+
+.wiki-render .wiki-sidebar-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--element-bg), transparent 88%);
+  color: var(--text-primary);
+  list-style: none;
+  user-select: none;
+}
+
+.wiki-render .wiki-sidebar-summary::-webkit-details-marker {
+  display: none;
+}
+
+.wiki-render .wiki-sidebar-summary::after {
+  content: "[show]";
+  font-size: 11px;
+  color: #3366cc;
+  font-weight: normal;
+  white-space: nowrap;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.wiki-render details[open] > .wiki-sidebar-summary::after {
+  content: "[hide]";
+}
+
+.wiki-render .wiki-sidebar-content {
+  padding: 6px 10px;
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+}
+
+/* Collapsible toggle for infobox long lists */
+.wiki-toggle-bracket {
+  display: block;
+  font-size: 11px;
+  color: var(--gray-2);
+  font-weight: normal;
+  line-height: 1.6;
+}
+
+.wiki-toggle-btn {
+  background: none;
+  border: none;
+  color: #3366cc;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.wiki-toggle-btn:hover {
+  text-decoration: underline;
+}
+
+.wiki-section-hidden {
+  display: none !important;
 }
 
 /* Thumb / image containers */
