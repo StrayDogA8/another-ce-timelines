@@ -379,6 +379,14 @@
   padding: 1px 6px;
 }
 
+.event.event-no-year {
+  height: 16px;
+}
+
+.event.event-compact.event-no-year {
+  height: 14px;
+}
+
 .event-title {
   font-size: 10px;
   font-weight: 700;

@@ -859,6 +859,23 @@ function App() {
     });
   };
 
+  const handleUpdateTagColor = (tag, color) => {
+    if (!tag) return;
+    setTimelineData((prevData) => {
+      const prevTagColors = prevData.file?.tagColors || {};
+      const nextTagColors = color
+        ? { ...prevTagColors, [tag]: color }
+        : Object.fromEntries(Object.entries(prevTagColors).filter(([k]) => k !== tag));
+      const updatedData = {
+        ...prevData,
+        file: { ...prevData.file, tagColors: nextTagColors },
+      };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
   const handleDeleteGroup = (groupId) => {
     if (!groupId) return;
     setTimelineData((prevData) => {
@@ -1960,6 +1977,8 @@ function App() {
           onUpdateGroup={handleUpdateGroup}
           onUpdateGroups={handleUpdateGroups}
           onDeleteGroup={handleDeleteGroup}
+          tagColors={timelineData.file?.tagColors || {}}
+          onUpdateTagColor={handleUpdateTagColor}
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
@@ -2057,6 +2076,7 @@ function App() {
             pinnedTags={pinnedTags}
             onTogglePinnedTag={handleTogglePinnedTag}
             onViewportYearChange={setViewportYear}
+            tagColors={timelineData.file?.tagColors || {}}
           />
         )}
       </main>
@@ -2171,6 +2191,7 @@ function App() {
                 onToggleTag={handleToggleTag}
                 pluginFields={pluginFields}
                 onUpdateGroups={handleUpdateGroups}
+                tagColors={timelineData.file?.tagColors || {}}
               />
             </aside>
           )}

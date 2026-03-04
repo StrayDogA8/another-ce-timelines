@@ -46,6 +46,7 @@ const TimelineView = forwardRef(function TimelineView({
   pinnedTags = [],
   onTogglePinnedTag,
   onViewportYearChange,
+  tagColors = {},
 }, ref) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
@@ -564,11 +565,13 @@ const TimelineView = forwardRef(function TimelineView({
       finalEvents.push(...group.finalEvents);
     });
 
-    const tlStartPx = yearToPx(file.start);
-    const tlEndPx = yearToPx(file.end);
+    const tlStartPx = file.start != null ? yearToPx(file.start) : null;
+    const tlEndPx = file.end != null ? yearToPx(file.end) : null;
     const finalEras = adjustedEras.map((era) => {
-      const clampedLeft = Math.max(yearToPx(era.start), tlStartPx);
-      const clampedRight = Math.min(yearToPx(era.end), tlEndPx);
+      const rawLeft = yearToPx(era.start);
+      const rawRight = yearToPx(era.end);
+      const clampedLeft = tlStartPx != null ? Math.max(rawLeft, tlStartPx) : rawLeft;
+      const clampedRight = tlEndPx != null ? Math.min(rawRight, tlEndPx) : rawRight;
       const top = BASE_LINE_Y + ERA_OFFSET;
       return {
         ...era,
@@ -576,7 +579,7 @@ const TimelineView = forwardRef(function TimelineView({
         width: clampedRight - clampedLeft,
         top,
       };
-    });
+    }).filter((era) => era.width > 0);
 
     // ticks
     const ticks = [];
@@ -1963,6 +1966,7 @@ const TimelineView = forwardRef(function TimelineView({
             const connectorThicknessBase = thinConnectorMode ? 11 : (spanH + 1);
 
             if (!isChild) return null;
+            if (span.width <= 0) return null;
 
             // Calculate actual visual distance for connector height and offset
             let connectorHeight = undefined;
@@ -2064,6 +2068,7 @@ const TimelineView = forwardRef(function TimelineView({
             if (!placement || placement.mode !== "extend") return null;
             const parentSpan = finalSpanById.get(placement.parentId);
             if (!parentSpan) return null;
+            if (span.width <= 0 || parentSpan.width <= 0) return null;
 
             const spanH = span.spanHeight ?? 20;
             const parentH = parentSpan.spanHeight ?? 20;
@@ -2109,6 +2114,7 @@ const TimelineView = forwardRef(function TimelineView({
             const mergeSpanH = span.spanHeight ?? 20;
             const mergeParent = finalSpanById.get(mergePlacement.parentId);
             if (!mergeParent) return null;
+            if (span.width <= 0 || mergeParent.width <= 0) return null;
             const thinConnectorMode = file?.thinConnectors === true;
 
             // Use actual rendered positions for direction detection (works across groups)
@@ -2244,6 +2250,7 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 <div className="spans-layer">
                   {groupSpans.map((span) => {
+                    if (span.width <= 0) return null;
                     const isSelected = selectedId === span.id;
                     const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
                     const mergePlacement = spanMergePlacement[span.id];
@@ -2324,6 +2331,7 @@ const TimelineView = forwardRef(function TimelineView({
 
                 <div className="events-layer">
                   {groupEvents.map((event) => {
+                    if ((file.start != null && event.date < file.start) || (file.end != null && event.date > file.end)) return null;
                     const parentId = event.parents?.[0];
                     const parentSpan = parentId ? finalSpanById.get(parentId) : null;
                     const parentColor = parentSpan?.color;
@@ -2345,7 +2353,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={event.id}
                         data-id={event.id}
-                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}`}
+                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}`}
                         style={{
                           left: `${event._x}px`,
                           top: `${event.top}px`,
@@ -2359,8 +2367,8 @@ const TimelineView = forwardRef(function TimelineView({
                         }}
                       >
                         <div className="event-title">{event.title}</div>
-                        <div className="event-date">
-                          {event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                        {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
+                          {event.hideYears !== true && (event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals))}
                           {(() => {
                             const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                               .filter((tag) => pinnedTags.includes(tag));
@@ -2368,14 +2376,14 @@ const TimelineView = forwardRef(function TimelineView({
                             return (
                               <span className="pinned-tags">
                                 {visiblePinnedTags.map((tag) => (
-                                  <span key={tag} className="pinned-tag">
+                                  <span key={tag} className="pinned-tag" style={tagColors[tag] ? { background: tagColors[tag], color: getReadableTextColor(tagColors[tag]) } : undefined}>
                                     {tag}
                                   </span>
                                 ))}
                               </span>
                             );
                           })()}
-                        </div>
+                        </div>}
                       </div>
                     );
                   })}
@@ -2386,6 +2394,7 @@ const TimelineView = forwardRef(function TimelineView({
 
         {renderLegacyLayers && <div className="spans-layer">
           {finalSpans.map((span) => {
+            if (span.width <= 0) return null;
             const isSelected = selectedId === span.id;
             const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
 
@@ -2468,6 +2477,7 @@ const TimelineView = forwardRef(function TimelineView({
         {/* Event lines layer - behind spans and events */}
         <div className="event-lines-layer">
           {finalEvents.map((event) => {
+            if ((file.start != null && event.date < file.start) || (file.end != null && event.date > file.end)) return null;
             const eventLineStyle = event.eventLineStyle || "solid";
             if (eventLineStyle === "none") return null;
 
@@ -2484,7 +2494,11 @@ const TimelineView = forwardRef(function TimelineView({
               ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top)
               : fallbackTargetY;
 
-            const eventBottom = event.top + (event._boxHeight || 29);
+            const hasPinnedTags = (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t));
+            const effectiveBoxHeight = event.hideYears === true && !hasPinnedTags
+              ? (file?.compactEvents ? 14 : 16)
+              : (event._boxHeight || 29);
+            const eventBottom = event.top + effectiveBoxHeight;
 
             const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
@@ -2550,6 +2564,7 @@ const TimelineView = forwardRef(function TimelineView({
 
         {renderLegacyLayers && <div className="events-layer">
           {finalEvents.map((event) => {
+            if ((file.start != null && event.date < file.start) || (file.end != null && event.date > file.end)) return null;
             const parentId = event.parents?.[0];
             const parentSpan = parentId
               ? finalSpanById.get(parentId)
@@ -2574,7 +2589,7 @@ const TimelineView = forwardRef(function TimelineView({
               <div
                 key={event.id}
                 data-id={event.id}
-                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}`}
+                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}`}
                 style={{
                   left: `${event._x}px`,
                   top: `${event.top}px`,
@@ -2588,8 +2603,8 @@ const TimelineView = forwardRef(function TimelineView({
                 }}
               >
                 <div className="event-title">{event.title}</div>
-                <div className="event-date">
-                  {event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
+                  {event.hideYears !== true && (event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals))}
                   {(() => {
                     const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                       .filter((tag) => pinnedTags.includes(tag));
@@ -2604,7 +2619,7 @@ const TimelineView = forwardRef(function TimelineView({
                       </span>
                     );
                   })()}
-                </div>
+                </div>}
               </div>
             );
           })}

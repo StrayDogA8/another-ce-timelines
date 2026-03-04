@@ -94,6 +94,8 @@ export default function Sidebar({
   onToggleHiddenTag,
   pinnedTags = [],
   onTogglePinnedTag,
+  tagColors = {},
+  onUpdateTagColor,
   onAddGroup,
   onUpdateGroup,
   onUpdateGroups,
@@ -141,6 +143,7 @@ export default function Sidebar({
   const listRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const groupColorInputRefs = useRef({});
+  const tagColorInputRefs = useRef({});
   const themeGroupColor = resolveThemeGroupColor() || DEFAULT_GROUP_COLOR;
 
   const displayName = useMemo(() => {
@@ -432,6 +435,11 @@ export default function Sidebar({
 
   const openGroupColorPicker = (groupId) => {
     const input = groupColorInputRefs.current[groupId];
+    if (input) input.click();
+  };
+
+  const openTagColorPicker = (tag) => {
+    const input = tagColorInputRefs.current[tag];
     if (input) input.click();
   };
 
@@ -782,9 +790,13 @@ export default function Sidebar({
                 const isShown = activeTags.includes(tag);
                 const isHidden = hiddenTags.includes(tag);
                 const isPinned = pinnedTags.includes(tag);
+                const tagColor = tagColors[tag];
                 return (
                   <div key={tag} className="filter-menu-item filter-menu-item-with-pin">
-                    <span className="filter-menu-label">{tag}</span>
+                    <span className="filter-menu-label">
+                      {tagColor && <span className="tag-sidebar-color-dot" style={{ background: tagColor }} />}
+                      {tag}
+                    </span>
                     <div className="filter-menu-actions">
                       <button
                         type="button"
@@ -812,6 +824,24 @@ export default function Sidebar({
                         title={isPinned ? "Remove label" : "Use as label"}
                       >
                         <Tag size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`filter-menu-icon-btn${tagColor ? " is-active" : ""}`}
+                        onClick={() => openTagColorPicker(tag)}
+                        aria-label="Set tag color"
+                        title="Set tag color"
+                      >
+                        <Palette size={12} />
+                        <input
+                          ref={(node) => { tagColorInputRefs.current[tag] = node; }}
+                          className="sidebar-group-inline-color-input"
+                          type="color"
+                          value={tagColor || "#808080"}
+                          onChange={(e) => onUpdateTagColor?.(tag, e.target.value)}
+                          tabIndex={-1}
+                          aria-hidden="true"
+                        />
                       </button>
                     </div>
                   </div>

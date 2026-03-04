@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
-import { formatYear } from "../utils/timelineUtils";
+import { formatYear, getReadableTextColor } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseWikipediaUrl, buildValidatedUpdate } from "../utils/validation";
 import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
@@ -22,6 +22,7 @@ export default function RightPanel({
   onToggleTag,
   pluginFields = [],
   onUpdateGroups,
+  tagColors = {},
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -1268,11 +1269,13 @@ export default function RightPanel({
                 <div className="tag-chip-list">
                   {formData.tags.map((tag) => {
                     const isSelected = activeTags.includes(tag);
+                    const tagColor = tagColors[tag];
                     return (
                       <button
                         key={tag}
                         type="button"
                         className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
+                        style={tagColor ? { background: tagColor, color: getReadableTextColor(tagColor) } : undefined}
                         onClick={() => {
                           if (onToggleTag) {
                             onToggleTag(tag);
@@ -2010,31 +2013,79 @@ export default function RightPanel({
             )}
 
             {formData.type === "span" && (
-              <div className="form-group">
-                <div className="edit-row">
-                  <label htmlFor="hideSpanDetails">Hide Details</label>
-                  <div className="edit-separator" />
-                  <div className="edit-checkbox-wrap">
-                    <input
-                      id="hideSpanDetails"
-                      type="checkbox"
-                      checked={formData.hideDetails === true || (formData.hideName === true && formData.hideYears === true)}
-                      onChange={(e) => {
-                        const next = { ...formData, hideDetails: e.target.checked };
-                        delete next.hideName;
-                        delete next.hideYears;
-                        setFormData(next);
-                        commitDraft(next);
-                      }}
-                    />
+              <>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="hideSpanDetails">Hide Details</label>
+                    <div className="edit-separator" />
+                    <div className="edit-checkbox-wrap">
+                      <input
+                        id="hideSpanDetails"
+                        type="checkbox"
+                        checked={formData.hideDetails === true || (formData.hideName === true && formData.hideYears === true)}
+                        onChange={(e) => {
+                          const next = { ...formData, hideDetails: e.target.checked };
+                          delete next.hideName;
+                          delete next.hideYears;
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="hideSpanYears">Hide Year</label>
+                    <div className="edit-separator" />
+                    <div className="edit-checkbox-wrap">
+                      <input
+                        id="hideSpanYears"
+                        type="checkbox"
+                        checked={formData.hideYears === true}
+                        onChange={(e) => {
+                          const next = { ...formData };
+                          if (e.target.checked) {
+                            next.hideYears = true;
+                          } else {
+                            delete next.hideYears;
+                          }
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Event styling (events only) */}
             {formData.type === "event" && (
               <>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="hideEventYears">Hide Year</label>
+                    <div className="edit-separator" />
+                    <div className="edit-checkbox-wrap">
+                      <input
+                        id="hideEventYears"
+                        type="checkbox"
+                        checked={formData.hideYears === true}
+                        onChange={(e) => {
+                          const next = { ...formData };
+                          if (e.target.checked) {
+                            next.hideYears = true;
+                          } else {
+                            delete next.hideYears;
+                          }
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="form-group">
                   <div className="edit-row">
                     <label htmlFor="eventLineStyle">Line Style</label>

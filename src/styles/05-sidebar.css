@@ -337,6 +337,16 @@
   padding-right: 0;
 }
 
+.tag-sidebar-color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 
 .sidebar-tags-dropdown .filter-menu-icon-btn:hover {
   background: transparent;
