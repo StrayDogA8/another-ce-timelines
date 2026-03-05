@@ -2317,7 +2317,7 @@ const TimelineView = forwardRef(function TimelineView({
                           return (
                             <span className="pinned-tags" style={{ color: spanTextColor }}>
                               {visiblePinnedTags.map((tag) => (
-                                <span key={tag} className="pinned-tag">
+                                <span key={tag} className="pinned-tag" style={tagColors[tag] ? { background: tagColors[tag], color: getReadableTextColor(tagColors[tag]) } : undefined}>
                                   {tag}
                                 </span>
                               ))}
@@ -2462,7 +2462,7 @@ const TimelineView = forwardRef(function TimelineView({
                   return (
                     <span className="pinned-tags" style={{ color: spanTextColor }}>
                       {visiblePinnedTags.map((tag) => (
-                        <span key={tag} className="pinned-tag">
+                        <span key={tag} className="pinned-tag" style={tagColors[tag] ? { background: tagColors[tag], color: getReadableTextColor(tagColors[tag]) } : undefined}>
                           {tag}
                         </span>
                       ))}

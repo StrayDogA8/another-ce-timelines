@@ -448,12 +448,20 @@
 
 .span-item .pinned-tags {
   margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .span-item .pinned-tag {
   color: var(--dark-bg);
   background: var(--active-bg);
   border: none;
+}
+
+.span-thin .pinned-tag {
+  font-size: 7px;
+  padding: 0 4px;
+  line-height: 1.2;
 }
 
 .eras-layer { position: absolute; inset: 0; }
