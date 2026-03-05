@@ -24,11 +24,6 @@ export default function HomePage({
   notesStorageDir,
   notesSubfolder,
   notesSubfolderEnabled,
-  pluginsRoot,
-  builtinPlugins,
-  enabledBuiltinPlugins,
-  installedPlugins,
-  enabledPlugins,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
   onNotesSubfolderChange,
@@ -36,9 +31,6 @@ export default function HomePage({
   onPickNotesSubfolder,
   onPickTimelinesDir,
   onPickNotesDir,
-  onToggleBuiltinPlugin,
-  onTogglePlugin,
-  onOpenPluginsFolder,
   onOpenFontsFolder,
   onRefreshThemes,
   openSettingsSignal = 0,
@@ -185,7 +177,6 @@ export default function HomePage({
 
   const timelinePathIssue = getPathIssue(timelineStorageDir);
   const notesPathIssue = getPathIssue(notesStorageDir);
-  const pluginFolderLabel = pluginsRoot || "Default plugin folder";
   const notesSubfolderIssue = useMemo(() => {
     const value = String(notesSubfolder || "").trim();
     if (!value) return null;
@@ -522,13 +513,6 @@ export default function HomePage({
                 >
                   Files
                 </button>
-                <button
-                  type="button"
-                  className={`settings-sidebar-item${settingsSection === "plugins" ? " is-active" : ""}`}
-                  onClick={() => setSettingsSection("plugins")}
-                >
-                  Plugins
-                </button>
               </div>
               <div className="settings-content">
                 {settingsSection === "general" && (
@@ -804,95 +788,6 @@ export default function HomePage({
                   </>
                 )}
 
-                {settingsSection === "plugins" && (
-                  <>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Plugin Folder</div>
-                        <div
-                          className="settings-path-pill"
-                          title={pluginFolderLabel}
-                        >
-                          <Folder className="settings-path-icon" size={14} />
-                          <span className="settings-path-text">
-                            {pluginFolderLabel}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-folder settings-folder-column">
-                          <div className="settings-folder-actions">
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onOpenPluginsFolder?.()}
-                            >
-                              Open
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {(builtinPlugins || []).map((plugin) => (
-                      <div key={plugin.id} className="settings-row">
-                        <div className="settings-row-left">
-                          <div className="settings-row-label">{plugin.name}</div>
-                          {plugin.description && (
-                            <div className="settings-row-description">
-                              {plugin.description}
-                            </div>
-                          )}
-                        </div>
-                        <div className="settings-row-right">
-                          <label className="settings-toggle">
-                            <input
-                              type="checkbox"
-                              checked={enabledBuiltinPlugins?.[plugin.id] ?? true}
-                              onChange={(e) =>
-                                onToggleBuiltinPlugin?.(plugin.id, e.target.checked)
-                              }
-                            />
-                            <span className="settings-toggle-slider" />
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                    {(installedPlugins || []).map((plugin) => (
-                      <div key={plugin.id} className="settings-row">
-                        <div className="settings-row-left">
-                          <div className="settings-row-label">{plugin.name}</div>
-                          {plugin.description && (
-                            <div className="settings-row-description">
-                              {plugin.description}
-                            </div>
-                          )}
-                        </div>
-                        <div className="settings-row-right">
-                          <label className="settings-toggle">
-                            <input
-                              type="checkbox"
-                              checked={enabledPlugins?.[plugin.id] !== false}
-                              onChange={(e) =>
-                                onTogglePlugin?.(plugin.id, e.target.checked)
-                              }
-                            />
-                            <span className="settings-toggle-slider" />
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                    {(!builtinPlugins || builtinPlugins.length === 0) &&
-                      (!installedPlugins || installedPlugins.length === 0) && (
-                        <div className="settings-row">
-                          <div className="settings-row-left">
-                            <div className="settings-row-description">
-                              No plugins found.
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                  </>
-                )}
               </div>
             </div>
           </div>

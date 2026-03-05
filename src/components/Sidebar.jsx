@@ -114,8 +114,6 @@ export default function Sidebar({
   onDelete,
   onDuplicateElement,
   onEditElement,
-  pluginActions = [],
-  pluginApi,
 }) {
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
@@ -639,26 +637,6 @@ export default function Sidebar({
             </button>
           </div>
           <div className="sidebar-add-buttons">
-            {pluginActions.map((action) => {
-              const IconComponent = action.icon;
-              let icon;
-              try {
-                icon = <IconComponent size={17} />;
-              } catch {
-                icon = <span style={{ fontSize: 11 }}>?</span>;
-              }
-              return (
-                <button
-                  key={action.id}
-                  className="sidebar-add-button"
-                  type="button"
-                  title={action.label || action.id}
-                  onClick={() => { try { action.onClick?.(pluginApi); } catch (e) { console.error("Plugin action error:", action.id, e); } }}
-                >
-                  {icon}
-                </button>
-              );
-            })}
           </div>
         </div>
 

@@ -243,62 +243,6 @@ export async function chooseNotesDir() {
   }
 }
 
-export async function choosePluginsDir() {
-  if (!isElectron()) {
-    console.warn('Not running in Electron');
-    return { success: false, error: 'Not in Electron environment' };
-  }
-
-  try {
-    return await window.electron.choosePluginsDir();
-  } catch (error) {
-    console.error('Error choosing plugins directory:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function openPluginsFolder(path) {
-  if (!isElectron()) {
-    console.warn('Not running in Electron');
-    return { success: false, error: 'Not in Electron environment' };
-  }
-
-  try {
-    return await window.electron.openPluginsFolder({ path });
-  } catch (error) {
-    console.error('Error opening plugins folder:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function listPlugins(path) {
-  if (!isElectron()) {
-    console.warn('Not running in Electron');
-    return { success: false, error: 'Not in Electron environment', plugins: [] };
-  }
-
-  try {
-    return await window.electron.listPlugins({ path });
-  } catch (error) {
-    console.error('Error listing plugins:', error);
-    return { success: false, error: error.message, plugins: [] };
-  }
-}
-
-export async function readPluginModule(entryPath) {
-  if (!isElectron()) {
-    console.warn('Not running in Electron');
-    return { success: false, error: 'Not in Electron environment' };
-  }
-
-  try {
-    return await window.electron.readPluginModule({ entryPath });
-  } catch (error) {
-    console.error('Error reading plugin module:', error);
-    return { success: false, error: error.message };
-  }
-}
-
 export async function chooseNotesSubfolder() {
   if (!isElectron()) {
     console.warn('Not running in Electron');
