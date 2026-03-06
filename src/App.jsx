@@ -8,6 +8,7 @@ import ExportPngModal from "./components/ExportPngModal";
 import ExportVideoModal from "./components/ExportVideoModal";
 import TopBar from "./components/TopBar";
 import HomePage from "./components/HomePage";
+import SearchOverlay from "./components/SearchOverlay";
 import {
   saveTimelineToFile,
   chooseTimelinesDir,
@@ -148,6 +149,7 @@ function App() {
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
   const [returnToProjectSettings, setReturnToProjectSettings] = useState(false);
   const [isProjectSettingsCovered, setIsProjectSettingsCovered] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const HISTORY_LIMIT = 100;
   const historyRef = useRef({ past: [], future: [] });
@@ -434,10 +436,37 @@ function App() {
     return () => window.removeEventListener("keydown", handleUndoRedo);
   }, [timelineData, currentTimelineId]);
 
+  useEffect(() => {
+    if (!timelineData) return;
+    const handleSearchKey = (e) => {
+      const isMac = navigator.platform.includes("Mac");
+      const isMod = isMac ? e.metaKey : e.ctrlKey;
+      if (!isMod || (e.key !== "f" && e.key !== "F")) return;
+      const target = e.target;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+      if (isEditable) return;
+      e.preventDefault();
+      setIsSearchOpen(true);
+    };
+    window.addEventListener("keydown", handleSearchKey);
+    return () => window.removeEventListener("keydown", handleSearchKey);
+  }, [timelineData]);
+
 
   const handleSelect = (id) => {
     setSelectedId(id);
     if (id) setIsRightCollapsed(false);
+  };
+
+  const handleSearchSelect = (id) => {
+    handleSelect(id);
+    requestAnimationFrame(() => {
+      timelineViewRef.current?.scrollToElement(id);
+    });
   };
 
   useEffect(() => {
@@ -1767,6 +1796,14 @@ function App() {
         onClose={() => setIsExportVideoModalOpen(false)}
         timelineData={timelineData}
         timelineViewRef={timelineViewRef}
+      />
+
+      <SearchOverlay
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        elements={timelineData?.elements ?? []}
+        onSelect={handleSearchSelect}
+        fileSettings={timelineData?.file}
       />
       </div>
     </>

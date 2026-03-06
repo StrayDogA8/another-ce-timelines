@@ -1764,8 +1764,32 @@ const TimelineView = forwardRef(function TimelineView({
         console.error('Error generating preview:', error);
         return null;
       }
-    }
-  }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR, compressedMin, compressedMax, decompressYear]);
+    },
+    scrollToElement: (elementId) => {
+      const el = timelineData?.elements?.find((e) => e.id === elementId);
+      if (!el) return;
+      let targetYear;
+      if (el.type === "event") {
+        targetYear = el.date;
+      } else {
+        targetYear = (el.start + el.end) / 2;
+      }
+      if (!Number.isFinite(targetYear)) return;
+      const container = containerRef.current;
+      if (!container) return;
+      const yearPx = yearToPx(targetYear);
+      const scale = scaleRef.current;
+      const viewportWidth = container.clientWidth;
+      const scaledTimelineWidth = timelineWidth * scale;
+      const baseMaxPan = Math.max(0, scaledTimelineWidth - viewportWidth);
+      const extra = Math.max(0, viewportWidth / 2 - TIMELINE_PADDING * scale);
+      const minX = -baseMaxPan - extra;
+      const maxX = extra;
+      const newX = viewportWidth / 2 - yearPx * scale;
+      translateRef.current.x = Math.min(maxX, Math.max(minX, newX));
+      applyTransform();
+    },
+  }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR, compressedMin, compressedMax, decompressYear, timelineData]);
 
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
