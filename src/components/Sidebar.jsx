@@ -254,10 +254,10 @@ export default function Sidebar({
 
     grouped.forEach((elements, groupId) => {
       const sorted = [...elements].sort((a, b) => {
+        if (a.type !== b.type) return a.type === "span" ? -1 : 1;
         const aStart = a.type === "event" ? a.date : a.start;
         const bStart = b.type === "event" ? b.date : b.start;
         if (aStart !== bStart) return aStart - bStart;
-        if (a.type !== b.type) return a.type === "span" ? -1 : 1;
         return (a.title || a.id).localeCompare(b.title || b.id);
       });
       grouped.set(groupId, sorted);
