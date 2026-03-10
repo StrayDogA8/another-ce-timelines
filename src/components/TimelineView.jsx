@@ -2510,6 +2510,8 @@ const TimelineView = forwardRef(function TimelineView({
               ? finalSpanById.get(parentId)
               : null;
 
+            if (parentSpan && parentSpan.groupId !== event.groupId) return null;
+
             const fallbackTargetY =
               file?.eventLinesToGroupBottom === true
                 ? (groupBandBottomById.get(event.groupId) ?? BASE_LINE_Y)
