@@ -685,14 +685,14 @@ function App() {
     });
   };
 
-  const handleAddEvent = () => {
+  const handleAddEvent = (groupId, clickYear) => {
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const fallbackMid =
       timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
-    const baseYear = Number.isFinite(viewportYear) ? viewportYear : fallbackMid;
+    const baseYear = Number.isFinite(clickYear) ? clickYear : Number.isFinite(viewportYear) ? viewportYear : fallbackMid;
     const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
     const eventId = generateUniqueRandomElementId(timelineData.elements, "event");
-    const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
+    const defaultGroupId = groupId || timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newEvent = {
       id: eventId,
       type: "event",
@@ -721,17 +721,17 @@ function App() {
     setEditRequestId(newEvent.id);
   };
 
-  const handleAddSpan = () => {
+  const handleAddSpan = (groupId, clickYear) => {
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const range = timelineData.file.end - timelineData.file.start;
     const duration = Math.max(1, Math.floor(range / 4));
     const fallbackStart = timelineData.file.start + Math.floor(range / 2);
-    const baseStart = Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
+    const baseStart = Number.isFinite(clickYear) ? clickYear : Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
     const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
     const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
 
     const spanId = generateUniqueRandomElementId(timelineData.elements, "span");
-    const defaultGroupId = timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
+    const defaultGroupId = groupId || timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newSpan = {
       id: spanId,
       type: "span",

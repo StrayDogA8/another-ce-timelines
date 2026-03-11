@@ -1216,12 +1216,31 @@ const TimelineView = forwardRef(function TimelineView({
       ? timelineData.elements.find((el) => el.id === elementId)
       : null;
 
+    let groupId = null;
+    let clickYear = null;
+    const timelineEl = timelineRef.current;
+    if (timelineEl) {
+      const timelineRect = timelineEl.getBoundingClientRect();
+      const scale = scaleRef.current || 1;
+      const clickYInTimeline = (e.clientY - timelineRect.top) / scale;
+      const matched = groupBandBoxes.find(
+        (box) => clickYInTimeline >= box.top && clickYInTimeline <= box.top + box.height
+      );
+      groupId = matched?.groupId || null;
+      const clickXInTimeline = (e.clientX - timelineRect.left) / scale;
+      const compressed = (clickXInTimeline - TIMELINE_PADDING) / PX_PER_YEAR + compressedMin;
+      const clamped = Math.min(Math.max(compressed, compressedMin), compressedMax);
+      clickYear = Math.round(decompressYear(clamped));
+    }
+
     e.preventDefault();
 
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       element,
+      groupId,
+      clickYear,
     });
   };
 
@@ -2783,14 +2802,14 @@ const TimelineView = forwardRef(function TimelineView({
         >
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(onAddEvent)}
+            onClick={() => handleMenuAction(() => onAddEvent(contextMenu.groupId, contextMenu.clickYear))}
           >
             <RectangleHorizontal size={16} />
             <span>Add Event</span>
           </button>
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(onAddSpan)}
+            onClick={() => handleMenuAction(() => onAddSpan(contextMenu.groupId, contextMenu.clickYear))}
           >
             <RectangleEllipsis size={16} />
             <span>Add Span</span>
