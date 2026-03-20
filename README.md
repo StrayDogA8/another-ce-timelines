@@ -10,6 +10,26 @@ Target release: March 2026. **An early alpha version is now available for testin
 
 A free app that allows users to create and share customized timelines for use in historical chronologies, world-building, and project management. 
 
+## Development
+
+**Prerequisites:** Node.js 20.19+ or 22.12+
+
+```bash
+npm install
+```
+
+**Run in development (Electron + Vite):**
+```bash
+npm run electron:dev
+```
+
+## Building
+
+**Build the Electron app installer:**
+```bash
+npm run electron:build
+```
+
 ![Default View](docs/default-view.png)
 
 ![Right Panel](docs/right-panel.png)
