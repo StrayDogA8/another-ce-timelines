@@ -1,14 +1,18 @@
 # 
 ![Temp Banner](docs/temp-banner.png)
 
-![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-![Electron.js](https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white)
-![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
-![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
+A free, open-source app for creating customizable, interactive timelines for worldbuilding and history. Events, spans, and eras form the core of each timeline, with tag and group filtering to organize them, and note vault integration to link notes directly to elements.
 
-Target release: March 2026. **An early alpha version is now available for testing.**
+Target release: March 2026. **An [early alpha](https://github.com/sreegjl/timelines/releases/tag/v0.2.0-alpha.1) version is now available for testing.**
 
-A free app that allows users to create and share customized timelines for use in historical chronologies, world-building, and project management. 
+[![React](https://img.shields.io/badge/React-%2320232a.svg?logo=react&logoColor=%2361DAFB)](#)
+[![Electron](https://img.shields.io/badge/Electron-2B2E3A?logo=electron&logoColor=fff)](#)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+
+![Default View](docs/default-view.png)
+
+![Right Panel](docs/right-panel.png)
 
 ## Development
 
@@ -30,8 +34,4 @@ npm run electron:dev
 npm run electron:build
 ```
 
-![Default View](docs/default-view.png)
-
-![Right Panel](docs/right-panel.png)
-
-![Design Doc](docs/design-doc.png)
+<!-- ![Design Doc](docs/design-doc.png) -->
