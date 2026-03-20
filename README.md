@@ -1,7 +1,7 @@
 # 
 ![Temp Banner](docs/temp-banner.png)
 
-A free, open-source app for creating customizable, interactive timelines for worldbuilding and history. Events, spans, and eras form the core of each timeline, with tag and group filtering to organize them, and note vault integration to link notes directly to elements.
+A free, open-source app for creating customizable, interactive timelines for worldbuilding and history. Events, spans, and eras form the core of each timeline, with tag and group filtering to organize them, and note vault integration to link Markdown notes directly to elements.
 
 Target release: March 2026. **An [early alpha](https://github.com/sreegjl/timelines/releases/tag/v0.2.0-alpha.1) version is now available for testing.**
 
