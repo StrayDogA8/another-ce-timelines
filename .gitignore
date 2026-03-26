@@ -26,3 +26,6 @@ release
 
 # Private Notes
 docs/private
+
+# Local environment overrides
+.env.local
