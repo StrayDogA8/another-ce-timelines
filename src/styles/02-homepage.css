@@ -658,6 +658,21 @@
   background: color-mix(in srgb, var(--info-blue) 18%, transparent);
 }
 
+.timeline-item-badge.cloud.unsynced {
+  background: color-mix(in srgb, #e6a817 18%, transparent);
+  color: #e6a817;
+}
+
+.timeline-item-badge.cloud.offline {
+  background: color-mix(in srgb, var(--gray-2) 18%, transparent);
+  color: var(--gray-2);
+}
+
+.timeline-item-badge.cloud.conflict {
+  background: color-mix(in srgb, #e05252 18%, transparent);
+  color: #e05252;
+}
+
 .timeline-item-dots {
   display: flex;
   align-items: center;

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw } from "lucide-react";
 import { login, logout, register, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
-import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById } from "../lib/api.js";
+import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
+import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile } from "../utils/electronApi.js";
 
 function relativeTime(ms) {
   if (!ms) return null;
@@ -266,14 +267,19 @@ export default function HomePage({
       setCloudTimelineFiles([]);
       return;
     }
-    apiListTimelines().then(result => {
+    Promise.all([apiListTimelines(), listCloudMetas()]).then(([result, metas]) => {
       if (result.success && Array.isArray(result.data)) {
-        setCloudTimelineFiles(result.data.map(t => ({
-          id: `cloud:${t._backendId || t.id}`,
-          name: t.title,
-          modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
-          storageType: 'cloud',
-        })));
+        setCloudTimelineFiles(result.data.map(t => {
+          const backendId = String(t._backendId || t.id);
+          const meta = metas?.[backendId];
+          return {
+            id: `cloud:${backendId}`,
+            name: t.title,
+            modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
+            storageType: 'cloud',
+            syncStatus: meta?.syncStatus ?? 'synced',
+          };
+        }));
       }
     });
   }, [cloudUser]);
@@ -308,21 +314,82 @@ export default function HomePage({
   const handleSync = async () => {
     if (!canUseCloud || syncing) return;
     setSyncing(true);
+    let conflictsFound = 0;
     try {
-      const [localResult, cloudResult] = await Promise.all([
+      const [localResult, cloudResult, metas] = await Promise.all([
         window.electron?.listTimelines?.() ?? [],
         apiListTimelines(),
+        listCloudMetas(),
       ]);
+
       setTimelineFiles((localResult ?? []).map(f => ({ ...f, storageType: 'local' })));
-      if (cloudResult.success && Array.isArray(cloudResult.data)) {
-        setCloudTimelineFiles(cloudResult.data.map(t => ({
-          id: `cloud:${t._backendId || t.id}`,
+
+      if (!cloudResult.success) {
+        showCloudError(`Sync failed: ${cloudResult.error || 'Unknown error'}`);
+        return;
+      }
+
+      // Retry unsynced timelines and detect conflicts
+      const updatedMetas = { ...metas };
+      await Promise.all(
+        Object.entries(metas)
+          .filter(([, m]) => m.syncStatus === 'unsynced')
+          .map(async ([backendId, meta]) => {
+            const cached = await loadCloudCache(backendId);
+            if (!cached.data) return;
+
+            const serverResult = await apiGetTimelineById(backendId);
+            if (!serverResult.success) return; // still offline
+
+            const serverUpdatedAt = serverResult.data?.updatedAt;
+
+            if (!meta.lastServerUpdatedAt || serverUpdatedAt === meta.lastServerUpdatedAt) {
+              // No conflict — upload cached version
+              const uploadResult = await apiUpdateTimeline(backendId, {
+                title: cached.data.file?.title,
+                slug: backendId,
+                description: cached.data.file?.description ?? '',
+                isPublic: cached.data.file?.isPublic ?? false,
+                contentJson: JSON.stringify(cached.data),
+              });
+              if (uploadResult.success) {
+                const syncedMeta = { ...meta, lastServerUpdatedAt: uploadResult.data?.updatedAt ?? serverUpdatedAt, syncStatus: 'synced' };
+                await updateCloudMeta(backendId, syncedMeta);
+                updatedMetas[backendId] = syncedMeta;
+              }
+            } else {
+              // Conflict — save local version as a conflict copy, keep server version in cache
+              const conflictTitle = `${meta.title ?? 'Timeline'} (Conflict ${new Date().toLocaleDateString()})`;
+              const conflictId = conflictTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+              await saveTimelineToFile(cached.data, conflictId);
+
+              const serverContentJson = serverResult.data?.contentJson ?? serverResult.data?.data;
+              const serverData = typeof serverContentJson === 'string' ? JSON.parse(serverContentJson) : serverContentJson;
+              const conflictMeta = { ...meta, lastServerUpdatedAt: serverUpdatedAt, localUpdatedAt: serverUpdatedAt, syncStatus: 'conflict' };
+              await saveCloudCache(backendId, serverData ?? cached.data, conflictMeta);
+              updatedMetas[backendId] = conflictMeta;
+
+              setTimelineFiles(prev => [...prev, { id: conflictId, name: conflictTitle, modifiedAt: Date.now(), storageType: 'local' }]);
+              conflictsFound++;
+            }
+          })
+      );
+
+      // Rebuild cloud list with updated sync statuses
+      setCloudTimelineFiles(cloudResult.data.map(t => {
+        const backendId = String(t._backendId || t.id);
+        const meta = updatedMetas[backendId];
+        return {
+          id: `cloud:${backendId}`,
           name: t.title,
           modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
           storageType: 'cloud',
-        })));
-      } else if (!cloudResult.success) {
-        showCloudError(`Sync failed: ${cloudResult.error || 'Unknown error'}`);
+          syncStatus: meta?.syncStatus ?? 'synced',
+        };
+      }));
+
+      if (conflictsFound > 0) {
+        showCloudError(`${conflictsFound} conflict${conflictsFound > 1 ? 's' : ''} detected — local copies saved.`);
       }
     } catch (err) {
       showCloudError(`Sync failed: ${err.message}`);
@@ -347,6 +414,7 @@ export default function HomePage({
           name: file.name,
           modifiedAt: Date.now(),
           storageType: 'cloud',
+          syncStatus: 'synced',
         }]);
       }
     } catch (err) {
@@ -366,7 +434,10 @@ export default function HomePage({
       const localId = file.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       await window.electron.saveTimeline(data, localId);
 
-      await apiDeleteTimeline(backendId);
+      await Promise.all([
+        apiDeleteTimeline(backendId),
+        deleteCloudCache(backendId),
+      ]);
 
       setCloudTimelineFiles(prev => prev.filter(f => f.id !== file.id));
       setTimelineFiles(prev => [...prev, {
@@ -694,9 +765,9 @@ export default function HomePage({
                   </span>
                 </div>
                 <div className="timeline-item-right">
-                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ' cloud' : ''}`}>
+                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
                     {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                    {file.storageType === 'cloud' ? 'Cloud' : 'Local'}
+                    {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
                   </span>
                   <button
                     className="timeline-item-dots"
@@ -725,9 +796,9 @@ export default function HomePage({
                   <span className="timeline-item-title">{file.name}</span>
                   <span className="timeline-item-meta">{file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}</span>
                 </div>
-                <span className={`timeline-item-badge${file.storageType === 'cloud' ? ' cloud' : ''}`}>
+                <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
                   {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                  {file.storageType === 'cloud' ? 'Cloud' : 'Local'}
+                  {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
                 </span>
               </div>
             ))}

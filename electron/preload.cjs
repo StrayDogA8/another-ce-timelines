@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('electron', {
   deleteUserTheme: (payload) => ipcRenderer.invoke('delete-user-theme', payload),
   fetchWikipedia: (payload) => ipcRenderer.invoke('fetch-wikipedia', payload),
   openExternal: (payload) => ipcRenderer.invoke('open-external', payload),
+  saveCloudCache: (payload) => ipcRenderer.invoke('save-cloud-cache', payload),
+  loadCloudCache: (backendId) => ipcRenderer.invoke('load-cloud-cache', backendId),
+  updateCloudMeta: (payload) => ipcRenderer.invoke('update-cloud-meta', payload),
+  deleteCloudCache: (backendId) => ipcRenderer.invoke('delete-cloud-cache', backendId),
+  listCloudMetas: () => ipcRenderer.invoke('list-cloud-metas'),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),

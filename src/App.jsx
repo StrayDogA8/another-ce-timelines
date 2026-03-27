@@ -18,6 +18,9 @@ import {
   openFontsFolder,
   deleteNote,
   renameTimeline,
+  saveCloudCache,
+  loadCloudCache,
+  updateCloudMeta,
 } from "./utils/electronApi";
 import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
@@ -128,6 +131,7 @@ function App() {
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const currentTimelineIdRef = useRef(null);
+  const cloudMetaRef = useRef(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
   const [exportPngOptions, setExportPngOptions] = useState(null);
@@ -372,12 +376,37 @@ function App() {
   // Keep ref in sync so saveTimeline can read it inside stale closures
   useEffect(() => { currentTimelineIdRef.current = currentTimelineId; }, [currentTimelineId]);
 
-  const saveTimeline = (data, localId) => {
+  const saveTimeline = async (data, localId) => {
     const id = currentTimelineIdRef.current;
     if (id?.startsWith('cloud:')) {
       const backendId = id.slice('cloud:'.length);
-      apiUpdateTimeline(backendId, { title: data.file?.title, slug: localId, description: data.file?.description ?? '', isPublic: data.file?.isPublic ?? false, contentJson: JSON.stringify(data) }).catch(console.error);
-      return Promise.resolve();
+      const now = new Date().toISOString();
+      const currentMeta = cloudMetaRef.current ?? { backendId, lastServerUpdatedAt: null };
+
+      // 1. Always write to cache first
+      const unsyncedMeta = { ...currentMeta, localUpdatedAt: now, syncStatus: 'unsynced' };
+      await saveCloudCache(backendId, data, unsyncedMeta);
+      cloudMetaRef.current = unsyncedMeta;
+
+      // 2. Try to push to backend
+      try {
+        const result = await apiUpdateTimeline(backendId, {
+          title: data.file?.title,
+          slug: localId,
+          description: data.file?.description ?? '',
+          isPublic: data.file?.isPublic ?? false,
+          contentJson: JSON.stringify(data),
+        });
+        if (result.success) {
+          const serverUpdatedAt = result.data?.updatedAt ?? now;
+          const syncedMeta = { ...unsyncedMeta, lastServerUpdatedAt: serverUpdatedAt, syncStatus: 'synced' };
+          await updateCloudMeta(backendId, syncedMeta);
+          cloudMetaRef.current = syncedMeta;
+        }
+      } catch {
+        // remains unsynced — already written to cache
+      }
+      return;
     }
     return saveTimelineToFile(data, localId);
   };
@@ -1024,11 +1053,40 @@ function App() {
 
       if (timelineId.startsWith('cloud:')) {
         const backendId = timelineId.slice('cloud:'.length);
-        const result = await apiGetTimelineById(backendId);
-        if (!result.success) throw new Error(result.error || 'Failed to load cloud timeline.');
-        const contentJson = result.data?.contentJson ?? result.data?.data;
-        if (!contentJson) throw new Error('This cloud timeline has no content yet.');
-        loadedTimeline = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
+        let serverData = null;
+        let serverUpdatedAt = null;
+
+        try {
+          const result = await apiGetTimelineById(backendId);
+          if (result.success) {
+            const contentJson = result.data?.contentJson ?? result.data?.data;
+            if (contentJson) {
+              serverData = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
+              serverUpdatedAt = result.data?.updatedAt ?? null;
+            }
+          }
+        } catch { /* offline */ }
+
+        if (serverData) {
+          const meta = {
+            backendId,
+            title: serverData.file?.title,
+            lastServerUpdatedAt: serverUpdatedAt,
+            localUpdatedAt: serverUpdatedAt,
+            syncStatus: 'synced',
+          };
+          await saveCloudCache(backendId, serverData, meta);
+          cloudMetaRef.current = meta;
+          loadedTimeline = serverData;
+        } else {
+          // Offline fallback
+          const cached = await loadCloudCache(backendId);
+          if (!cached.data) throw new Error('Offline and no cached version available.');
+          const offlineMeta = { ...(cached.meta ?? { backendId }), syncStatus: 'offline' };
+          await updateCloudMeta(backendId, offlineMeta);
+          cloudMetaRef.current = offlineMeta;
+          loadedTimeline = cached.data;
+        }
       } else {
         if (!window.electron?.loadTimeline) {
           throw new Error("Timeline loading is only available in the desktop app.");

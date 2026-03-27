@@ -8,8 +8,15 @@ const DEFAULT_THEME_KEY = 'parchment';
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 const defaultTimelinesDir = () => path.join(app.getPath('userData'), 'timelines');
+const cloudCacheDir = () => path.join(app.getPath('userData'), 'cloud-cache');
 const userThemesDir = () => path.join(app.getPath('userData'), 'themes');
 const defaultFontsDir = () => path.join(app.getPath('userData'), 'fonts');
+
+const getCloudCacheDir = async () => {
+  const dir = cloudCacheDir();
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+};
 
 const safeName = (value) => String(value || '')
   .trim()
@@ -362,6 +369,84 @@ ipcMain.handle('load-timeline', async (event, filename) => {
   } catch (error) {
     console.error('Error loading timeline:', error);
     throw error;
+  }
+});
+
+ipcMain.handle('save-cloud-cache', async (event, { backendId, data, meta }) => {
+  try {
+    const cacheDir = await getCloudCacheDir();
+    const safeId = sanitizeTimelineId(String(backendId));
+    await fs.writeFile(path.join(cacheDir, `${safeId}.timeline`), JSON.stringify(data, null, 2), 'utf8');
+    await fs.writeFile(path.join(cacheDir, `${safeId}.meta.json`), JSON.stringify(meta, null, 2), 'utf8');
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('load-cloud-cache', async (event, backendId) => {
+  try {
+    const cacheDir = await getCloudCacheDir();
+    const safeId = sanitizeTimelineId(String(backendId));
+    const [dataContent, metaContent] = await Promise.all([
+      fs.readFile(path.join(cacheDir, `${safeId}.timeline`), 'utf8').catch(() => null),
+      fs.readFile(path.join(cacheDir, `${safeId}.meta.json`), 'utf8').catch(() => null),
+    ]);
+    return {
+      data: dataContent ? JSON.parse(dataContent) : null,
+      meta: metaContent ? JSON.parse(metaContent) : null,
+    };
+  } catch {
+    return { data: null, meta: null };
+  }
+});
+
+ipcMain.handle('update-cloud-meta', async (event, { backendId, meta }) => {
+  try {
+    const cacheDir = await getCloudCacheDir();
+    const safeId = sanitizeTimelineId(String(backendId));
+    const metaPath = path.join(cacheDir, `${safeId}.meta.json`);
+    let existing = {};
+    try {
+      existing = JSON.parse(await fs.readFile(metaPath, 'utf8'));
+    } catch {}
+    await fs.writeFile(metaPath, JSON.stringify({ ...existing, ...meta }, null, 2), 'utf8');
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-cloud-cache', async (event, backendId) => {
+  try {
+    const cacheDir = await getCloudCacheDir();
+    const safeId = sanitizeTimelineId(String(backendId));
+    await Promise.all([
+      fs.unlink(path.join(cacheDir, `${safeId}.timeline`)).catch(() => {}),
+      fs.unlink(path.join(cacheDir, `${safeId}.meta.json`)).catch(() => {}),
+    ]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-cloud-metas', async () => {
+  try {
+    const cacheDir = await getCloudCacheDir();
+    const files = await fs.readdir(cacheDir).catch(() => []);
+    const metas = {};
+    await Promise.all(
+      files.filter(f => f.endsWith('.meta.json')).map(async (file) => {
+        try {
+          const content = await fs.readFile(path.join(cacheDir, file), 'utf8');
+          metas[file.replace('.meta.json', '')] = JSON.parse(content);
+        } catch {}
+      })
+    );
+    return metas;
+  } catch {
+    return {};
   }
 });
 
