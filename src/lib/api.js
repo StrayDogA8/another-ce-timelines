@@ -61,6 +61,10 @@ export async function apiCreateTimeline(payload) {
   return request('POST', '/api/timelines', payload);
 }
 
+export async function apiGetTimelineById(id) {
+  return request('GET', `/api/timelines/${id}`);
+}
+
 export async function apiUpdateTimeline(id, payload) {
   return request('PUT', `/api/timelines/${id}`, payload);
 }

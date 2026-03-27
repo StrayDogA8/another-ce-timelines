@@ -328,9 +328,12 @@ ipcMain.handle('list-timelines', async () => {
           const data = JSON.parse(content);
           const filename = file.replace('.timeline', '');
 
+          const stat = await fs.stat(filePath);
           return {
             id: filename,
-            name: data.file?.title || filename
+            name: data.file?.title || filename,
+            modifiedAt: stat.mtimeMs,
+            eventCount: Array.isArray(data.elements) ? data.elements.length : 0,
           };
         } catch (err) {
           console.warn(`Skipping corrupt timeline ${file}:`, err.message);

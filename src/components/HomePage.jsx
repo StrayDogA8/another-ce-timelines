@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw } from "lucide-react";
+import { login, logout, register, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
+import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById } from "../lib/api.js";
+
+function relativeTime(ms) {
+  if (!ms) return null;
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "1 week ago";
+  return `${Math.floor(days / 7)} weeks ago`;
+}
 import NewTimelineModal from "./NewTimelineModal";
 import "../styles/02-homepage.css";
 import "../styles/07-modals-menus.css";
@@ -37,11 +49,22 @@ export default function HomePage({
   onAppSettingsClosed,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
+  const [cloudTimelineFiles, setCloudTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState("list");
+  const [filter, setFilter] = useState("all");
+  const [cloudUser, setCloudUser] = useState(() => getCurrentUser());
+  const [cloudEmail, setCloudEmail] = useState("");
+  const [cloudPassword, setCloudPassword] = useState("");
+  const [cloudMode, setCloudMode] = useState("login");
+  const [cloudError, setCloudError] = useState("");
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [cloudActionError, setCloudActionError] = useState("");
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [marketplaceThemes, setMarketplaceThemes] = useState([]);
   const [marketplaceError, setMarketplaceError] = useState("");
@@ -215,7 +238,7 @@ export default function HomePage({
       if (window.electron?.listTimelines) {
         try {
           const files = await window.electron.listTimelines();
-          setTimelineFiles(files);
+          setTimelineFiles(files.map(f => ({ ...f, storageType: 'local' })));
         } catch (error) {
           console.error('Failed to list timelines:', error);
           setTimelineFiles([]);
@@ -229,6 +252,133 @@ export default function HomePage({
 
     loadTimelineList();
   }, [timelineStorageDir]);
+
+  // Sync auth state and refresh user data (including plan) when logged in
+  useEffect(() => {
+    const unsub = onAuthStateChange((user) => setCloudUser(user));
+    if (getCurrentUser()) refreshCurrentUser();
+    return unsub;
+  }, []);
+
+  // Fetch cloud timelines when user has a qualifying plan
+  useEffect(() => {
+    if (!cloudUser || !["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase())) {
+      setCloudTimelineFiles([]);
+      return;
+    }
+    apiListTimelines().then(result => {
+      if (result.success && Array.isArray(result.data)) {
+        setCloudTimelineFiles(result.data.map(t => ({
+          id: `cloud:${t._backendId || t.id}`,
+          name: t.title,
+          modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
+          storageType: 'cloud',
+        })));
+      }
+    });
+  }, [cloudUser]);
+
+  const handleCloudSubmit = async (e) => {
+    e.preventDefault();
+    setCloudError("");
+    setCloudLoading(true);
+    const fn = cloudMode === "login" ? login : register;
+    const result = await fn({ email: cloudEmail, password: cloudPassword });
+    if (result.success) {
+      setCloudEmail("");
+      setCloudPassword("");
+    } else {
+      setCloudError(result.error || "Something went wrong.");
+    }
+    setCloudLoading(false);
+  };
+
+  const handleCloudLogout = () => {
+    logout();
+    setCloudUser(null);
+  };
+
+  const canUseCloud = cloudUser && ["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase());
+
+  const showCloudError = (msg) => {
+    setCloudActionError(msg);
+    setTimeout(() => setCloudActionError(""), 4000);
+  };
+
+  const handleSync = async () => {
+    if (!canUseCloud || syncing) return;
+    setSyncing(true);
+    try {
+      const [localResult, cloudResult] = await Promise.all([
+        window.electron?.listTimelines?.() ?? [],
+        apiListTimelines(),
+      ]);
+      setTimelineFiles((localResult ?? []).map(f => ({ ...f, storageType: 'local' })));
+      if (cloudResult.success && Array.isArray(cloudResult.data)) {
+        setCloudTimelineFiles(cloudResult.data.map(t => ({
+          id: `cloud:${t._backendId || t.id}`,
+          name: t.title,
+          modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
+          storageType: 'cloud',
+        })));
+      } else if (!cloudResult.success) {
+        showCloudError(`Sync failed: ${cloudResult.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      showCloudError(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleStoreInCloud = async (file) => {
+    try {
+      const data = await window.electron.loadTimeline(file.id);
+      const slug = file.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const result = await apiCreateTimeline({ title: file.name, slug, contentJson: JSON.stringify(data) });
+      if (!result.success) throw new Error(result.error || 'Failed to store in cloud.');
+
+      const backendId = result.data?.id ?? result.data?._backendId;
+      if (backendId) {
+        await window.electron.deleteTimeline({ id: file.id, deleteAssets: false });
+        setTimelineFiles(prev => prev.filter(f => f.id !== file.id));
+        setCloudTimelineFiles(prev => [...prev, {
+          id: `cloud:${backendId}`,
+          name: file.name,
+          modifiedAt: Date.now(),
+          storageType: 'cloud',
+        }]);
+      }
+    } catch (err) {
+      showCloudError(`Could not store in cloud: ${err.message}`);
+    }
+  };
+
+  const handleStoreLocally = async (file) => {
+    try {
+      const backendId = file.id.slice('cloud:'.length);
+      const result = await apiGetTimelineById(backendId);
+      if (!result.success) throw new Error(result.error || 'Failed to fetch from cloud.');
+      const contentJson = result.data?.contentJson ?? result.data?.data;
+      if (!contentJson) throw new Error('This cloud timeline has no content.');
+      const data = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
+
+      const localId = file.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      await window.electron.saveTimeline(data, localId);
+
+      await apiDeleteTimeline(backendId);
+
+      setCloudTimelineFiles(prev => prev.filter(f => f.id !== file.id));
+      setTimelineFiles(prev => [...prev, {
+        id: localId,
+        name: file.name,
+        modifiedAt: Date.now(),
+        storageType: 'local',
+      }]);
+    } catch (err) {
+      showCloudError(`Could not store locally: ${err.message}`);
+    }
+  };
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -255,9 +405,11 @@ export default function HomePage({
 
   const handleContextMenu = (e, file) => {
     e.preventDefault();
+    const nearRight = e.clientX > window.innerWidth / 2;
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
+      nearRight,
       file: file,
     });
   };
@@ -329,7 +481,17 @@ export default function HomePage({
         throw new Error("Duplicate is only available in the desktop app.");
       }
       // Load the original timeline
-      const originalData = await window.electron.loadTimeline(file.id);
+      let originalData;
+      if (file.storageType === 'cloud') {
+        const backendId = file.id.slice('cloud:'.length);
+        const result = await apiGetTimelineById(backendId);
+        if (!result.success) throw new Error(result.error || 'Failed to load cloud timeline.');
+        const contentJson = result.data?.contentJson ?? result.data?.data;
+        if (!contentJson) throw new Error('This cloud timeline has no content yet.');
+        originalData = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
+      } else {
+        originalData = await window.electron.loadTimeline(file.id);
+      }
 
       // Create duplicate with new name
       const duplicateName = `${file.name} Copy`;
@@ -368,7 +530,11 @@ export default function HomePage({
     if (!file) return;
 
     try {
-      if (window.electron?.deleteTimeline) {
+      if (file.storageType === 'cloud') {
+        const backendId = file.id.slice('cloud:'.length);
+        await apiDeleteTimeline(backendId);
+        setCloudTimelineFiles(prev => prev.filter(f => f.id !== file.id));
+      } else if (window.electron?.deleteTimeline) {
         await window.electron.deleteTimeline({
           id: file.id,
           deleteAssets: deleteDialogWithAssets,
@@ -376,7 +542,7 @@ export default function HomePage({
 
         // Reload timeline list
         const files = await window.electron.listTimelines();
-        setTimelineFiles(files);
+        setTimelineFiles(files.map(f => ({ ...f, storageType: 'local' })));
       } else {
         alert('Delete is only available in the desktop app');
       }
@@ -389,9 +555,14 @@ export default function HomePage({
   };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredTimelines = normalizedQuery
-    ? timelineFiles.filter((file) => file.name.toLowerCase().includes(normalizedQuery))
-    : timelineFiles;
+  const allTimelines = [...timelineFiles, ...cloudTimelineFiles];
+  const filteredTimelines = allTimelines
+    .filter((file) => {
+      const matchesSearch = !normalizedQuery || file.name.toLowerCase().includes(normalizedQuery);
+      const matchesFilter = filter === "all" || file.storageType === filter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
 
   if (loading && !settingsOnly) {
     return (
@@ -419,6 +590,20 @@ export default function HomePage({
         <div className="homepage-header">
           <div className="homepage-header-left">
             <h1 className="homepage-title">timelines</h1>
+            <svg
+              className="homepage-logo"
+              width="67"
+              height="25"
+              viewBox="0 0 67 25"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <rect y="8.89844" width="29.2656" height="6.80469" fill="currentColor" />
+              <rect x="34.0703" width="32.9297" height="7.32812" fill="currentColor" />
+              <rect x="34.0703" y="16.75" width="32.9297" height="7.32812" fill="currentColor" />
+              <path d="M28.2656 5C28.2656 2.23858 30.5042 0 33.2656 0H35.0703V24.0781H33.2656C30.5042 24.0781 28.2656 21.8395 28.2656 19.0781V5Z" fill="currentColor" />
+            </svg>
           </div>
           <div className="homepage-header-right">
             <input
@@ -434,36 +619,120 @@ export default function HomePage({
               onClick={handleOpenMarketplace}
               aria-label="Marketplace"
             >
-              <Store size={26} />
+              <Store size={19} />
             </button>
             <button
               className="homepage-settings-icon"
               onClick={() => setView("settings")}
               aria-label="App Settings"
             >
-              <Settings size={26} />
+              <Settings size={19} />
             </button>
           </div>
         </div>
 
-        <div className="timeline-grid">
-          <button className="timeline-card timeline-card-new" onClick={handleNewTimeline}>
-            <FilePlus size={32} strokeWidth={1.5} />
-            <span>New Timeline</span>
+        <div className="timeline-view-toolbar">
+          <button className="timeline-new-btn" onClick={handleNewTimeline}>
+            <FilePlus size={14} strokeWidth={2.5} />
+            New Timeline
           </button>
-
-          {filteredTimelines.map((file) => (
-            <button
-              key={file.id}
-              className="timeline-card"
-              onClick={() => onSelectTimeline(file.id)}
-              onContextMenu={(e) => handleContextMenu(e, file)}
-            >
-              <File size={32} strokeWidth={1.5} />
-              <span>{file.name}</span>
-            </button>
-          ))}
+          <div className="timeline-toolbar-right">
+            <div className="timeline-filter-tabs">
+              {["all", "local", "cloud"].map((tab) => (
+                <button
+                  key={tab}
+                  className={`timeline-filter-tab${filter === tab ? " active" : ""}`}
+                  onClick={() => setFilter(tab)}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+              {canUseCloud && (
+                <button
+                  className="timeline-view-toggle"
+                  onClick={handleSync}
+                  aria-label="Sync timelines"
+                  title="Sync"
+                  disabled={syncing}
+                >
+                  <RefreshCw size={15} className={syncing ? "spin" : ""} />
+                </button>
+              )}
+              <button
+                className="timeline-view-toggle"
+                onClick={() => setViewMode(v => v === "list" ? "grid" : "list")}
+                aria-label="Toggle view"
+              >
+                {viewMode === "list" ? <LayoutGrid size={15} /> : <List size={15} />}
+              </button>
+            </div>
+          </div>
         </div>
+
+        {cloudActionError && (
+          <div className="cloud-action-error">{cloudActionError}</div>
+        )}
+
+        {viewMode === "list" ? (
+          <div className="timeline-list">
+            {filteredTimelines.map((file) => (
+              <div
+                key={file.id}
+                className="timeline-item"
+                onClick={() => onSelectTimeline(file.id)}
+                onContextMenu={(e) => handleContextMenu(e, file)}
+              >
+                <div className="timeline-item-icon">
+                  <File size={15} strokeWidth={1.75} />
+                </div>
+                <div className="timeline-item-body">
+                  <span className="timeline-item-title">{file.name}</span>
+                  <span className="timeline-item-meta">
+                    {file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}
+                  </span>
+                </div>
+                <div className="timeline-item-right">
+                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ' cloud' : ''}`}>
+                    {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
+                    {file.storageType === 'cloud' ? 'Cloud' : 'Local'}
+                  </span>
+                  <button
+                    className="timeline-item-dots"
+                    onClick={(e) => { e.stopPropagation(); handleContextMenu(e, file); }}
+                    aria-label="More options"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="timeline-grid">
+            {filteredTimelines.map((file) => (
+              <div
+                key={file.id}
+                className="timeline-card"
+                onClick={() => onSelectTimeline(file.id)}
+                onContextMenu={(e) => handleContextMenu(e, file)}
+              >
+                <div className="timeline-item-icon">
+                  <File size={15} strokeWidth={1.75} />
+                </div>
+                <div className="timeline-card-body">
+                  <span className="timeline-item-title">{file.name}</span>
+                  <span className="timeline-item-meta">{file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}</span>
+                </div>
+                <span className={`timeline-item-badge${file.storageType === 'cloud' ? ' cloud' : ''}`}>
+                  {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
+                  {file.storageType === 'cloud' ? 'Cloud' : 'Local'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {filteredTimelines.length === 0 && (
           <div className="no-timelines">
@@ -512,6 +781,13 @@ export default function HomePage({
                   onClick={() => setSettingsSection("files")}
                 >
                   Files
+                </button>
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "cloud" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("cloud")}
+                >
+                  Cloud
                 </button>
               </div>
               <div className="settings-content">
@@ -788,6 +1064,75 @@ export default function HomePage({
                   </>
                 )}
 
+                {settingsSection === "cloud" && (
+                  <>
+                    {cloudUser ? (
+                      <div className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">Account</div>
+                          <div className="settings-row-description">{cloudUser.email}</div>
+                          {cloudUser.plan && (
+                            <div className="settings-row-description">{cloudUser.plan} Plan</div>
+                          )}
+                        </div>
+                        <div className="settings-row-right">
+                          <button className="settings-folder-button" type="button" onClick={handleCloudLogout}>
+                            Log Out
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="settings-row">
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">
+                            {cloudMode === "login" ? "Log In" : "Create Account"}
+                          </div>
+                          <div className="settings-row-description">
+                            {cloudMode === "login"
+                              ? "Sign in to sync your timelines to the cloud."
+                              : "Create a new account to get started."}
+                          </div>
+                          {cloudError && (
+                            <div className="settings-path-error">{cloudError}</div>
+                          )}
+                        </div>
+                        <div className="settings-row-right">
+                          <form className="settings-cloud-form" onSubmit={handleCloudSubmit}>
+                            <input
+                              className="settings-input"
+                              type="email"
+                              placeholder="Email"
+                              value={cloudEmail}
+                              onChange={(e) => setCloudEmail(e.target.value)}
+                              required
+                            />
+                            <input
+                              className="settings-input"
+                              type="password"
+                              placeholder="Password"
+                              value={cloudPassword}
+                              onChange={(e) => setCloudPassword(e.target.value)}
+                              required
+                            />
+                            <div className="settings-folder-actions">
+                              <button className="settings-folder-button" type="submit" disabled={cloudLoading}>
+                                {cloudLoading ? "..." : cloudMode === "login" ? "Log In" : "Register"}
+                              </button>
+                              <button
+                                className="settings-folder-button"
+                                type="button"
+                                onClick={() => { setCloudMode(m => m === "login" ? "register" : "login"); setCloudError(""); }}
+                              >
+                                {cloudMode === "login" ? "Register instead" : "Log in instead"}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
               </div>
             </div>
           </div>
@@ -853,7 +1198,9 @@ export default function HomePage({
           className="timeline-context-menu"
           style={{
             position: 'fixed',
-            left: `${contextMenu.x}px`,
+            ...(contextMenu.nearRight
+              ? { right: `${window.innerWidth - contextMenu.x}px` }
+              : { left: `${contextMenu.x}px` }),
             top: `${contextMenu.y}px`,
           }}
         >
@@ -872,6 +1219,29 @@ export default function HomePage({
             <Copy size={16} />
             <span>Duplicate</span>
           </button>
+
+          {canUseCloud && (
+            <>
+              <div className="context-menu-separator" />
+              {contextMenu.file.storageType === 'cloud' ? (
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleMenuAction(() => handleStoreLocally(contextMenu.file))}
+                >
+                  <HardDrive size={16} />
+                  <span>Store Locally</span>
+                </button>
+              ) : (
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleMenuAction(() => handleStoreInCloud(contextMenu.file))}
+                >
+                  <Cloud size={16} />
+                  <span>Store in Cloud</span>
+                </button>
+              )}
+            </>
+          )}
 
           <div className="context-menu-separator" />
 

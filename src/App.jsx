@@ -23,6 +23,8 @@ import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTi
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
+import { apiGetTimelineById, apiUpdateTimeline, apiCreateTimeline } from "./lib/api.js";
+import { getCurrentUser } from "./lib/auth.js";
 import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
 import "./index.css";
 
@@ -125,6 +127,7 @@ function App() {
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
+  const currentTimelineIdRef = useRef(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
   const [exportPngOptions, setExportPngOptions] = useState(null);
@@ -366,6 +369,19 @@ function App() {
     prevTimelineRef.current = timelineData;
   }, [timelineData]);
 
+  // Keep ref in sync so saveTimeline can read it inside stale closures
+  useEffect(() => { currentTimelineIdRef.current = currentTimelineId; }, [currentTimelineId]);
+
+  const saveTimeline = (data, localId) => {
+    const id = currentTimelineIdRef.current;
+    if (id?.startsWith('cloud:')) {
+      const backendId = id.slice('cloud:'.length);
+      apiUpdateTimeline(backendId, { title: data.file?.title, slug: localId, description: data.file?.description ?? '', isPublic: data.file?.isPublic ?? false, contentJson: JSON.stringify(data) }).catch(console.error);
+      return Promise.resolve();
+    }
+    return saveTimelineToFile(data, localId);
+  };
+
   const undoTimeline = () => {
     if (!timelineData) return;
     const { past, future } = historyRef.current;
@@ -382,7 +398,7 @@ function App() {
 
     const timelineId =
       previous.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
-    saveTimelineToFile(previous, timelineId).catch(console.error);
+    saveTimeline(previous, timelineId).catch(console.error);
   };
 
   const redoTimeline = () => {
@@ -401,7 +417,7 @@ function App() {
 
     const timelineId =
       next.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
-    saveTimelineToFile(next, timelineId).catch(console.error);
+    saveTimeline(next, timelineId).catch(console.error);
   };
 
   useEffect(() => {
@@ -532,7 +548,7 @@ function App() {
       };
 
       const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
     });
   };
@@ -557,7 +573,7 @@ function App() {
         },
       };
       const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
     });
   };
@@ -574,7 +590,7 @@ function App() {
         file: { ...prevData.file, tagColors: nextTagColors },
       };
       const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
     });
   };
@@ -611,7 +627,7 @@ function App() {
         elements: nextElements,
       };
       const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
     });
   };
@@ -673,7 +689,7 @@ function App() {
 
       
       const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId)
+      saveTimeline(updatedData, timelineId)
         .then(() => {
           console.log('Timeline saved to file successfully');
         })
@@ -712,7 +728,7 @@ function App() {
       };
 
             const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -749,7 +765,7 @@ function App() {
       };
 
             const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -784,7 +800,7 @@ function App() {
       };
 
             const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -819,7 +835,7 @@ function App() {
       };
 
       const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -854,7 +870,7 @@ function App() {
       };
 
             const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
 
       return updatedData;
     });
@@ -954,7 +970,7 @@ function App() {
         setCurrentTimelineId(nextTimelineId);
       }
 
-      saveTimelineToFile(updatedData, nextTimelineId).catch(console.error);
+      saveTimeline(updatedData, nextTimelineId).catch(console.error);
 
       return updatedData;
     });
@@ -970,7 +986,7 @@ function App() {
         },
       };
       const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimelineToFile(updatedData, timelineId).catch(console.error);
+      saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
     });
   };
@@ -1004,20 +1020,25 @@ function App() {
 
   const handleLoadTimeline = async (timelineId) => {
     try {
-      if (!window.electron?.loadTimeline) {
-        throw new Error("Timeline loading is only available in the desktop app.");
+      let loadedTimeline;
+
+      if (timelineId.startsWith('cloud:')) {
+        const backendId = timelineId.slice('cloud:'.length);
+        const result = await apiGetTimelineById(backendId);
+        if (!result.success) throw new Error(result.error || 'Failed to load cloud timeline.');
+        const contentJson = result.data?.contentJson ?? result.data?.data;
+        if (!contentJson) throw new Error('This cloud timeline has no content yet.');
+        loadedTimeline = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
+      } else {
+        if (!window.electron?.loadTimeline) {
+          throw new Error("Timeline loading is only available in the desktop app.");
+        }
+        loadedTimeline = await window.electron.loadTimeline(timelineId);
       }
 
-      const loadedTimeline = await window.electron.loadTimeline(timelineId);
-      console.log('Loaded timeline from Electron file system');
-      // Update the timeline data
       setTimelineData(normalizeTimelineData(loadedTimeline));
       setCurrentTimelineId(timelineId);
-
-      // Clear selection when loading new timeline
       setSelectedId(null);
-
-      console.log(`Loaded timeline: ${timelineId}`);
     } catch (error) {
       console.error('Failed to load timeline:', error);
       alert(`Failed to load timeline: ${error.message}`);
@@ -1070,6 +1091,12 @@ function App() {
     try {
       await saveTimelineToFile(newTimeline, timelineId);
 
+      const cloudUser = getCurrentUser();
+      if (cloudUser && ["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase())) {
+        const slug = timelineId;
+        apiCreateTimeline({ title: timelineConfig.title, slug, contentJson: JSON.stringify(newTimeline) }).catch(console.error);
+      }
+
       // Load the newly created timeline
       setTimelineData(newTimeline);
       setCurrentTimelineId(timelineId);
@@ -1098,7 +1125,7 @@ function App() {
       };
 
       // Save the duplicate
-      await saveTimelineToFile(duplicateData, duplicateId);
+      await saveTimeline(duplicateData, duplicateId);
 
       // Load the newly created duplicate
       setTimelineData(duplicateData);
