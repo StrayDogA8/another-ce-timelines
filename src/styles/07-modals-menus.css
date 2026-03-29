@@ -459,6 +459,7 @@
 
 .confirm-modal {
   max-width: 420px;
+  height: auto;
 }
 
 .export-png-modal {

@@ -47,6 +47,7 @@ export default function HomePage({
   onOpenFontsFolder,
   onRefreshThemes,
   openSettingsSignal = 0,
+  openCloudSettingsSignal = 0,
   onAppSettingsClosed,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
@@ -75,9 +76,11 @@ export default function HomePage({
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
+  const [storeLocallyDialogFile, setStoreLocallyDialogFile] = useState(null);
   const [settingsSection, setSettingsSection] = useState("general");
   const previousViewRef = useRef("home");
   const menuRef = useRef(null);
+  const syncingRef = useRef(false);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
   const bundledKeys = useMemo(
@@ -228,6 +231,13 @@ export default function HomePage({
   }, [settingsOnly]);
 
   useEffect(() => {
+    if (openCloudSettingsSignal > 0) {
+      setView("settings");
+      setSettingsSection("cloud");
+    }
+  }, [openCloudSettingsSignal]);
+
+  useEffect(() => {
     if (previousViewRef.current === "settings" && view !== "settings") {
       onAppSettingsClosed?.();
     }
@@ -261,10 +271,29 @@ export default function HomePage({
     return unsub;
   }, []);
 
-  // Fetch cloud timelines when user has a qualifying plan
+// Fetch cloud timelines when user has a qualifying plan, or show cached when logged out
   useEffect(() => {
     if (!cloudUser || !["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase())) {
-      setCloudTimelineFiles([]);
+      listCloudMetas().then(async (metas) => {
+        if (!metas || Object.keys(metas).length === 0) {
+          setCloudTimelineFiles([]);
+          return;
+        }
+        const entries = await Promise.all(
+          Object.entries(metas).map(async ([backendId, meta]) => {
+            const cached = await loadCloudCache(backendId);
+            const name = cached?.data?.file?.title ?? `Cloud Timeline ${backendId}`;
+            return {
+              id: `cloud:${backendId}`,
+              name,
+              modifiedAt: meta.localUpdatedAt ? new Date(meta.localUpdatedAt).getTime() : null,
+              storageType: 'cloud',
+              syncStatus: 'unsynced',
+            };
+          })
+        );
+        setCloudTimelineFiles(entries);
+      });
       return;
     }
     Promise.all([apiListTimelines(), listCloudMetas()]).then(([result, metas]) => {
@@ -312,7 +341,8 @@ export default function HomePage({
   };
 
   const handleSync = async () => {
-    if (!canUseCloud || syncing) return;
+    if (!canUseCloud || syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
     let conflictsFound = 0;
     try {
@@ -321,8 +351,6 @@ export default function HomePage({
         apiListTimelines(),
         listCloudMetas(),
       ]);
-
-      setTimelineFiles((localResult ?? []).map(f => ({ ...f, storageType: 'local' })));
 
       if (!cloudResult.success) {
         showCloudError(`Sync failed: ${cloudResult.error || 'Unknown error'}`);
@@ -342,8 +370,11 @@ export default function HomePage({
             if (!serverResult.success) return; // still offline
 
             const serverUpdatedAt = serverResult.data?.updatedAt;
-
-            if (!meta.lastServerUpdatedAt || serverUpdatedAt === meta.lastServerUpdatedAt) {
+            // No conflict if either timestamp is absent (can't compare) or they refer to the same instant.
+            // Use getTime() to normalize precision differences (e.g. nanoseconds vs microseconds from server).
+            const noConflict = !meta.lastServerUpdatedAt || !serverUpdatedAt ||
+              new Date(meta.lastServerUpdatedAt).getTime() === new Date(serverUpdatedAt).getTime();
+            if (noConflict) {
               // No conflict — upload cached version
               const uploadResult = await apiUpdateTimeline(backendId, {
                 title: cached.data.file?.title,
@@ -353,7 +384,11 @@ export default function HomePage({
                 contentJson: JSON.stringify(cached.data),
               });
               if (uploadResult.success) {
-                const syncedMeta = { ...meta, lastServerUpdatedAt: uploadResult.data?.updatedAt ?? serverUpdatedAt, syncStatus: 'synced' };
+                // Clean up any previously created conflict file for this timeline
+                if (meta.conflictFileId && window.electron?.deleteTimeline) {
+                  await window.electron.deleteTimeline({ id: meta.conflictFileId, deleteAssets: false }).catch(() => {});
+                }
+                const syncedMeta = { ...meta, lastServerUpdatedAt: uploadResult.data?.updatedAt ?? serverUpdatedAt, syncStatus: 'synced', conflictFileId: null };
                 await updateCloudMeta(backendId, syncedMeta);
                 updatedMetas[backendId] = syncedMeta;
               }
@@ -365,15 +400,17 @@ export default function HomePage({
 
               const serverContentJson = serverResult.data?.contentJson ?? serverResult.data?.data;
               const serverData = typeof serverContentJson === 'string' ? JSON.parse(serverContentJson) : serverContentJson;
-              const conflictMeta = { ...meta, lastServerUpdatedAt: serverUpdatedAt, localUpdatedAt: serverUpdatedAt, syncStatus: 'conflict' };
+              const conflictMeta = { ...meta, lastServerUpdatedAt: serverUpdatedAt, localUpdatedAt: serverUpdatedAt, syncStatus: 'conflict', conflictFileId: conflictId };
               await saveCloudCache(backendId, serverData ?? cached.data, conflictMeta);
               updatedMetas[backendId] = conflictMeta;
-
-              setTimelineFiles(prev => [...prev, { id: conflictId, name: conflictTitle, modifiedAt: Date.now(), storageType: 'local' }]);
               conflictsFound++;
             }
           })
       );
+
+      // Refresh local file list from disk (picks up any newly created conflict files, no duplicates)
+      const freshLocal = await window.electron?.listTimelines?.() ?? localResult ?? [];
+      setTimelineFiles(freshLocal.map(f => ({ ...f, storageType: 'local' })));
 
       // Rebuild cloud list with updated sync statuses
       setCloudTimelineFiles(cloudResult.data.map(t => {
@@ -394,6 +431,7 @@ export default function HomePage({
     } catch (err) {
       showCloudError(`Sync failed: ${err.message}`);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   };
@@ -420,6 +458,12 @@ export default function HomePage({
     } catch (err) {
       showCloudError(`Could not store in cloud: ${err.message}`);
     }
+  };
+
+  const handleConfirmStoreLocally = async () => {
+    const file = storeLocallyDialogFile;
+    setStoreLocallyDialogFile(null);
+    if (file) await handleStoreLocally(file);
   };
 
   const handleStoreLocally = async (file) => {
@@ -756,7 +800,12 @@ export default function HomePage({
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
                 <div className="timeline-item-icon">
-                  <File size={15} strokeWidth={1.75} />
+                  <svg width="20" height="8" viewBox="0 0 67 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect y="8.89844" width="29.2656" height="6.80469" fill="currentColor" />
+                    <rect x="34.0703" width="32.9297" height="7.32812" fill="currentColor" />
+                    <rect x="34.0703" y="16.75" width="32.9297" height="7.32812" fill="currentColor" />
+                    <path d="M28.2656 5C28.2656 2.23858 30.5042 0 33.2656 0H35.0703V24.0781H33.2656C30.5042 24.0781 28.2656 21.8395 28.2656 19.0781V5Z" fill="currentColor" />
+                  </svg>
                 </div>
                 <div className="timeline-item-body">
                   <span className="timeline-item-title">{file.name}</span>
@@ -790,7 +839,12 @@ export default function HomePage({
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
                 <div className="timeline-item-icon">
-                  <File size={15} strokeWidth={1.75} />
+                  <svg width="20" height="8" viewBox="0 0 67 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect y="8.89844" width="29.2656" height="6.80469" fill="currentColor" />
+                    <rect x="34.0703" width="32.9297" height="7.32812" fill="currentColor" />
+                    <rect x="34.0703" y="16.75" width="32.9297" height="7.32812" fill="currentColor" />
+                    <path d="M28.2656 5C28.2656 2.23858 30.5042 0 33.2656 0H35.0703V24.0781H33.2656C30.5042 24.0781 28.2656 21.8395 28.2656 19.0781V5Z" fill="currentColor" />
+                  </svg>
                 </div>
                 <div className="timeline-card-body">
                   <span className="timeline-item-title">{file.name}</span>
@@ -1194,7 +1248,7 @@ export default function HomePage({
                                 type="button"
                                 onClick={() => { setCloudMode(m => m === "login" ? "register" : "login"); setCloudError(""); }}
                               >
-                                {cloudMode === "login" ? "Register instead" : "Log in instead"}
+                                {cloudMode === "login" ? "Register" : "Log in instead"}
                               </button>
                             </div>
                           </form>
@@ -1263,6 +1317,48 @@ export default function HomePage({
         </div>
       )}
 
+      {storeLocallyDialogFile && (
+        <div
+          className="settings-backdrop"
+          onClick={() => setStoreLocallyDialogFile(null)}
+        >
+          <div
+            className="settings-modal confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-header">
+              <h2 className="settings-title">STORE LOCALLY</h2>
+              <button
+                className="settings-back-button"
+                onClick={() => setStoreLocallyDialogFile(null)}
+                aria-label="Close dialog"
+              >
+                <X size={18} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="confirm-content">
+              <p className="confirm-text">
+                "{storeLocallyDialogFile.name}" will be saved to your device and removed from the cloud. This cannot be undone.
+              </p>
+            </div>
+            <div className="confirm-actions">
+              <button
+                className="settings-folder-button"
+                onClick={() => setStoreLocallyDialogFile(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-folder-button confirm-delete-button"
+                onClick={handleConfirmStoreLocally}
+              >
+                Store Locally
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <div
           ref={menuRef}
@@ -1297,7 +1393,7 @@ export default function HomePage({
               {contextMenu.file.storageType === 'cloud' ? (
                 <button
                   className="context-menu-item"
-                  onClick={() => handleMenuAction(() => handleStoreLocally(contextMenu.file))}
+                  onClick={() => handleMenuAction(() => setStoreLocallyDialogFile(contextMenu.file))}
                 >
                   <HardDrive size={16} />
                   <span>Store Locally</span>

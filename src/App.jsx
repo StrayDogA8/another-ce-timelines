@@ -26,8 +26,8 @@ import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTi
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
-import { apiGetTimelineById, apiUpdateTimeline, apiCreateTimeline } from "./lib/api.js";
-import { getCurrentUser } from "./lib/auth.js";
+import { apiGetTimelineById, apiUpdateTimeline } from "./lib/api.js";
+import { onAuthStateChange } from "./lib/auth.js";
 import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
 import "./index.css";
 
@@ -110,6 +110,18 @@ function App() {
     };
   }, []);
 
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setSessionExpired(true);
+    window.addEventListener('auth:session-expired', handler);
+    return () => window.removeEventListener('auth:session-expired', handler);
+  }, []);
+
+  useEffect(() => {
+    return onAuthStateChange((user) => { if (user) setSessionExpired(false); });
+  }, []);
+
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 600;
@@ -153,6 +165,7 @@ function App() {
   const [pinnedTags, setPinnedTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
   const [homeSettingsSignal, setHomeSettingsSignal] = useState(0);
+  const [openCloudSettingsSignal, setOpenCloudSettingsSignal] = useState(0);
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
   const [returnToProjectSettings, setReturnToProjectSettings] = useState(false);
   const [isProjectSettingsCovered, setIsProjectSettingsCovered] = useState(false);
@@ -1068,16 +1081,26 @@ function App() {
         } catch { /* offline */ }
 
         if (serverData) {
-          const meta = {
-            backendId,
-            title: serverData.file?.title,
-            lastServerUpdatedAt: serverUpdatedAt,
-            localUpdatedAt: serverUpdatedAt,
-            syncStatus: 'synced',
-          };
-          await saveCloudCache(backendId, serverData, meta);
-          cloudMetaRef.current = meta;
-          loadedTimeline = serverData;
+          // Don't overwrite unsynced local changes with server data — the user's
+          // edits would be silently lost if they reopen the timeline before syncing.
+          const existingCached = await loadCloudCache(backendId);
+          const existingMeta = existingCached?.meta;
+          if (existingMeta?.syncStatus === 'unsynced' && existingCached.data) {
+            cloudMetaRef.current = existingMeta;
+            loadedTimeline = existingCached.data;
+          } else {
+            const meta = {
+              backendId,
+              title: serverData.file?.title,
+              lastServerUpdatedAt: serverUpdatedAt,
+              localUpdatedAt: serverUpdatedAt,
+              syncStatus: 'synced',
+              conflictFileId: existingMeta?.conflictFileId ?? null,
+            };
+            await saveCloudCache(backendId, serverData, meta);
+            cloudMetaRef.current = meta;
+            loadedTimeline = serverData;
+          }
         } else {
           // Offline fallback
           const cached = await loadCloudCache(backendId);
@@ -1148,12 +1171,6 @@ function App() {
     // Save to file system
     try {
       await saveTimelineToFile(newTimeline, timelineId);
-
-      const cloudUser = getCurrentUser();
-      if (cloudUser && ["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase())) {
-        const slug = timelineId;
-        apiCreateTimeline({ title: timelineConfig.title, slug, contentJson: JSON.stringify(newTimeline) }).catch(console.error);
-      }
 
       // Load the newly created timeline
       setTimelineData(newTimeline);
@@ -1392,11 +1409,19 @@ function App() {
     setHomeSettingsSignal((value) => value + 1);
   };
 
+  const handleOpenCloudSettings = () => {
+    if (timelineData) {
+      setIsAppSettingsOverlayOpen(true);
+    }
+    setOpenCloudSettingsSignal((v) => v + 1);
+  };
+
   const handleAppSettingsClosedFromHome = () => {
     setIsProjectSettingsCovered(false);
     setIsAppSettingsOverlayOpen(false);
     setIsSettingsOpen(returnToProjectSettings);
     setReturnToProjectSettings(false);
+    setOpenCloudSettingsSignal(0);
   };
 
   const handleTimelineStorageDirChange = async (nextDir) => {
@@ -1593,9 +1618,16 @@ function App() {
             onAppFontSizeChange={handleAppFontSizeChange}
             onRefreshThemes={refreshUserThemes}
             openSettingsSignal={homeSettingsSignal}
+            openCloudSettingsSignal={openCloudSettingsSignal}
             onAppSettingsClosed={handleAppSettingsClosedFromHome}
           />
         </div>
+        {sessionExpired && (
+          <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: '13px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+            <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
+            <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
+          </div>
+        )}
       </>
     );
   }
@@ -1743,6 +1775,7 @@ function App() {
           onAppFontSizeChange={handleAppFontSizeChange}
           onRefreshThemes={refreshUserThemes}
           openSettingsSignal={homeSettingsSignal}
+          openCloudSettingsSignal={openCloudSettingsSignal}
           onAppSettingsClosed={handleAppSettingsClosedFromHome}
         />
       )}
@@ -1891,6 +1924,12 @@ function App() {
         fileSettings={timelineData?.file}
       />
       </div>
+      {sessionExpired && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: '13px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+          <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
+          <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
+        </div>
+      )}
     </>
   );
 }

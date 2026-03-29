@@ -20,6 +20,11 @@ async function request(method, path, body) {
     });
 
     if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('timelines-auth-token');
+        localStorage.removeItem('timelines-auth-user');
+        window.dispatchEvent(new Event('auth:session-expired'));
+      }
       const text = await res.text().catch(() => '');
       return { success: false, error: `HTTP ${res.status}${text ? `: ${text}` : ''}` };
     }

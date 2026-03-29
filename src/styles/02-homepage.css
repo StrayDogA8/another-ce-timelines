@@ -40,7 +40,7 @@
 
 .homepage-container {
   width: 100%;
-  max-width: 1500px;
+  max-width: 1000px;
   box-sizing: border-box;
   padding: 36px 48px 60px;
   margin: 0 auto;
@@ -399,7 +399,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
+  width: 240px;
+  margin-right: 28px;
+}
+
+.settings-cloud-form .settings-folder-actions {
+  width: 270px;
 }
 
 .settings-folder-actions {
@@ -694,8 +699,8 @@
 
 /* ── Grid view ── */
 .timeline-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 40px;
 }
@@ -706,11 +711,14 @@
   align-items: flex-start;
   gap: 10px;
   padding: 16px;
+  width: 184px;
+  height: 130px;
   background: var(--secondary-bg);
   border: 1px solid var(--active-bg);
   border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.12s ease;
+  overflow: hidden;
 }
 
 .timeline-card:hover {
@@ -752,5 +760,11 @@
   color: #e05252;
   font-size: var(--text-sm);
   margin-bottom: 8px;
+}
+
+@media (max-width: 750px) {
+  .homepage-title {
+    display: none;
+  }
 }
 

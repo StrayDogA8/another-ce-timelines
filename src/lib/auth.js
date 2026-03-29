@@ -10,6 +10,8 @@ function notifyListeners(user) {
   listeners.forEach(fn => fn(user));
 }
 
+window.addEventListener('auth:session-expired', () => notifyListeners(null));
+
 export function isLoggedIn() {
   if (!ENABLE_CLOUD) return false;
   return !!localStorage.getItem(TOKEN_KEY);
