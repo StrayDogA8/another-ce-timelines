@@ -752,17 +752,19 @@ export default function HomePage({
             New Timeline
           </button>
           <div className="timeline-toolbar-right">
-            <div className="timeline-filter-tabs">
-              {["all", "local", "cloud"].map((tab) => (
-                <button
-                  key={tab}
-                  className={`timeline-filter-tab${filter === tab ? " active" : ""}`}
-                  onClick={() => setFilter(tab)}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
-            </div>
+            {cloudTimelineFiles.length > 0 && (
+              <div className="timeline-filter-tabs">
+                {["all", "local", "cloud"].map((tab) => (
+                  <button
+                    key={tab}
+                    className={`timeline-filter-tab${filter === tab ? " active" : ""}`}
+                    onClick={() => setFilter(tab)}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
               {canUseCloud && (
                 <button
@@ -814,10 +816,12 @@ export default function HomePage({
                   </span>
                 </div>
                 <div className="timeline-item-right">
-                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
-                    {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                    {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
-                  </span>
+                  {cloudTimelineFiles.length > 0 && (
+                    <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
+                      {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
+                      {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
+                    </span>
+                  )}
                   <button
                     className="timeline-item-dots"
                     onClick={(e) => { e.stopPropagation(); handleContextMenu(e, file); }}
@@ -850,10 +854,12 @@ export default function HomePage({
                   <span className="timeline-item-title">{file.name}</span>
                   <span className="timeline-item-meta">{file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}</span>
                 </div>
-                <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
-                  {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                  {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
-                </span>
+                {cloudTimelineFiles.length > 0 && (
+                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
+                    {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
+                    {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
+                  </span>
+                )}
               </div>
             ))}
           </div>

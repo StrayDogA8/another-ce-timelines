@@ -27,7 +27,7 @@ const VIDEO_ZOOM_MIN = 0.2;
 const VIDEO_ZOOM_MAX = 1;
 
 
-export default function ExportVideoModal({ isOpen, onClose, onExport, timelineData, timelineViewRef }) {
+export default function ExportVideoModal({ isOpen, onClose, timelineData, timelineViewRef }) {
   const [filename, setFilename] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -360,7 +360,7 @@ export default function ExportVideoModal({ isOpen, onClose, onExport, timelineDa
     } catch (error) {
       console.error('Error exporting video:', error);
     } finally {
-      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (_) {}
+      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch {}
       setIsExporting(false);
       setExportProgress(0);
     }

@@ -9,8 +9,7 @@
     "electron:dev": "concurrently \"npm run dev\" \"wait-on tcp:5183 && cross-env NODE_ENV=development electron .\"",
     "build": "vite build",
     "electron:build": "npm run build && electron-builder",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint ."
   },
   "build": {
     "appId": "com.timelines.app",
