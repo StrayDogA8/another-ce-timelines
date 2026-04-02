@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw } from "lucide-react";
-import { login, logout, register, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
+import { login, logout, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
 import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
 import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile } from "../utils/electronApi.js";
 
@@ -62,7 +62,6 @@ export default function HomePage({
   const [cloudUser, setCloudUser] = useState(() => getCurrentUser());
   const [cloudEmail, setCloudEmail] = useState("");
   const [cloudPassword, setCloudPassword] = useState("");
-  const [cloudMode, setCloudMode] = useState("login");
   const [cloudError, setCloudError] = useState("");
   const [cloudLoading, setCloudLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -317,8 +316,7 @@ export default function HomePage({
     e.preventDefault();
     setCloudError("");
     setCloudLoading(true);
-    const fn = cloudMode === "login" ? login : register;
-    const result = await fn({ email: cloudEmail, password: cloudPassword });
+    const result = await login({ email: cloudEmail, password: cloudPassword });
     if (result.success) {
       setCloudEmail("");
       setCloudPassword("");
@@ -328,8 +326,8 @@ export default function HomePage({
     setCloudLoading(false);
   };
 
-  const handleCloudLogout = () => {
-    logout();
+  const handleCloudLogout = async () => {
+    await logout();
     setCloudUser(null);
   };
 
@@ -1202,6 +1200,9 @@ export default function HomePage({
                         <div className="settings-row-left">
                           <div className="settings-row-label">Account</div>
                           <div className="settings-row-description">{cloudUser.email}</div>
+                          {cloudUser.verified === false && (
+                            <div className="settings-path-error">Email not verified — please verify at our website.</div>
+                          )}
                           {cloudUser.plan && (
                             <div className="settings-row-description">{cloudUser.plan} Plan</div>
                           )}
@@ -1215,14 +1216,8 @@ export default function HomePage({
                     ) : (
                       <div className="settings-row">
                         <div className="settings-row-left">
-                          <div className="settings-row-label">
-                            {cloudMode === "login" ? "Log In" : "Create Account"}
-                          </div>
-                          <div className="settings-row-description">
-                            {cloudMode === "login"
-                              ? "Sign in to sync your timelines to the cloud."
-                              : "Create a new account to get started."}
-                          </div>
+                          <div className="settings-row-label">Log In</div>
+                          <div className="settings-row-description">Sign in to sync your timelines to the cloud.</div>
                           {cloudError && (
                             <div className="settings-path-error">{cloudError}</div>
                           )}
@@ -1247,14 +1242,7 @@ export default function HomePage({
                             />
                             <div className="settings-folder-actions">
                               <button className="settings-folder-button" type="submit" disabled={cloudLoading}>
-                                {cloudLoading ? "..." : cloudMode === "login" ? "Log In" : "Register"}
-                              </button>
-                              <button
-                                className="settings-folder-button"
-                                type="button"
-                                onClick={() => { setCloudMode(m => m === "login" ? "register" : "login"); setCloudError(""); }}
-                              >
-                                {cloudMode === "login" ? "Register" : "Log in instead"}
+                                {cloudLoading ? "..." : "Log In"}
                               </button>
                             </div>
                           </form>

@@ -1,5 +1,5 @@
 import { ENABLE_CLOUD } from './features.js';
-import { apiLogin, apiRegister, apiGetCurrentUser } from './api.js';
+import { apiLogin, apiGetCurrentUser, apiLogout } from './api.js';
 
 const TOKEN_KEY = 'timelines-auth-token';
 const USER_KEY = 'timelines-auth-user';
@@ -52,26 +52,8 @@ export async function login({ email, password }) {
   return { success: true };
 }
 
-export async function register({ email, password }) {
-  if (!ENABLE_CLOUD) {
-    return { success: false, error: 'Cloud features are disabled.' };
-  }
-
-  const result = await apiRegister({ email, password });
-  if (!result.success) return result;
-
-  const { token } = result.data;
-  localStorage.setItem(TOKEN_KEY, token);
-
-  const userResult = await apiGetCurrentUser();
-  const user = userResult.success ? userResult.data : null;
-  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-  notifyListeners(user);
-  return { success: true };
-}
-
-export function logout() {
+export async function logout() {
+  await apiLogout().catch(() => {});
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   notifyListeners(null);

@@ -3,7 +3,7 @@ import { getToken } from './auth.js';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
-async function request(method, path, body) {
+async function request(method, path, body, { skipSessionExpiry = false } = {}) {
   if (!ENABLE_CLOUD) {
     return { success: false, error: 'Cloud features are disabled.' };
   }
@@ -20,12 +20,19 @@ async function request(method, path, body) {
     });
 
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
+      const text = await res.text().catch(() => '');
+      if (res.status === 401) {
+        localStorage.removeItem('timelines-auth-token');
+        localStorage.removeItem('timelines-auth-user');
+        window.dispatchEvent(new Event('auth:session-expired'));
+      } else if (res.status === 403 && text.toLowerCase().includes('verified')) {
+        // Email verification block — do NOT clear the session
+        return { success: false, error: 'Please verify your email to use cloud sync.', unverified: true };
+      } else if (res.status === 403 && token && !skipSessionExpiry) {
         localStorage.removeItem('timelines-auth-token');
         localStorage.removeItem('timelines-auth-user');
         window.dispatchEvent(new Event('auth:session-expired'));
       }
-      const text = await res.text().catch(() => '');
       return { success: false, error: `HTTP ${res.status}${text ? `: ${text}` : ''}` };
     }
 
@@ -44,9 +51,6 @@ export async function apiLogin({ email, password }) {
   return request('POST', '/api/auth/login', { email, password });
 }
 
-export async function apiRegister({ email, password }) {
-  return request('POST', '/api/auth/register', { email, password });
-}
 
 export async function apiGetCurrentUser() {
   return request('GET', '/api/users/me');
@@ -81,3 +85,8 @@ export async function apiDeleteTimeline(id) {
 export async function apiHealth() {
   return request('GET', '/api/health');
 }
+
+export async function apiLogout() {
+  return request('POST', '/api/auth/logout');
+}
+
