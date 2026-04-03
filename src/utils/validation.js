@@ -144,6 +144,18 @@ export const buildValidatedUpdate = (draft, timelineData) => {
     }
   }
 
+  if (draft.type === "era" && parsedStart.value !== null && parsedEnd.value !== null) {
+    const otherEras = (timelineData?.elements || []).filter(
+      (el) => el.type === "era" && el.id !== draft.id
+    );
+    const overlapping = otherEras.find(
+      (el) => parsedStart.value < el.end && parsedEnd.value > el.start
+    );
+    if (overlapping) {
+      errors.push(`Era overlaps with "${overlapping.title || overlapping.id}".`);
+    }
+  }
+
   if (draft.type === "span" && draft.extendFrom) {
     const extendParent = timelineData?.elements?.find(
       (el) => el.type === "span" && el.id === draft.extendFrom
