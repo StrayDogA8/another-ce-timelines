@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 import SettingsModal from "./components/SettingsModal";
 import NewTimelineModal from "./components/NewTimelineModal";
 import ExportPngModal from "./components/ExportPngModal";
@@ -1659,6 +1660,7 @@ function App() {
         className="app-sidebar overlay-sidebar"
         style={{ width: isLeftCollapsed ? COLLAPSED_WIDTH : sidebarWidth }}
       >
+        <ErrorBoundary name="Sidebar">
         <Sidebar
           isCollapsed={isLeftCollapsed}
           onToggle={() => setIsLeftCollapsed((v) => !v)}
@@ -1694,12 +1696,14 @@ function App() {
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
         />
+        </ErrorBoundary>
       </aside>
 
       <main
         className="app-content"
         style={{ display: isRightMaximized ? "none" : "block" }}
       >
+          <ErrorBoundary name="Timeline">
           <TimelineView
             ref={timelineViewRef}
             selectedId={selectedId}
@@ -1731,6 +1735,7 @@ function App() {
             onViewportYearChange={setViewportYear}
             tagColors={timelineData.file?.tagColors || {}}
           />
+          </ErrorBoundary>
       </main>
 
       <SettingsModal
@@ -1821,6 +1826,7 @@ function App() {
                   : rightWidth
               }}
             >
+              <ErrorBoundary name="Right panel">
               <RightPanel
                 onSelect={handleSelect}
                 selectedElement={selectedElement}
@@ -1836,6 +1842,7 @@ function App() {
                 onUpdateGroups={handleUpdateGroups}
                 tagColors={timelineData.file?.tagColors || {}}
               />
+              </ErrorBoundary>
             </aside>
           )}
         </>
