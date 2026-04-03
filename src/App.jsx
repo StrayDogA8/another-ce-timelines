@@ -819,12 +819,34 @@ function App() {
 
   const handleAddEra = () => {
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-    const range = timelineData.file.end - timelineData.file.start;
+    const tlStart = timelineData.file.start;
+    const tlEnd = timelineData.file.end;
+    const range = tlEnd - tlStart;
     const duration = Math.max(1, Math.floor(range / 3));
-    const fallbackStart = timelineData.file.start + Math.floor(range / 2);
-    const baseStart = Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
-    const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
-    const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
+
+    const existingEras = timelineData.elements
+      .filter((el) => el.type === "era")
+      .sort((a, b) => a.start - b.start);
+
+    const isFree = (s, e) => !existingEras.some((era) => s < era.end && e > era.start);
+
+    // Try placing after each existing era, then at timeline start
+    const candidates = [tlStart, ...existingEras.map((era) => era.end)];
+    let start = null;
+    let end = null;
+    for (const candidate of candidates) {
+      const s = clamp(candidate, tlStart, tlEnd);
+      const e = clamp(s + duration, tlStart, tlEnd);
+      if (e > s && isFree(s, e)) {
+        start = s;
+        end = e;
+        break;
+      }
+    }
+    if (start === null) {
+      alert("No room to add an era. The timeline is fully covered. Adjust or remove an existing era first.");
+      return;
+    }
 
     const eraId = generateUniqueRandomElementId(timelineData.elements, "era");
     const newEra = {
