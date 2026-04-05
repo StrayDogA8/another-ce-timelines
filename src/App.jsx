@@ -1646,7 +1646,7 @@ function App() {
           />
         </div>
         {sessionExpired && (
-          <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: '13px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+          <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
             <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
             <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
           </div>
@@ -1954,7 +1954,7 @@ function App() {
       />
       </div>
       {sessionExpired && (
-        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: '13px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
           <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
           <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
         </div>

@@ -1982,7 +1982,7 @@
 
 .wiki-render .wiki-sidebar-summary::after {
   content: "[show]";
-  font-size: 11px;
+  font-size: var(--text-2xs);
   color: #3366cc;
   font-weight: normal;
   white-space: nowrap;
@@ -2003,7 +2003,7 @@
 /* Collapsible toggle for infobox long lists */
 .wiki-toggle-bracket {
   display: block;
-  font-size: 11px;
+  font-size: var(--text-2xs);
   color: var(--gray-2);
   font-weight: normal;
   line-height: 1.6;
@@ -2014,7 +2014,7 @@
   border: none;
   color: #3366cc;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-2xs);
   padding: 0;
   font-family: inherit;
   line-height: inherit;
