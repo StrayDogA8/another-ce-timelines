@@ -325,7 +325,7 @@ export default function Sidebar({
     loadTimelineList();
   }, []);
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside or pressing Escape
   useEffect(() => {
     if (!timelineMenu && !openSubmenu) return;
 
@@ -343,10 +343,18 @@ export default function Sidebar({
         setOpenSubmenu(null);
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setTimelineMenu(null);
+        setOpenSubmenu(null);
+      }
+    };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
       // Clean up timer on unmount
       if (submenuCloseTimer.current) {
         clearTimeout(submenuCloseTimer.current);
@@ -363,10 +371,13 @@ export default function Sidebar({
         setElementMenu(null);
       }
     };
+    const handleKeyDown = (e) => { if (e.key === "Escape") setElementMenu(null); };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [elementMenu]);
 

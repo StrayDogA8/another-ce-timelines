@@ -51,6 +51,13 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
   const backdropPointerDownRef = useRef(false);
   const exportCancelRef = useRef(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => { if (e.key === "Escape" && !isExporting) onClose(); };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isExporting, onClose]);
+
   // Reset state when modal opens
   useEffect(() => {
     if (!isOpen) {

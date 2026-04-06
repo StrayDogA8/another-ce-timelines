@@ -16,6 +16,13 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const detailSliderRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     const updateTooltip = () => {
       const sliderEl = detailSliderRef.current;
       if (!sliderEl) return;

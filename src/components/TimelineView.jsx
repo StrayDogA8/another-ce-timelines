@@ -969,7 +969,7 @@ const TimelineView = forwardRef(function TimelineView({
     }
   }, [filterMenu]);
 
-  // Close filter menu when clicking outside
+  // Close filter menu when clicking outside or pressing Escape
   useEffect(() => {
     if (!filterMenu) return;
 
@@ -980,9 +980,14 @@ const TimelineView = forwardRef(function TimelineView({
         setFilterMenu(null);
       }
     };
+    const handleKeyDown = (e) => { if (e.key === "Escape") setFilterMenu(null); };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [filterMenu]);
 
   // DPI + zoom/pan effect
@@ -1193,7 +1198,7 @@ const TimelineView = forwardRef(function TimelineView({
     return () => { if (rafId) cancelAnimationFrame(rafId); };
   }, [selectedId, timelineData.elements]);
 
-  // Close context menu on click outside
+  // Close context menu on click outside or Escape
   useEffect(() => {
     if (!contextMenu) return;
 
@@ -1203,9 +1208,14 @@ const TimelineView = forwardRef(function TimelineView({
         setContextMenu(null);
       }
     };
+    const handleKeyDown = (e) => { if (e.key === "Escape") setContextMenu(null); };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [contextMenu]);
 
   const handleContextMenu = (e) => {

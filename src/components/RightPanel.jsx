@@ -73,6 +73,23 @@ export default function RightPanel({
   };
 
   useEffect(() => {
+    const anyOpen = isSpanParentMenuOpen || isExtendFromMenuOpen || isMergeParentMenuOpen ||
+      isParentMenuOpen || isTagMenuOpen || isGroupMenuOpen;
+    if (!anyOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      setIsSpanParentMenuOpen(false);
+      setIsExtendFromMenuOpen(false);
+      setIsMergeParentMenuOpen(false);
+      setIsParentMenuOpen(false);
+      setIsTagMenuOpen(false);
+      setIsGroupMenuOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isSpanParentMenuOpen, isExtendFromMenuOpen, isMergeParentMenuOpen, isParentMenuOpen, isTagMenuOpen, isGroupMenuOpen]);
+
+  useEffect(() => {
     if (selectedElement) {
       const prevId = prevSelectedIdRef.current;
       const shouldPreserveEditMode =

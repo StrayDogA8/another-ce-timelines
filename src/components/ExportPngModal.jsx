@@ -137,6 +137,13 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   }, [clampPreviewOffset]);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     const container = previewContainerRef.current;
     if (!container || !isOpen) return;
     container.addEventListener('wheel', handleWheel, { passive: false });
