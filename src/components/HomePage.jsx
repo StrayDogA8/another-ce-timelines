@@ -411,7 +411,7 @@ export default function HomePage({
       setTimelineFiles(freshLocal.map(f => ({ ...f, storageType: 'local' })));
 
       // Rebuild cloud list with updated sync statuses
-      setCloudTimelineFiles(cloudResult.data.map(t => {
+      setCloudTimelineFiles((Array.isArray(cloudResult.data) ? cloudResult.data : []).map(t => {
         const backendId = String(t._backendId || t.id);
         const meta = updatedMetas[backendId];
         return {
@@ -916,7 +916,7 @@ export default function HomePage({
                   className={`settings-sidebar-item${settingsSection === "cloud" ? " is-active" : ""}`}
                   onClick={() => setSettingsSection("cloud")}
                 >
-                  Cloud
+                  Cloud (Experimental)
                 </button>
               </div>
               <div className="settings-content">

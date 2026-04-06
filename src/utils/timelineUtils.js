@@ -573,6 +573,7 @@ export function layoutEvents({
   fixedEventHeight,
   compactEvents = false,
   fontFamily,
+  pinnedTags = [],
 }) {
   const laidOut = [...events]
     .sort((a, b) => a.date - b.date)
@@ -588,9 +589,23 @@ export function layoutEvents({
   probeTitle.className = "event-title";
   const probeDate = document.createElement("div");
   probeDate.className = "event-date";
-  probeDate.textContent = "0000";
+  probeDate.appendChild(document.createTextNode("0000"));
+  const probePinnedTagsSpan = document.createElement("span");
+  probePinnedTagsSpan.className = "pinned-tags";
+  probeDate.appendChild(probePinnedTagsSpan);
   probe.appendChild(probeTitle);
   probe.appendChild(probeDate);
+
+  const setProbeTags = (tags) => {
+    probePinnedTagsSpan.innerHTML = "";
+    const visible = (Array.isArray(tags) ? tags : []).filter((t) => pinnedTags.includes(t));
+    visible.forEach((tag) => {
+      const span = document.createElement("span");
+      span.className = "pinned-tag";
+      span.textContent = tag;
+      probePinnedTagsSpan.appendChild(span);
+    });
+  };
   Object.assign(probe.style, {
     position: "absolute",
     visibility: "hidden",
@@ -608,7 +623,8 @@ export function layoutEvents({
 
   let measureEvent;
   if (fixedEventHeight) {
-    // All events use the fixed single-line height
+    // OverflowTags ensures tags never wrap when fixedEventHeight is on,
+    // so the box is always the single-line CSS height.
     measureEvent = () => ({ boxHeight: singleLineHeight, isMultiLine: false });
   } else {
     // Switch to auto-height for measuring multi-line content
@@ -616,8 +632,9 @@ export function layoutEvents({
     probe.style.height = "auto";
     const baseContentHeight = probe.offsetHeight;
 
-    measureEvent = (title) => {
+    measureEvent = (title, tags) => {
       probeTitle.textContent = title || "X";
+      setProbeTags(tags);
       const naturalHeight = probe.offsetHeight;
       const isMultiLine = naturalHeight > baseContentHeight;
       return {
@@ -634,7 +651,7 @@ export function layoutEvents({
 
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
-    const { boxHeight, isMultiLine } = measureEvent(event.title);
+    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags);
 
     // Find placed events that horizontally overlap
     const conflicts = placed

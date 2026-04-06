@@ -16,6 +16,45 @@ import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsi
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
+function OverflowTags({ tags, tagColors, getReadableTextColor: readableColor }) {
+  const containerRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(tags.length);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const tagEls = Array.from(el.querySelectorAll('.pinned-tag-item'));
+    if (tagEls.length < 2) return;
+    const firstTop = tagEls[0].getBoundingClientRect().top;
+    let firstLineCount = 0;
+    for (const tagEl of tagEls) {
+      if (Math.abs(tagEl.getBoundingClientRect().top - firstTop) < 1) firstLineCount++;
+      else break;
+    }
+    if (firstLineCount < tags.length) {
+      const newVisible = Math.max(1, firstLineCount - 1);
+      if (newVisible !== visibleCount) setVisibleCount(newVisible);
+    }
+  }, []); // runs once on mount; parent key= remounts when tags change
+
+  const overflow = tags.length - visibleCount;
+
+  return (
+    <span className="pinned-tags" ref={containerRef}>
+      {tags.slice(0, visibleCount).map((tag) => (
+        <span
+          key={tag}
+          className="pinned-tag pinned-tag-item"
+          style={tagColors?.[tag] ? { background: tagColors[tag], color: readableColor(tagColors[tag]) } : undefined}
+        >
+          {tag}
+        </span>
+      ))}
+      {overflow > 0 && <span className="pinned-tag pinned-tag-overflow">+{overflow}</span>}
+    </span>
+  );
+}
+
 const TimelineView = forwardRef(function TimelineView({
   selectedId,
   onSelect,
@@ -378,6 +417,7 @@ const TimelineView = forwardRef(function TimelineView({
         LANE_SPACING,
         BOX_OFFSET,
         compactEvents,
+        pinnedTags,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
       const eventBottoms = tempEvents.map((event) => event.top + (event._boxHeight || 29));
@@ -464,6 +504,7 @@ const TimelineView = forwardRef(function TimelineView({
         fixedEventHeight: Boolean(file.fixedEventHeight),
         compactEvents,
         fontFamily: resolvedFont,
+        pinnedTags,
       });
 
       const finalSpans = rawFinalSpans.map((span) => ({
@@ -2421,11 +2462,21 @@ const TimelineView = forwardRef(function TimelineView({
                       >
                         <div className="event-title">{event.title}</div>
                         {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
-                          {event.hideYears !== true && (event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals))}
+                          {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}</span>}
                           {(() => {
                             const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                               .filter((tag) => pinnedTags.includes(tag));
                             if (visiblePinnedTags.length === 0) return null;
+                            if (file?.fixedEventHeight) {
+                              return (
+                                <OverflowTags
+                                  key={visiblePinnedTags.join(',')}
+                                  tags={visiblePinnedTags}
+                                  tagColors={tagColors}
+                                  getReadableTextColor={getReadableTextColor}
+                                />
+                              );
+                            }
                             return (
                               <span className="pinned-tags">
                                 {visiblePinnedTags.map((tag) => (
@@ -2659,11 +2710,21 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 <div className="event-title">{event.title}</div>
                 {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
-                  {event.hideYears !== true && (event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals))}
+                  {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}</span>}
                   {(() => {
                     const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                       .filter((tag) => pinnedTags.includes(tag));
                     if (visiblePinnedTags.length === 0) return null;
+                    if (file?.fixedEventHeight) {
+                      return (
+                        <OverflowTags
+                          key={visiblePinnedTags.join(',')}
+                          tags={visiblePinnedTags}
+                          tagColors={tagColors}
+                          getReadableTextColor={getReadableTextColor}
+                        />
+                      );
+                    }
                     return (
                       <span className="pinned-tags">
                         {visiblePinnedTags.map((tag) => (

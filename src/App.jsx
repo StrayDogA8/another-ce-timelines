@@ -682,11 +682,23 @@ function App() {
 
   const handleTogglePinnedTag = (tag) => {
     if (!tag) return;
-    setPinnedTags((prev) => (
-      prev.includes(tag)
-        ? prev.filter((value) => value !== tag)
-        : [...prev, tag]
-    ));
+    const nextPinnedTags = pinnedTags.includes(tag)
+      ? pinnedTags.filter((value) => value !== tag)
+      : [...pinnedTags, tag];
+    setPinnedTags(nextPinnedTags);
+    setTimelineData((prevData) => {
+      if (!prevData?.file) return prevData;
+      const nextFile = { ...prevData.file };
+      if (nextPinnedTags.length > 0) {
+        nextFile.pinnedTags = nextPinnedTags;
+      } else {
+        delete nextFile.pinnedTags;
+      }
+      const updatedData = { ...prevData, file: nextFile };
+      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      saveTimeline(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
   };
 
   const handleEditElement = (id) => {
@@ -745,6 +757,7 @@ function App() {
   };
 
   const handleAddEvent = (groupId, clickYear) => {
+    if (!timelineData?.file) return;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const fallbackMid =
       timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
@@ -1141,6 +1154,7 @@ function App() {
       }
 
       setTimelineData(normalizeTimelineData(loadedTimeline));
+      setPinnedTags(Array.isArray(loadedTimeline.file?.pinnedTags) ? loadedTimeline.file.pinnedTags : []);
       setCurrentTimelineId(timelineId);
       setSelectedId(null);
     } catch (error) {
@@ -1153,6 +1167,7 @@ function App() {
     setTimelineData(null);
     setCurrentTimelineId(null);
     setSelectedId(null);
+    setPinnedTags([]);
     setIsSettingsOpen(false);
     setIsAppSettingsOverlayOpen(false);
     setReturnToProjectSettings(false);

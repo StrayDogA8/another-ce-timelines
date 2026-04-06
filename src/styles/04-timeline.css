@@ -409,7 +409,7 @@
   font-weight: 600;
   color: var(--gray-1);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
 }
 
@@ -418,12 +418,21 @@
   gap: 3px;
 }
 
+.event-year {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .event-date .pinned-tags {
   margin-left: auto;
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.pinned-tag-overflow {
+  flex-shrink: 0;
 }
 
 .event-date .pinned-tag {
