@@ -144,15 +144,22 @@ export const buildValidatedUpdate = (draft, timelineData) => {
     }
   }
 
-  if (draft.type === "era" && parsedStart.value !== null && parsedEnd.value !== null) {
-    const otherEras = (timelineData?.elements || []).filter(
+  if (draft.type === "era" && parsedStart.value !== null && parsedEnd.value !== null && draft.parentId) {
+    const allEras = (timelineData?.elements || []).filter(
       (el) => el.type === "era" && el.id !== draft.id
     );
-    const overlapping = otherEras.find(
+    const parentEra = allEras.find((el) => el.id === draft.parentId);
+    if (parentEra) {
+      if (parsedStart.value < parentEra.start || parsedEnd.value > parentEra.end) {
+        errors.push(`Sub-era must be within parent era "${parentEra.title || parentEra.id}".`);
+      }
+    }
+    const siblings = allEras.filter((el) => el.parentId === draft.parentId);
+    const overlappingSibling = siblings.find(
       (el) => parsedStart.value < el.end && parsedEnd.value > el.start
     );
-    if (overlapping) {
-      errors.push(`Era overlaps with "${overlapping.title || overlapping.id}".`);
+    if (overlappingSibling) {
+      errors.push(`Sub-era overlaps with "${overlappingSibling.title || overlappingSibling.id}".`);
     }
   }
 

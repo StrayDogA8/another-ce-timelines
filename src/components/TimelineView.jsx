@@ -16,6 +16,35 @@ import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsi
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
+function assignEraLanes(eras) {
+  if (eras.length === 0) return new Map();
+  const byId = new Map(eras.map((e) => [e.id, e]));
+  const visited = new Set();
+  const ordered = [];
+  const visit = (era) => {
+    if (visited.has(era.id)) return;
+    if (era.parentId) {
+      const parent = byId.get(era.parentId);
+      if (parent) visit(parent);
+    }
+    visited.add(era.id);
+    ordered.push(era);
+  };
+  [...eras].sort((a, b) => a.start - b.start).forEach(visit);
+  const laneOf = new Map();
+  for (const era of ordered) {
+    const parentLane = era.parentId ? (laneOf.get(era.parentId) ?? 0) : -1;
+    let lane = parentLane + 1;
+    while (ordered.some(
+      (other) => laneOf.get(other.id) === lane && era.start < other.end && era.end > other.start
+    )) {
+      lane++;
+    }
+    laneOf.set(era.id, lane);
+  }
+  return laneOf;
+}
+
 function OverflowTags({ tags, tagColors, getReadableTextColor: readableColor }) {
   const containerRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(tags.length);
@@ -345,6 +374,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     // eras
     const ERA_OFFSET = 34;
+    const ERA_BAND_HEIGHT = 30; // 26px era height + 4px gap
     const GROUP_STACK_GAP = Number(file?.groupStackGap) > 0 ? Number(file.groupStackGap) : 120;
 
     // Resolve the font for event measurement (file.font overrides theme/default)
@@ -473,7 +503,11 @@ const TimelineView = forwardRef(function TimelineView({
 
     const topExtent = Math.min(maxGroupTop, maxEraTop);
     const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
-    const belowBaseline = ERA_OFFSET + 30; // Era height + some padding
+    const eraLanes = assignEraLanes(adjustedEras);
+    const maxEraLane = eraLanes.size > 0 ? Math.max(...eraLanes.values()) : 0;
+    const belowBaseline = adjustedEras.length > 0
+      ? ERA_OFFSET + 26 + maxEraLane * ERA_BAND_HEIGHT + 4
+      : 30;
 
     const calculatedHeight = aboveBaseline + belowBaseline;
     const BASE_LINE_Y = calculatedHeight;
@@ -613,12 +647,14 @@ const TimelineView = forwardRef(function TimelineView({
       const rawRight = yearToPx(era.end);
       const clampedLeft = tlStartPx != null ? Math.max(rawLeft, tlStartPx) : rawLeft;
       const clampedRight = tlEndPx != null ? Math.min(rawRight, tlEndPx) : rawRight;
-      const top = BASE_LINE_Y + ERA_OFFSET;
+      const lane = eraLanes.get(era.id) ?? 0;
+      const top = BASE_LINE_Y + ERA_OFFSET + lane * ERA_BAND_HEIGHT;
       return {
         ...era,
         left: clampedLeft,
         width: clampedRight - clampedLeft,
         top,
+        lane,
       };
     }).filter((era) => era.width > 0);
 

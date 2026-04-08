@@ -837,16 +837,16 @@ function App() {
     const range = tlEnd - tlStart;
     const duration = Math.max(1, Math.floor(range / 3));
 
-    const existingEras = timelineData.elements
-      .filter((el) => el.type === "era")
+    const topLevelEras = timelineData.elements
+      .filter((el) => el.type === "era" && !el.parentId)
       .sort((a, b) => a.start - b.start);
 
-    const isFree = (s, e) => !existingEras.some((era) => s < era.end && e > era.start);
+    const isFree = (s, e) => !topLevelEras.some((era) => s < era.end && e > era.start);
 
-    // Try placing after each existing era, then at timeline start
-    const candidates = [tlStart, ...existingEras.map((era) => era.end)];
-    let start = null;
-    let end = null;
+    // Try placing after each existing top-level era, then at timeline start
+    const candidates = [tlStart, ...topLevelEras.map((era) => era.end)];
+    let start = tlStart;
+    let end = clamp(tlStart + duration, tlStart, tlEnd);
     for (const candidate of candidates) {
       const s = clamp(candidate, tlStart, tlEnd);
       const e = clamp(s + duration, tlStart, tlEnd);
@@ -855,10 +855,6 @@ function App() {
         end = e;
         break;
       }
-    }
-    if (start === null) {
-      alert("No room to add an era. The timeline is fully covered. Adjust or remove an existing era first.");
-      return;
     }
 
     const eraId = generateUniqueRandomElementId(timelineData.elements, "era");
@@ -883,6 +879,52 @@ function App() {
       return updatedData;
     });
 
+    setSelectedId(newEra.id);
+    setEditRequestId(newEra.id);
+  };
+
+  const handleAddSubEra = (parentEraId) => {
+    const parentEra = timelineData.elements.find((el) => el.id === parentEraId);
+    if (!parentEra) return;
+
+    const range = parentEra.end - parentEra.start;
+    const duration = Math.max(1, Math.floor(range / 3));
+    const siblings = timelineData.elements
+      .filter((el) => el.type === "era" && el.parentId === parentEraId)
+      .sort((a, b) => a.start - b.start);
+    const isFree = (s, e) => !siblings.some((era) => s < era.end && e > era.start);
+    const candidates = [parentEra.start, ...siblings.map((era) => era.end)];
+    let start = null;
+    let end = null;
+    for (const candidate of candidates) {
+      const s = Math.min(Math.max(candidate, parentEra.start), parentEra.end);
+      const e = Math.min(s + duration, parentEra.end);
+      if (e > s && isFree(s, e)) {
+        start = s;
+        end = e;
+        break;
+      }
+    }
+    if (start === null) {
+      alert("No room to add a sub-era. The parent era is fully covered.");
+      return;
+    }
+    const eraId = generateUniqueRandomElementId(timelineData.elements, "era");
+    const newEra = {
+      id: eraId,
+      type: "era",
+      title: "New Sub-Era",
+      start,
+      end,
+      color: "#F4D05A",
+      parentId: parentEraId,
+    };
+    setTimelineData((prevData) => {
+      const updatedData = { ...prevData, elements: [...prevData.elements, newEra] };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimeline(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
     setSelectedId(newEra.id);
     setEditRequestId(newEra.id);
   };
@@ -921,7 +963,16 @@ function App() {
 
   const handleDelete = (elementId) => {
     setTimelineData((prevData) => {
-      const filteredElements = prevData.elements.filter(el => el.id !== elementId);
+      const collectEraDescendants = (id, elements) => {
+        const children = elements.filter((el) => el.type === "era" && el.parentId === id);
+        return children.flatMap((c) => [c.id, ...collectEraDescendants(c.id, elements)]);
+      };
+      const deletedEl = prevData.elements.find((el) => el.id === elementId);
+      const toDelete = new Set([elementId]);
+      if (deletedEl?.type === "era") {
+        collectEraDescendants(elementId, prevData.elements).forEach((id) => toDelete.add(id));
+      }
+      const filteredElements = prevData.elements.filter((el) => !toDelete.has(el.id));
 
       const cleanedElements = filteredElements.map(el => {
         if (el.type === "event" && el.parents?.includes(elementId)) {
@@ -1721,6 +1772,7 @@ function App() {
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
+          onAddSubEra={handleAddSubEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDownloadJson={handleDownloadJSON}
           onDownloadPng={handleDownloadPNG}
