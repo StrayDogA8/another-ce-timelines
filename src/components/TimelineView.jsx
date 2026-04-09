@@ -16,9 +16,23 @@ import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsi
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
-function assignEraLanes(eras) {
+function assignEraLanes(eras, bandHeight, bandGap) {
   if (eras.length === 0) return new Map();
   const byId = new Map(eras.map((e) => [e.id, e]));
+  const stride = bandHeight + bandGap;
+
+  // Compute subtree height (0 = leaf, N = has N levels of descendants)
+  const heightOf = new Map();
+  const getHeight = (era) => {
+    if (heightOf.has(era.id)) return heightOf.get(era.id);
+    const children = eras.filter((e) => e.parentId === era.id);
+    const h = children.length === 0 ? 0 : 1 + Math.max(...children.map(getHeight));
+    heightOf.set(era.id, h);
+    return h;
+  };
+  eras.forEach(getHeight);
+
+  // Topological sort: parents before children
   const visited = new Set();
   const ordered = [];
   const visit = (era) => {
@@ -31,18 +45,51 @@ function assignEraLanes(eras) {
     ordered.push(era);
   };
   [...eras].sort((a, b) => a.start - b.start).forEach(visit);
-  const laneOf = new Map();
+
+  // Work directly in pixel space to avoid stride/bandHeight mismatch.
+  const offsetOf = new Map();
+  const overlaps = (a, b) => a.start < b.end && a.end > b.start;
+
   for (const era of ordered) {
-    const parentLane = era.parentId ? (laneOf.get(era.parentId) ?? 0) : -1;
-    let lane = parentLane + 1;
-    while (ordered.some(
-      (other) => laneOf.get(other.id) === lane && era.start < other.end && era.end > other.start
-    )) {
-      lane++;
+    if (era.parentId && offsetOf.has(era.parentId)) {
+      // Child: always placed directly above parent (touching). Parent placement already
+      // ensured this slot is clear of other eras.
+      offsetOf.set(era.id, offsetOf.get(era.parentId) - bandHeight);
+    } else {
+      // Root era: find the first stride-aligned offset where:
+      //   1. The root itself is >= stride away from every placed era it overlaps in time.
+      //   2. Each future child slot (offset - k*bandHeight, k=1..height) is >= bandHeight
+      //      away from every placed era the root overlaps in time.
+      const h = heightOf.get(era.id) ?? 0;
+      let offset = h * stride;
+      while (true) {
+        let valid = true;
+        for (const [otherId, otherOffset] of offsetOf) {
+          if (!valid) break;
+          const other = byId.get(otherId);
+          if (!other || !overlaps(era, other)) continue;
+          // Root must be stride-separated from every overlapping placed era.
+          if (Math.abs(otherOffset - offset) < stride) { valid = false; break; }
+          // Each child slot must be bandHeight-separated from every overlapping placed era.
+          for (let depth = 1; depth <= h && valid; depth++) {
+            if (Math.abs(otherOffset - (offset - depth * bandHeight)) < bandHeight) {
+              valid = false;
+            }
+          }
+        }
+        if (valid) break;
+        offset += stride;
+      }
+      offsetOf.set(era.id, offset);
     }
-    laneOf.set(era.id, lane);
   }
-  return laneOf;
+
+  // Normalize so minimum offset is 0
+  const minOffset = Math.min(...offsetOf.values());
+  if (minOffset < 0) {
+    offsetOf.forEach((v, k) => offsetOf.set(k, v - minOffset));
+  }
+  return offsetOf;
 }
 
 function OverflowTags({ tags, tagColors, getReadableTextColor: readableColor }) {
@@ -374,7 +421,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     // eras
     const ERA_OFFSET = 34;
-    const ERA_BAND_HEIGHT = 30; // 26px era height + 4px gap
+    const ERA_BAND_HEIGHT = 26; // matches era height so adjacent lanes touch
     const GROUP_STACK_GAP = Number(file?.groupStackGap) > 0 ? Number(file.groupStackGap) : 120;
 
     // Resolve the font for event measurement (file.font overrides theme/default)
@@ -503,10 +550,11 @@ const TimelineView = forwardRef(function TimelineView({
 
     const topExtent = Math.min(maxGroupTop, maxEraTop);
     const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
-    const eraLanes = assignEraLanes(adjustedEras);
-    const maxEraLane = eraLanes.size > 0 ? Math.max(...eraLanes.values()) : 0;
+    const ERA_GAP = 4;
+    const eraOffsets = assignEraLanes(adjustedEras, ERA_BAND_HEIGHT, ERA_GAP);
+    const maxEraOffset = eraOffsets.size > 0 ? Math.max(...eraOffsets.values()) : 0;
     const belowBaseline = adjustedEras.length > 0
-      ? ERA_OFFSET + 26 + maxEraLane * ERA_BAND_HEIGHT + 4
+      ? ERA_OFFSET + ERA_BAND_HEIGHT + maxEraOffset + 8
       : 30;
 
     const calculatedHeight = aboveBaseline + belowBaseline;
@@ -647,14 +695,12 @@ const TimelineView = forwardRef(function TimelineView({
       const rawRight = yearToPx(era.end);
       const clampedLeft = tlStartPx != null ? Math.max(rawLeft, tlStartPx) : rawLeft;
       const clampedRight = tlEndPx != null ? Math.min(rawRight, tlEndPx) : rawRight;
-      const lane = eraLanes.get(era.id) ?? 0;
-      const top = BASE_LINE_Y + ERA_OFFSET + lane * ERA_BAND_HEIGHT;
+      const top = BASE_LINE_Y + ERA_OFFSET + (eraOffsets.get(era.id) ?? 0);
       return {
         ...era,
         left: clampedLeft,
         width: clampedRight - clampedLeft,
         top,
-        lane,
       };
     }).filter((era) => era.width > 0);
 

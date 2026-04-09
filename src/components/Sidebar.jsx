@@ -103,7 +103,6 @@ export default function Sidebar({
   onAddEvent,
   onAddSpan,
   onAddEra,
-  onAddSubEra,
   onOpenSettings,
   onDownloadJson,
   onDownloadPng,
@@ -158,13 +157,20 @@ export default function Sidebar({
     return formatYear(y, file.negID, file.posID, file.useMonths === true, file.hideDecimals);
   };
 
-  const eraRows = useMemo(() => {
-    const childrenOf = (parentId) =>
-      eras.filter((e) => e.parentId === parentId).sort((a, b) => a.start - b.start);
-    const flatten = (list, level) =>
-      list.flatMap((e) => [{ ...e, level }, ...flatten(childrenOf(e.id), level + 1)]);
-    const roots = eras.filter((e) => !e.parentId).sort((a, b) => a.start - b.start);
-    return flatten(roots, 0);
+  const eraRoots = useMemo(
+    () => eras.filter((e) => !e.parentId).sort((a, b) => a.start - b.start),
+    [eras]
+  );
+  const eraChildrenOf = useMemo(() => {
+    const map = new Map();
+    eras.forEach((e) => {
+      if (e.parentId) {
+        if (!map.has(e.parentId)) map.set(e.parentId, []);
+        map.get(e.parentId).push(e);
+      }
+    });
+    map.forEach((children) => children.sort((a, b) => a.start - b.start));
+    return map;
   }, [eras]);
 
   const spanRows = useMemo(
@@ -685,15 +691,26 @@ export default function Sidebar({
             </div>
             {openEras && (
               <div className="sb-section-body">
-                {eraRows.map((e) => (
-                  <SidebarRow
-                    key={e.id}
-                    item={e}
-                    rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
-                    level={e.level}
-                    {...rowProps}
-                  />
-                ))}
+                {(function renderEras(list) {
+                  return list.map((e) => {
+                    const children = eraChildrenOf.get(e.id);
+                    return (
+                      <div key={e.id}>
+                        <SidebarRow
+                          item={e}
+                          rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
+                          level={0}
+                          {...rowProps}
+                        />
+                        {children && children.length > 0 && (
+                          <div className="sb-section-body">
+                            {renderEras(children)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })(eraRoots)}
               </div>
             )}
           </div>
@@ -1055,15 +1072,6 @@ export default function Sidebar({
             <Edit2 size={16} />
             <span>Edit {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
           </button>
-          {elementMenu.element.type === "era" && (
-            <button
-              className="context-menu-item"
-              onClick={() => handleElementMenuAction(() => onAddSubEra?.(elementMenu.element.id))}
-            >
-              <Plus size={16} />
-              <span>Add Sub-Era</span>
-            </button>
-          )}
           {elementMenu.element.type !== "era" && (
             <button
               className="context-menu-item"

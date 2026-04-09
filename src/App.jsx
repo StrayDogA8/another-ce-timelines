@@ -883,52 +883,6 @@ function App() {
     setEditRequestId(newEra.id);
   };
 
-  const handleAddSubEra = (parentEraId) => {
-    const parentEra = timelineData.elements.find((el) => el.id === parentEraId);
-    if (!parentEra) return;
-
-    const range = parentEra.end - parentEra.start;
-    const duration = Math.max(1, Math.floor(range / 3));
-    const siblings = timelineData.elements
-      .filter((el) => el.type === "era" && el.parentId === parentEraId)
-      .sort((a, b) => a.start - b.start);
-    const isFree = (s, e) => !siblings.some((era) => s < era.end && e > era.start);
-    const candidates = [parentEra.start, ...siblings.map((era) => era.end)];
-    let start = null;
-    let end = null;
-    for (const candidate of candidates) {
-      const s = Math.min(Math.max(candidate, parentEra.start), parentEra.end);
-      const e = Math.min(s + duration, parentEra.end);
-      if (e > s && isFree(s, e)) {
-        start = s;
-        end = e;
-        break;
-      }
-    }
-    if (start === null) {
-      alert("No room to add a sub-era. The parent era is fully covered.");
-      return;
-    }
-    const eraId = generateUniqueRandomElementId(timelineData.elements, "era");
-    const newEra = {
-      id: eraId,
-      type: "era",
-      title: "New Sub-Era",
-      start,
-      end,
-      color: "#F4D05A",
-      parentId: parentEraId,
-    };
-    setTimelineData((prevData) => {
-      const updatedData = { ...prevData, elements: [...prevData.elements, newEra] };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
-      return updatedData;
-    });
-    setSelectedId(newEra.id);
-    setEditRequestId(newEra.id);
-  };
-
   const handleDuplicateElement = (elementId) => {
     setTimelineData((prevData) => {
       const original = prevData.elements.find((el) => el.id === elementId);
@@ -1772,7 +1726,6 @@ function App() {
           onAddEvent={handleAddEvent}
           onAddSpan={handleAddSpan}
           onAddEra={handleAddEra}
-          onAddSubEra={handleAddSubEra}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDownloadJson={handleDownloadJSON}
           onDownloadPng={handleDownloadPNG}

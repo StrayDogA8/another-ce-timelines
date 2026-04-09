@@ -33,6 +33,9 @@ export default function RightPanel({
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const [notesBasePath, setNotesBasePath] = useState("");
   const prevSelectedIdRef = useRef(null);
+  const [eraParentQuery, setEraParentQuery] = useState("");
+  const [isEraParentMenuOpen, setIsEraParentMenuOpen] = useState(false);
+  const eraParentMenuTimeoutRef = useRef(null);
   const [spanParentQuery, setSpanParentQuery] = useState("");
   const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
   const spanParentMenuTimeoutRef = useRef(null);
@@ -109,6 +112,8 @@ export default function RightPanel({
       if (prevId !== selectedElement.id) {
         if (!shouldPreserveEditMode) {
           setIsEditMode(false);
+          setEraParentQuery("");
+          setIsEraParentMenuOpen(false);
           setSpanParentQuery("");
           setIsSpanParentMenuOpen(false);
           setExtendFromQuery("");
@@ -125,6 +130,8 @@ export default function RightPanel({
 
   useEffect(() => {
     if (!isEditMode) {
+      setEraParentQuery("");
+      setIsEraParentMenuOpen(false);
       setSpanParentQuery("");
       setIsSpanParentMenuOpen(false);
       setExtendFromQuery("");
@@ -263,6 +270,7 @@ export default function RightPanel({
   // Cleanup all menu timeouts on unmount
   useEffect(() => {
     return () => {
+      if (eraParentMenuTimeoutRef.current) clearTimeout(eraParentMenuTimeoutRef.current);
       if (spanParentMenuTimeoutRef.current) clearTimeout(spanParentMenuTimeoutRef.current);
       if (extendFromMenuTimeoutRef.current) clearTimeout(extendFromMenuTimeoutRef.current);
       if (mergeParentMenuTimeoutRef.current) clearTimeout(mergeParentMenuTimeoutRef.current);
@@ -397,6 +405,44 @@ export default function RightPanel({
       (span.title || "").toLowerCase().includes(needle)
     );
   }, [mergeParentCandidates, mergeParentQuery]);
+
+  const eraParentCandidates = useMemo(() => {
+    if (!timelineData || !formData || formData.type !== "era") return [];
+    const allEras = timelineData.elements.filter((el) => el.type === "era" && el.id !== formData.id);
+    const getDescendants = (id) => {
+      const children = allEras.filter((e) => e.parentId === id);
+      return children.flatMap((c) => [c.id, ...getDescendants(c.id)]);
+    };
+    const descendants = new Set(getDescendants(formData.id));
+    return allEras.filter((e) => !descendants.has(e.id)).sort((a, b) => a.start - b.start);
+  }, [timelineData, formData]);
+
+  const eraParentSuggestions = useMemo(() => {
+    if (!eraParentQuery.trim()) return eraParentCandidates;
+    const needle = eraParentQuery.trim().toLowerCase();
+    return eraParentCandidates.filter((era) =>
+      era.id.toLowerCase().includes(needle) || (era.title || "").toLowerCase().includes(needle)
+    );
+  }, [eraParentCandidates, eraParentQuery]);
+
+  const setEraParent = (eraId) => {
+    if (!eraId) return;
+    setFormData((prev) => ({ ...prev, parentId: eraId }));
+    commitDraft({ ...formData, parentId: eraId });
+    setEraParentQuery("");
+    setIsEraParentMenuOpen(false);
+  };
+
+  const clearEraParent = () => {
+    const { parentId: _p, ...rest } = formData;
+    setFormData(rest);
+    commitDraft(rest);
+  };
+
+  const handleEraParentBlur = () => {
+    if (eraParentMenuTimeoutRef.current) clearTimeout(eraParentMenuTimeoutRef.current);
+    eraParentMenuTimeoutRef.current = setTimeout(() => setIsEraParentMenuOpen(false), 120);
+  };
 
   const tagCandidates = useMemo(() => {
     if (!timelineData) return [];
@@ -546,7 +592,23 @@ export default function RightPanel({
   };
 
   const commitDraft = (draft) => {
-    const { errors, nextData } = buildValidatedUpdate(draft, timelineData);
+    let effectiveDraft = draft;
+    if (draft.type === "era" && draft.parentId) {
+      const parentEra = timelineData?.elements?.find((el) => el.id === draft.parentId);
+      if (parentEra) {
+        const parsedStart = parseTimelineInput(draft.startInput ?? String(draft.start ?? ""));
+        const parsedEnd = parseTimelineInput(draft.endInput ?? String(draft.end ?? ""));
+        if (
+          Number.isFinite(parsedStart.value) &&
+          Number.isFinite(parsedEnd.value) &&
+          (parsedStart.value < parentEra.start || parsedEnd.value > parentEra.end)
+        ) {
+          const { parentId: _, ...rest } = draft;
+          effectiveDraft = rest;
+        }
+      }
+    }
+    const { errors, nextData } = buildValidatedUpdate(effectiveDraft, timelineData);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return false;
@@ -1248,6 +1310,21 @@ export default function RightPanel({
               </div>
             )}
 
+            {/* Parent era (eras only) */}
+            {formData.type === "era" && formData.parentId && (
+              <div className="view-group">
+                <label>Parent</label>
+                <div className="view-separator" />
+                <button
+                  type="button"
+                  className="parent-link"
+                  onClick={() => onSelect(formData.parentId)}
+                >
+                  {timelineData.elements.find(el => el.id === formData.parentId)?.title || formData.parentId}
+                </button>
+              </div>
+            )}
+
             {/* Merge target (spans only) */}
             {formData.type === "span" && formData.mergeParent && (
               <div className="view-group">
@@ -1624,7 +1701,7 @@ export default function RightPanel({
               );
             })()}
 
-            {(formData.type === "event" || formData.type === "span") && (
+            {(formData.type === "event" || formData.type === "span" || formData.type === "era") && (
               <div className="rp-edit-section">
                 <button
                   type="button"
@@ -1926,6 +2003,80 @@ export default function RightPanel({
                             ))
                           ) : (
                             <div className="branch-suggestion-empty">No matching contiguous spans</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Parent era (eras only) */}
+            {formData.type === "era" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="eraParent">Parent</label>
+                  <div className="edit-separator" />
+                  {formData.parentId ? (
+                    <div className="relation-selected-list">
+                      <div className="relation-selected-item">
+                        <button
+                          type="button"
+                          className="relation-selected-link"
+                          onClick={() => onSelect(formData.parentId)}
+                        >
+                          {timelineData.elements.find((el) => el.id === formData.parentId)?.title || formData.parentId}
+                        </button>
+                        <button
+                          type="button"
+                          className="relation-selected-remove"
+                          onClick={clearEraParent}
+                          aria-label="Remove parent"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="branch-picker">
+                      <input
+                        id="eraParent"
+                        type="text"
+                        value={eraParentQuery}
+                        onChange={(e) => {
+                          setEraParentQuery(e.target.value);
+                          setIsEraParentMenuOpen(true);
+                        }}
+                        onFocus={() => setIsEraParentMenuOpen(true)}
+                        onBlur={handleEraParentBlur}
+                        placeholder="Search era title..."
+                        className="edit-input branch-input"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (eraParentSuggestions.length > 0) setEraParent(eraParentSuggestions[0].id);
+                          }
+                        }}
+                      />
+                      {isEraParentMenuOpen && eraParentQuery.trim().length > 0 && (
+                        <div className="branch-suggestions">
+                          {eraParentSuggestions.length > 0 ? (
+                            eraParentSuggestions.map((era) => (
+                              <button
+                                key={era.id}
+                                type="button"
+                                className="branch-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setEraParent(era.id);
+                                }}
+                              >
+                                <span className="branch-suggestion-title">{era.title || era.id}</span>
+                                <span className="branch-suggestion-id">{era.id}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="branch-suggestion-empty">No matching eras</div>
                           )}
                         </div>
                       )}
