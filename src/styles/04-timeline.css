@@ -423,6 +423,13 @@
   flex-shrink: 0;
 }
 
+.event-date:not(:has(.pinned-tags)) .event-year {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
 .event-date .pinned-tags {
   margin-left: auto;
   display: inline-flex;

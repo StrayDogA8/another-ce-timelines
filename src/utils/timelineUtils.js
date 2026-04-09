@@ -574,6 +574,10 @@ export function layoutEvents({
   compactEvents = false,
   fontFamily,
   pinnedTags = [],
+  negID,
+  posID,
+  useMonths = false,
+  hideDecimals = false,
 }) {
   const laidOut = [...events]
     .sort((a, b) => a.date - b.date)
@@ -589,7 +593,10 @@ export function layoutEvents({
   probeTitle.className = "event-title";
   const probeDate = document.createElement("div");
   probeDate.className = "event-date";
-  probeDate.appendChild(document.createTextNode("0000"));
+  const probeYearSpan = document.createElement("span");
+  probeYearSpan.className = "event-year";
+  probeYearSpan.textContent = "0000";
+  probeDate.appendChild(probeYearSpan);
   const probePinnedTagsSpan = document.createElement("span");
   probePinnedTagsSpan.className = "pinned-tags";
   probeDate.appendChild(probePinnedTagsSpan);
@@ -632,8 +639,9 @@ export function layoutEvents({
     probe.style.height = "auto";
     const baseContentHeight = probe.offsetHeight;
 
-    measureEvent = (title, tags) => {
+    measureEvent = (title, tags, yearLabel) => {
       probeTitle.textContent = title || "X";
+      probeYearSpan.textContent = yearLabel || "0000";
       setProbeTags(tags);
       const naturalHeight = probe.offsetHeight;
       const isMultiLine = naturalHeight > baseContentHeight;
@@ -651,7 +659,8 @@ export function layoutEvents({
 
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
-    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags);
+    const yearLabel = event.dateLabel ?? formatYear(event.date, negID, posID, useMonths, hideDecimals);
+    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags, yearLabel);
 
     // Find placed events that horizontally overlap
     const conflicts = placed

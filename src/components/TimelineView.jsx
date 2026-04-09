@@ -497,6 +497,10 @@ const TimelineView = forwardRef(function TimelineView({
         compactEvents,
         fontFamily: resolvedFont,
         pinnedTags,
+        negID: file.negID,
+        posID: file.posID,
+        useMonths: file.useMonths === true,
+        hideDecimals: file.hideDecimals,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
       const eventBottoms = tempEvents.map((event) => event.top + (event._boxHeight || 29));
@@ -589,6 +593,10 @@ const TimelineView = forwardRef(function TimelineView({
         compactEvents,
         fontFamily: resolvedFont,
         pinnedTags,
+        negID: file.negID,
+        posID: file.posID,
+        useMonths: file.useMonths === true,
+        hideDecimals: file.hideDecimals,
       });
 
       const finalSpans = rawFinalSpans.map((span) => ({
