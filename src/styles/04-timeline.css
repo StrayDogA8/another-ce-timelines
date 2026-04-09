@@ -409,6 +409,8 @@
   font-weight: 600;
   color: var(--gray-1);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 4px;
 }
@@ -420,7 +422,11 @@
 
 .event-year {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
   flex-shrink: 0;
+  margin-right: auto;
 }
 
 .event-date:not(:has(.pinned-tags)) .event-year {
@@ -431,11 +437,7 @@
 }
 
 .event-date .pinned-tags {
-  margin-left: auto;
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
+  display: contents;
 }
 
 .pinned-tag-overflow {
