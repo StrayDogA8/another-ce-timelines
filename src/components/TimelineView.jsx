@@ -493,7 +493,9 @@ const TimelineView = forwardRef(function TimelineView({
         EVENT_GAP,
         LANE_SPACING,
         BOX_OFFSET,
+        fixedEventHeight: Boolean(file.fixedEventHeight),
         compactEvents,
+        fontFamily: resolvedFont,
         pinnedTags,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
