@@ -1080,7 +1080,7 @@ const TimelineView = forwardRef(function TimelineView({
     const canvasX = (localX - translateRef.current.x) / oldScale;
     const canvasY = (localY - translateRef.current.y) / oldScale;
 
-    const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.5), 5);
+    const newScale = Math.min(Math.max(oldScale * zoomFactor, 0.1), 5);
     scaleRef.current = newScale;
 
     translateRef.current.x = localX - canvasX * newScale;
