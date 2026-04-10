@@ -485,13 +485,26 @@
 .eras-layer { position: absolute; inset: 0; }
 .era-item {
   position: absolute;
-  height: 26px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  height: 27px;
   color: var(--gray-4);
   font-size: 8px;
   font-weight: 600;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.era-title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+  box-sizing: border-box;
+  text-align: center;
+  line-height: 1.2;
+  width: 100%;
 }
 
 .event.is-selected {

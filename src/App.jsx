@@ -838,7 +838,7 @@ function App() {
     const duration = Math.max(1, Math.floor(range / 3));
 
     const topLevelEras = timelineData.elements
-      .filter((el) => el.type === "era" && !el.parentId)
+      .filter((el) => el.type === "era")
       .sort((a, b) => a.start - b.start);
 
     const isFree = (s, e) => !topLevelEras.some((era) => s < era.end && e > era.start);
@@ -917,15 +917,7 @@ function App() {
 
   const handleDelete = (elementId) => {
     setTimelineData((prevData) => {
-      const collectEraDescendants = (id, elements) => {
-        const children = elements.filter((el) => el.type === "era" && el.parentId === id);
-        return children.flatMap((c) => [c.id, ...collectEraDescendants(c.id, elements)]);
-      };
-      const deletedEl = prevData.elements.find((el) => el.id === elementId);
       const toDelete = new Set([elementId]);
-      if (deletedEl?.type === "era") {
-        collectEraDescendants(elementId, prevData.elements).forEach((id) => toDelete.add(id));
-      }
       const filteredElements = prevData.elements.filter((el) => !toDelete.has(el.id));
 
       const cleanedElements = filteredElements.map(el => {

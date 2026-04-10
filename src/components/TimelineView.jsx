@@ -20,61 +20,96 @@ function assignEraLanes(eras, bandHeight, bandGap) {
   if (eras.length === 0) return new Map();
   const byId = new Map(eras.map((e) => [e.id, e]));
   const stride = bandHeight + bandGap;
+  const dur = (e) => e.end - e.start;
+  const overlaps = (a, b) => a.start < b.end && a.end > b.start;
+  const getEraHeight = (era) => {
+    const size = era?.eraSize || "normal";
+    if (size === "extra-thick") return bandHeight * 3;
+    if (size === "thick") return bandHeight * 2;
+    return bandHeight;
+  };
+  const verticalOverlap = (topA, heightA, topB, heightB) =>
+    topA < topB + heightB && topA + heightA > topB;
 
-  // Compute subtree height (0 = leaf, N = has N levels of descendants)
-  const heightOf = new Map();
-  const getHeight = (era) => {
-    if (heightOf.has(era.id)) return heightOf.get(era.id);
-    const children = eras.filter((e) => e.parentId === era.id);
-    const h = children.length === 0 ? 0 : 1 + Math.max(...children.map(getHeight));
-    heightOf.set(era.id, h);
+  // Implicit parent = the shortest strictly-longer era that overlaps this one.
+  // Overlapping eras are stacked automatically: shorter above longer, touching.
+  const implicitParentOf = new Map();
+  for (const era of eras) {
+    let parent = null;
+    for (const other of eras) {
+      if (other.id === era.id) continue;
+      if (!overlaps(era, other)) continue;
+      if (dur(other) <= dur(era)) continue;
+      if (!parent || dur(other) < dur(parent)) parent = other;
+    }
+    if (parent) implicitParentOf.set(era.id, parent);
+  }
+
+  // Height above the root's own top edge used by its deepest implicit child chain.
+  const aboveHeightOf = new Map();
+  const getAboveHeight = (era) => {
+    if (aboveHeightOf.has(era.id)) return aboveHeightOf.get(era.id);
+    const children = eras.filter((e) => implicitParentOf.get(e.id)?.id === era.id);
+    const h = children.length === 0
+      ? 0
+      : Math.max(...children.map((child) => getEraHeight(child) + getAboveHeight(child)));
+    aboveHeightOf.set(era.id, h);
     return h;
   };
-  eras.forEach(getHeight);
+  eras.forEach(getAboveHeight);
 
-  // Topological sort: parents before children
   const visited = new Set();
   const ordered = [];
   const visit = (era) => {
     if (visited.has(era.id)) return;
-    if (era.parentId) {
-      const parent = byId.get(era.parentId);
-      if (parent) visit(parent);
-    }
+    const parent = implicitParentOf.get(era.id);
+    if (parent) visit(parent);
     visited.add(era.id);
     ordered.push(era);
   };
   [...eras].sort((a, b) => a.start - b.start).forEach(visit);
 
-  // Work directly in pixel space to avoid stride/bandHeight mismatch.
+  // All root eras share the same base offset so they sit in the same bottommost lane.
+  const commonRootBottom = Math.max(0, ...eras
+    .filter((e) => !implicitParentOf.has(e.id))
+    .map((e) => getEraHeight(e)));
+
   const offsetOf = new Map();
-  const overlaps = (a, b) => a.start < b.end && a.end > b.start;
 
   for (const era of ordered) {
-    if (era.parentId && offsetOf.has(era.parentId)) {
-      // Child: always placed directly above parent (touching). Parent placement already
-      // ensured this slot is clear of other eras.
-      offsetOf.set(era.id, offsetOf.get(era.parentId) - bandHeight);
+    const eraHeight = getEraHeight(era);
+    const parent = implicitParentOf.get(era.id);
+    if (parent && offsetOf.has(parent.id)) {
+      // Place touching directly above implicit parent; resolve conflicts by going higher.
+      let targetOffset = offsetOf.get(parent.id) - eraHeight;
+      while (true) {
+        let conflict = false;
+        for (const [otherId, otherOffset] of offsetOf) {
+          const other = byId.get(otherId);
+          if (!other || !overlaps(era, other)) continue;
+          const otherHeight = getEraHeight(other);
+          if (verticalOverlap(targetOffset, eraHeight, otherOffset, otherHeight)) {
+            conflict = true;
+            targetOffset = otherOffset - eraHeight;
+            break;
+          }
+        }
+        if (!conflict) break;
+      }
+      offsetOf.set(era.id, targetOffset);
     } else {
-      // Root era: find the first stride-aligned offset where:
-      //   1. The root itself is >= stride away from every placed era it overlaps in time.
-      //   2. Each future child slot (offset - k*bandHeight, k=1..height) is >= bandHeight
-      //      away from every placed era the root overlaps in time.
-      const h = heightOf.get(era.id) ?? 0;
-      let offset = h * stride;
+      // Root era: find first lane-aligned offset where the era and all its
+      // implicit children have room to move upward without needing fake lane gaps.
+      let offset = commonRootBottom - eraHeight;
       while (true) {
         let valid = true;
         for (const [otherId, otherOffset] of offsetOf) {
           if (!valid) break;
           const other = byId.get(otherId);
           if (!other || !overlaps(era, other)) continue;
-          // Root must be stride-separated from every overlapping placed era.
-          if (Math.abs(otherOffset - offset) < stride) { valid = false; break; }
-          // Each child slot must be bandHeight-separated from every overlapping placed era.
-          for (let depth = 1; depth <= h && valid; depth++) {
-            if (Math.abs(otherOffset - (offset - depth * bandHeight)) < bandHeight) {
-              valid = false;
-            }
+          const otherHeight = getEraHeight(other);
+          if (verticalOverlap(offset, eraHeight, otherOffset, otherHeight)) {
+            valid = false;
           }
         }
         if (valid) break;
@@ -84,11 +119,8 @@ function assignEraLanes(eras, bandHeight, bandGap) {
     }
   }
 
-  // Normalize so minimum offset is 0
   const minOffset = Math.min(...offsetOf.values());
-  if (minOffset < 0) {
-    offsetOf.forEach((v, k) => offsetOf.set(k, v - minOffset));
-  }
+  if (minOffset < 0) offsetOf.forEach((v, k) => offsetOf.set(k, v - minOffset));
   return offsetOf;
 }
 
@@ -421,8 +453,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     // eras
     const ERA_OFFSET = 34;
-    const ERA_BAND_HEIGHT = 26; // matches era height so adjacent lanes touch
-    const GROUP_STACK_GAP = Number(file?.groupStackGap) > 0 ? Number(file.groupStackGap) : 120;
+    const ERA_BAND_HEIGHT = 27; // must match .era-item height so fill/stack math lines up exactly
 
     // Resolve the font for event measurement (file.font overrides theme/default)
     const fileFontSetting = file.font;
@@ -556,11 +587,16 @@ const TimelineView = forwardRef(function TimelineView({
 
     const topExtent = Math.min(maxGroupTop, maxEraTop);
     const aboveBaseline = TEMP_BASE_LINE_Y - topExtent;
-    const ERA_GAP = 4;
+    const ERA_GAP = 0;
     const eraOffsets = assignEraLanes(adjustedEras, ERA_BAND_HEIGHT, ERA_GAP);
-    const maxEraOffset = eraOffsets.size > 0 ? Math.max(...eraOffsets.values()) : 0;
+    const maxEraBottom = adjustedEras.length > 0
+      ? Math.max(...adjustedEras.map((era) => {
+          const sizeMultiplier = era.eraSize === "extra-thick" ? 3 : era.eraSize === "thick" ? 2 : 1;
+          return (eraOffsets.get(era.id) ?? 0) + ERA_BAND_HEIGHT * sizeMultiplier;
+        }))
+      : 0;
     const belowBaseline = adjustedEras.length > 0
-      ? ERA_OFFSET + ERA_BAND_HEIGHT + maxEraOffset + 8
+      ? ERA_OFFSET + maxEraBottom + 8
       : 30;
 
     const calculatedHeight = aboveBaseline + belowBaseline;
@@ -705,11 +741,17 @@ const TimelineView = forwardRef(function TimelineView({
       const rawRight = yearToPx(era.end);
       const clampedLeft = tlStartPx != null ? Math.max(rawLeft, tlStartPx) : rawLeft;
       const clampedRight = tlEndPx != null ? Math.min(rawRight, tlEndPx) : rawRight;
-      const top = BASE_LINE_Y + ERA_OFFSET + (eraOffsets.get(era.id) ?? 0);
+      const laneOffset = eraOffsets.get(era.id) ?? 0;
+      const sizeMultiplier = era.eraSize === "extra-thick" ? 3 : era.eraSize === "thick" ? 2 : 1;
+      const top = Math.floor(BASE_LINE_Y + ERA_OFFSET + laneOffset);
+      const left = Math.floor(clampedLeft);
+      const width = Math.ceil(clampedRight) - left;
+      const height = ERA_BAND_HEIGHT * sizeMultiplier;
       return {
         ...era,
-        left: clampedLeft,
-        width: clampedRight - clampedLeft,
+        height,
+        left,
+        width,
         top,
       };
     }).filter((era) => era.width > 0);
@@ -2120,6 +2162,7 @@ const TimelineView = forwardRef(function TimelineView({
                 style={{
                   left: `${era.left}px`,
                   width: `${era.width}px`,
+                  height: `${era.height}px`,
                   top: `${era.top}px`,
                   background: `${era.color || "var(--tertiary-bg)"}`,
                 }}
@@ -2128,15 +2171,17 @@ const TimelineView = forwardRef(function TimelineView({
                   handleSelect(era.id);
                 }}
               >
-                <span
-                  className="era-title"
-                  style={{
-                    color: eraTextColor,
-                    opacity: 1,
-                  }}
-                >
-                  {era.title}
-                </span>
+                {era.hideDetails !== true && (
+                  <span
+                    className="era-title"
+                    style={{
+                      color: eraTextColor,
+                      opacity: 1,
+                    }}
+                  >
+                    {era.title}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -2933,15 +2978,13 @@ const TimelineView = forwardRef(function TimelineView({
             <Edit2 size={16} />
             <span>Edit {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
           </button>
-          {contextMenu.element.type !== "era" && (
-            <button
-              className="context-menu-item"
-              onClick={() => handleMenuAction(() => onDuplicateElement?.(contextMenu.element.id))}
-            >
-              <Copy size={16} />
-              <span>Duplicate {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
-            </button>
-          )}
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onDuplicateElement?.(contextMenu.element.id))}
+          >
+            <Copy size={16} />
+            <span>Duplicate {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
+          </button>
           <div className="context-menu-separator" />
           <button
             className="context-menu-item context-menu-item-danger"

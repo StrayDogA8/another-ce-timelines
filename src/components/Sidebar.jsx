@@ -158,20 +158,9 @@ export default function Sidebar({
   };
 
   const eraRoots = useMemo(
-    () => eras.filter((e) => !e.parentId).sort((a, b) => a.start - b.start),
+    () => [...eras].sort((a, b) => a.start - b.start),
     [eras]
   );
-  const eraChildrenOf = useMemo(() => {
-    const map = new Map();
-    eras.forEach((e) => {
-      if (e.parentId) {
-        if (!map.has(e.parentId)) map.set(e.parentId, []);
-        map.get(e.parentId).push(e);
-      }
-    });
-    map.forEach((children) => children.sort((a, b) => a.start - b.start));
-    return map;
-  }, [eras]);
 
   const spanRows = useMemo(
     () =>
@@ -691,26 +680,15 @@ export default function Sidebar({
             </div>
             {openEras && (
               <div className="sb-section-body">
-                {(function renderEras(list) {
-                  return list.map((e) => {
-                    const children = eraChildrenOf.get(e.id);
-                    return (
-                      <div key={e.id}>
-                        <SidebarRow
-                          item={e}
-                          rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
-                          level={0}
-                          {...rowProps}
-                        />
-                        {children && children.length > 0 && (
-                          <div className="sb-section-body">
-                            {renderEras(children)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })(eraRoots)}
+                {eraRoots.map((e) => (
+                  <SidebarRow
+                    key={e.id}
+                    item={e}
+                    rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
+                    level={0}
+                    {...rowProps}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -1072,15 +1050,13 @@ export default function Sidebar({
             <Edit2 size={16} />
             <span>Edit {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
           </button>
-          {elementMenu.element.type !== "era" && (
-            <button
-              className="context-menu-item"
-              onClick={() => handleElementMenuAction(() => onDuplicateElement?.(elementMenu.element.id))}
-            >
-              <Copy size={16} />
-              <span>Duplicate {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
-            </button>
-          )}
+          <button
+            className="context-menu-item"
+            onClick={() => handleElementMenuAction(() => onDuplicateElement?.(elementMenu.element.id))}
+          >
+            <Copy size={16} />
+            <span>Duplicate {elementMenu.element.type.charAt(0).toUpperCase() + elementMenu.element.type.slice(1)}</span>
+          </button>
           <div className="context-menu-separator" />
           <button
             className="context-menu-item context-menu-item-danger"
