@@ -39,9 +39,16 @@
         "AppImage"
       ],
       "icon": "public/favicon/icon.png"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sreegjl",
+      "repo": "timelines",
+      "releaseType": "prerelease"
     }
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "dompurify": "^3.3.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.553.0",

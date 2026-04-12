@@ -41,4 +41,14 @@ contextBridge.exposeInMainWorld('electron', {
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
+  // Auto-updater
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdaterStatus: (callback) => {
+    ipcRenderer.on('updater-status', (_event, data) => callback(data));
+  },
+  offUpdaterStatus: () => {
+    ipcRenderer.removeAllListeners('updater-status');
+  },
 });

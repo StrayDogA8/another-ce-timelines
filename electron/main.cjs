@@ -3,6 +3,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const { autoUpdater } = require('electron-updater');
 const DEFAULT_THEME_KEY = 'parchment';
 
 let mainWindow;
@@ -234,6 +235,65 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'local-font', privileges: { bypassCSP: true, supportFetchAPI: true, standard: true } }
 ]);
 
+// Auto-updater setup
+function setupAutoUpdater() {
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) return;
+
+  autoUpdater.allowPrerelease = true;
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('updater-status', { status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updater-status', { status: 'available', version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('updater-status', { status: 'not-available' });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('updater-status', { status: 'downloading', percent: Math.floor(progress.percent) });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('updater-status', { status: 'downloaded', version: info.version });
+  });
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updater-status', { status: 'error', message: err.message });
+  });
+}
+
+ipcMain.handle('check-for-updates', async () => {
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    return { status: 'dev' };
+  }
+  try {
+    await autoUpdater.checkForUpdates();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('download-update', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall();
+});
+
 app.whenReady().then(async () => {
   // Register protocol handler for local fonts
   protocol.handle('local-font', async (request) => {
@@ -261,6 +321,7 @@ app.whenReady().then(async () => {
 
   await initializeUserData();
   await createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -486,7 +486,7 @@
   line-height: 1.2;
 }
 
-.eras-layer { position: absolute; inset: 0; }
+.eras-layer { position: absolute; inset: 0; z-index: 2; }
 .era-item {
   position: absolute;
   height: 27px;

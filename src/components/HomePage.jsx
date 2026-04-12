@@ -77,6 +77,7 @@ export default function HomePage({
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [storeLocallyDialogFile, setStoreLocallyDialogFile] = useState(null);
   const [settingsSection, setSettingsSection] = useState("general");
+  const [updateStatus, setUpdateStatus] = useState(null); // null | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'dev'
   const previousViewRef = useRef("home");
   const menuRef = useRef(null);
   const syncingRef = useRef(false);
@@ -221,6 +222,14 @@ export default function HomePage({
       setSettingsSection("general");
     }
   }, [openSettingsSignal]);
+
+  useEffect(() => {
+    if (!window.electron?.onUpdaterStatus) return;
+    window.electron.onUpdaterStatus((data) => {
+      setUpdateStatus(data.status);
+    });
+    return () => window.electron.offUpdaterStatus?.();
+  }, []);
 
   useEffect(() => {
     if (settingsOnly) {
@@ -911,22 +920,72 @@ export default function HomePage({
                 >
                   Files
                 </button>
-                <button
-                  type="button"
-                  className={`settings-sidebar-item${settingsSection === "cloud" ? " is-active" : ""}`}
-                  onClick={() => setSettingsSection("cloud")}
-                >
-                  Cloud (Experimental)
-                </button>
+                {false && (
+                  <button
+                    type="button"
+                    className={`settings-sidebar-item${settingsSection === "cloud" ? " is-active" : ""}`}
+                    onClick={() => setSettingsSection("cloud")}
+                  >
+                    Cloud (Experimental)
+                  </button>
+                )}
               </div>
               <div className="settings-content">
                 {settingsSection === "general" && (
                   <>
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Version 0.3.0-alpha.1</div>
+                        <div className="settings-row-description">
+                          {updateStatus === 'available'
+                            ? 'Update available'
+                            : updateStatus === 'downloaded'
+                            ? 'Ready to install'
+                            : updateStatus === 'error'
+                            ? 'Update check failed'
+                            : 'Up to date'}
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            {updateStatus === 'downloaded' ? (
+                              <button
+                                className="settings-folder-button"
+                                type="button"
+                                onClick={() => window.electron?.installUpdate?.()}
+                              >
+                                Restart & Install
+                              </button>
+                            ) : updateStatus === 'available' ? (
+                              <button
+                                className="settings-folder-button"
+                                type="button"
+                                onClick={() => window.electron?.downloadUpdate?.()}
+                              >
+                                {updateStatus === 'downloading'
+                                  ? `Downloading…`
+                                  : 'Download Update'}
+                              </button>
+                            ) : (
+                              <button
+                                className="settings-folder-button"
+                                type="button"
+                                disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                                onClick={() => window.electron?.checkForUpdates?.()}
+                              >
+                                {updateStatus === 'checking' ? 'Checking…' : updateStatus === 'downloading' ? `Downloading…` : 'Check for Updates'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div className="settings-row settings-row-docs">
                       <div className="settings-row-left">
                         <div className="settings-row-label">Documentation</div>
                         <div className="settings-row-description">
-                          Timelines 0.2.0 (Alpha)
+                          Guides, tips, and feature references.
                         </div>
                       </div>
                       <div className="settings-row-right">
