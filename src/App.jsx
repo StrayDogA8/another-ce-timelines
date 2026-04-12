@@ -118,11 +118,11 @@ function App() {
     const handler = () => setSessionExpired(true);
     window.addEventListener('auth:session-expired', handler);
     return () => window.removeEventListener('auth:session-expired', handler);
-  }, []);
+  }, [defaultThemeKey]);
 
   useEffect(() => {
     return onAuthStateChange((user) => { if (user) setSessionExpired(false); });
-  }, []);
+  }, [defaultThemeKey]);
 
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
@@ -266,7 +266,7 @@ function App() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isLeftCollapsed, isRightCollapsed]);
+  }, [isLeftCollapsed, isRightCollapsed, isRightMaximized]);
 
   useEffect(() => {
     timelineDataRef.current = timelineData;
@@ -309,7 +309,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, timelineData, keybinds]);
+  }, [selectedId, timelineData, keybinds, handleRequestDelete]);
 
 
   const refreshUserThemes = async () => {
@@ -357,7 +357,7 @@ function App() {
       prevTimelineRef.current = timelineData;
       lastTimelineIdRef.current = fileId;
     }
-  }, [timelineData?.file?.id]);
+  }, [timelineData?.file?.id, timelineData]);
 
   useEffect(() => {
     if (!timelineData) {
@@ -480,7 +480,7 @@ function App() {
 
     window.addEventListener("keydown", handleUndoRedo);
     return () => window.removeEventListener("keydown", handleUndoRedo);
-  }, [timelineData, currentTimelineId, keybinds]);
+  }, [timelineData, currentTimelineId, keybinds, undoTimeline, redoTimeline]);
 
   useEffect(() => {
     if (!timelineData) return;
@@ -525,7 +525,7 @@ function App() {
 
     window.addEventListener("keydown", handleAddShortcuts);
     return () => window.removeEventListener("keydown", handleAddShortcuts);
-  }, [timelineData, keybinds, viewportYear]);
+  }, [timelineData, keybinds, viewportYear, handleAddEvent, handleAddSpan, handleAddEra]);
 
   const handleSelect = (id) => {
     setSelectedId(id);
@@ -1260,7 +1260,7 @@ function App() {
 
   const isElectron = window.electron !== undefined;
 
-  const resolveThemeKey = (value, fallback = defaultThemeKey) => {
+  const resolveThemeKey = useCallback((value, fallback = defaultThemeKey) => {
     if (!value) return fallback;
     const lower = String(value).toLowerCase();
     if (lower === "default") return fallback;
@@ -1268,7 +1268,7 @@ function App() {
       (key) => key.toLowerCase() === lower
     );
     return match || fallback;
-  };
+  }, [defaultThemeKey, themeConfig]);
 
   const resolveFontStack = (family) => {
     const fallback =
@@ -1284,14 +1284,14 @@ function App() {
     return `"${safeName}", ${fallback}`;
   };
 
-  const getThemeFont = (themeKeyValue) => {
+  const getThemeFont = useCallback((themeKeyValue) => {
     const theme = themeConfig.themes?.[themeKeyValue];
     if (!theme?.font?.family) return null;
     return {
       family: theme.font.family,
       cssUrl: theme.font.cssUrl,
     };
-  };
+  }, [themeConfig]);
 
   const resolveFontChoice = (setting, themeFont) => {
     const normalized = String(setting || "").trim();
@@ -1338,12 +1338,12 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [defaultThemeKey]);
 
   useEffect(() => {
     const resolved = resolveThemeKey(appThemePreference);
     setAppThemeKey(resolved);
-  }, [appThemePreference, themeConfig]);
+  }, [appThemePreference, resolveThemeKey]);
 
   useEffect(() => {
     if (!timelineData) {
@@ -1423,6 +1423,7 @@ function App() {
     timelineData?.file?.font,
     themeKey,
     themeConfig,
+    getThemeFont,
   ]);
 
   useEffect(() => {
@@ -1431,7 +1432,7 @@ function App() {
       return;
     }
     setThemeKey(appThemeKey);
-  }, [timelineData?.file, appThemeKey]);
+  }, [timelineData?.file, appThemeKey, resolveThemeKey]);
 
   const handleAppThemeChange = async (nextThemeKey) => {
     setAppThemePreference(nextThemeKey);

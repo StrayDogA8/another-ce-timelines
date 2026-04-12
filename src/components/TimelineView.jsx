@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -143,7 +143,7 @@ function OverflowTags({ tags, tagColors, getReadableTextColor: readableColor }) 
       const newVisible = Math.max(1, firstLineCount - 1);
       if (newVisible !== visibleCount) setVisibleCount(newVisible);
     }
-  }, []); // runs once on mount; parent key= remounts when tags change
+  }, [tags.length, visibleCount]); // parent key remounts when tags change
 
   const overflow = tags.length - visibleCount;
 
@@ -823,7 +823,7 @@ const TimelineView = forwardRef(function TimelineView({
       TIMELINE_PADDING,
       decompressYear,
     };
-  }, [timelineData, currentScale]);
+  }, [timelineData, pinnedTags]);
 
   const finalSpanById = useMemo(
     () => new Map(finalSpans.map((span) => [span.id, span])),
@@ -1010,6 +1010,7 @@ const TimelineView = forwardRef(function TimelineView({
     TIMELINE_PADDING,
     decompressYear,
     file,
+    onViewportYearChange,
   ]);
 
   // Helper function to apply transform
@@ -1700,7 +1701,7 @@ const TimelineView = forwardRef(function TimelineView({
     applyTransform();
   };
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       // Sync React state with current DOM values when pausing
       setSliderValue(sliderValueRef.current);
@@ -1712,7 +1713,7 @@ const TimelineView = forwardRef(function TimelineView({
       }
     }
     setIsPlaying(!isPlaying);
-  };
+  }, [isPlaying, onViewportYearChange]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1736,7 +1737,7 @@ const TimelineView = forwardRef(function TimelineView({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPlaying, keybinds]);
+  }, [handlePlayPause, keybinds]);
 
   // Stop animation and select an element
   const handleSelect = (id) => {

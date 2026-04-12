@@ -1,5 +1,5 @@
 import { ArrowLeft, Plus, X } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, clamp, detailToSlider, sliderToDetail } from "../utils/sliderUtils";
 import { sanitizeTitle, loadScaleSections, validateScaleSection } from "../utils/validation";
@@ -99,14 +99,14 @@ export default function SettingsModal({
     });
   };
 
-  const updateDetailTooltipPosition = () => {
+  const updateDetailTooltipPosition = useCallback(() => {
     const sliderEl = detailSliderRef.current;
     if (!sliderEl) return;
     const sliderWidth = sliderEl.getBoundingClientRect().width;
     const thumbSize = 20;
     const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
     setDetailTooltipLeft(left);
-  };
+  }, [detailSlider]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -119,7 +119,7 @@ export default function SettingsModal({
     updateDetailTooltipPosition();
     window.addEventListener("resize", updateDetailTooltipPosition);
     return () => window.removeEventListener("resize", updateDetailTooltipPosition);
-  }, [detailSlider]);
+  }, [updateDetailTooltipPosition]);
 
   useEffect(() => {
     if (timelineData?.file) {
@@ -157,7 +157,7 @@ export default function SettingsModal({
         setIsInitialized(true);
       }
     }
-  }, [timelineData]);
+  }, [timelineData, defaultThemeKey]);
 
   useEffect(() => {
     if (!layoutOptions.some((option) => option.value === layout)) {
@@ -269,6 +269,8 @@ export default function SettingsModal({
     hideDecimals,
     showGrid,
     useWikipedia,
+    isInitialized,
+    onUpdateTimeline,
   ]);
 
   if (!isOpen) return null;
