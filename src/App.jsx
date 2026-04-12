@@ -118,11 +118,11 @@ function App() {
     const handler = () => setSessionExpired(true);
     window.addEventListener('auth:session-expired', handler);
     return () => window.removeEventListener('auth:session-expired', handler);
-  }, [defaultThemeKey]);
+  }, []);
 
   useEffect(() => {
     return onAuthStateChange((user) => { if (user) setSessionExpired(false); });
-  }, [defaultThemeKey]);
+  }, []);
 
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
   const MIN_WIDTH = 220;
@@ -309,7 +309,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, timelineData, keybinds, handleRequestDelete]);
+  }, [selectedId, timelineData, keybinds]);
 
 
   const refreshUserThemes = async () => {
@@ -480,7 +480,7 @@ function App() {
 
     window.addEventListener("keydown", handleUndoRedo);
     return () => window.removeEventListener("keydown", handleUndoRedo);
-  }, [timelineData, currentTimelineId, keybinds, undoTimeline, redoTimeline]);
+  }, [timelineData, currentTimelineId, keybinds]);
 
   useEffect(() => {
     if (!timelineData) return;
@@ -525,7 +525,7 @@ function App() {
 
     window.addEventListener("keydown", handleAddShortcuts);
     return () => window.removeEventListener("keydown", handleAddShortcuts);
-  }, [timelineData, keybinds, viewportYear, handleAddEvent, handleAddSpan, handleAddEra]);
+  }, [timelineData, keybinds, viewportYear]);
 
   const handleSelect = (id) => {
     setSelectedId(id);
