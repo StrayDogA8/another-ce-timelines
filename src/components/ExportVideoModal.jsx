@@ -367,7 +367,7 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
     } catch (error) {
       console.error('Error exporting video:', error);
     } finally {
-      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch {}
+      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch { /* ignore close failures */ }
       setIsExporting(false);
       setExportProgress(0);
     }

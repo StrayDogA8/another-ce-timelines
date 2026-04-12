@@ -194,6 +194,7 @@ const TimelineView = forwardRef(function TimelineView({
   onTogglePinnedTag,
   onViewportYearChange,
   tagColors = {},
+  keybinds = {},
 }, ref) {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
@@ -1712,6 +1713,30 @@ const TimelineView = forwardRef(function TimelineView({
     }
     setIsPlaying(!isPlaying);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const bind = keybinds.play ?? { keys: ["Space"] };
+      const keys = bind.keys.map((k) => k.toLowerCase());
+      const mainKey = keys.find((k) => !["ctrl","alt","shift"].includes(k));
+      if (!mainKey) return;
+      const eventKey = e.key === " " ? "space" : e.key.toLowerCase();
+      if (eventKey !== mainKey) return;
+      const needsCtrl = keys.includes("ctrl");
+      const needsAlt = keys.includes("alt");
+      const needsShift = keys.includes("shift");
+      const isMac = navigator.platform.includes("Mac");
+      if (needsCtrl !== (isMac ? e.metaKey : e.ctrlKey)) return;
+      if (needsAlt !== e.altKey) return;
+      if (needsShift !== e.shiftKey) return;
+      e.preventDefault();
+      handlePlayPause();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPlaying, keybinds]);
 
   // Stop animation and select an element
   const handleSelect = (id) => {

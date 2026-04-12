@@ -1051,6 +1051,45 @@
   background: var(--active-bg);
 }
 
+.hotkey-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: 5px;
+  border: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+}
+
+.hotkey-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 5px;
+  border: 1px solid var(--active-bg);
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.hotkey-icon-button:hover {
+  opacity: 1;
+}
+
+.hotkey-badge-recording {
+  border-color: var(--element-bg);
+  opacity: 0.7;
+  outline: none;
+  cursor: default;
+}
+
 .settings-folder-button {
   padding: 8px 12px;
   font-family: inherit;

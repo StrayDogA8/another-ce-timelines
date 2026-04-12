@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw } from "lucide-react";
 import { login, logout, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
 import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
 import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile } from "../utils/electronApi.js";
@@ -19,6 +19,7 @@ import "../styles/07-modals-menus.css";
 import themeConfig from "../config/theme.json";
 import { loadThemeConfig } from "../utils/themeLoader";
 import { deleteUserTheme, saveUserTheme } from "../utils/electronApi";
+import { DEFAULT_KEYBINDS, cloneDefaultKeybinds, saveKeybinds } from "../utils/keybinds";
 
 export default function HomePage({
   settingsOnly = false,
@@ -49,6 +50,8 @@ export default function HomePage({
   openSettingsSignal = 0,
   openCloudSettingsSignal = 0,
   onAppSettingsClosed,
+  keybinds = cloneDefaultKeybinds(),
+  onKeybindsChange,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [cloudTimelineFiles, setCloudTimelineFiles] = useState([]);
@@ -78,6 +81,8 @@ export default function HomePage({
   const [storeLocallyDialogFile, setStoreLocallyDialogFile] = useState(null);
   const [settingsSection, setSettingsSection] = useState("general");
   const [updateStatus, setUpdateStatus] = useState(null); // null | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'dev'
+  const [recordingKey, setRecordingKey] = useState(null);
+  const recordingKeyRef = useRef(null);
   const previousViewRef = useRef("home");
   const menuRef = useRef(null);
   const syncingRef = useRef(false);
@@ -190,10 +195,13 @@ export default function HomePage({
       trimmed.startsWith("\\\\") ||
       trimmed.startsWith("/");
     if (!isAbsolute) return "Path should be absolute.";
-    const invalidCharPattern = /[<>:"|?*\x00-\x1F]/;
     const isDrivePath = /^[a-zA-Z]:[\\/]/.test(trimmed);
     const pathToCheck = isDrivePath ? trimmed.slice(2) : trimmed;
-    if (invalidCharPattern.test(pathToCheck)) {
+    const hasInvalidChar = [...pathToCheck].some((char) => {
+      const code = char.charCodeAt(0);
+      return '<>:"|?*'.includes(char) || code <= 31;
+    });
+    if (hasInvalidChar) {
       return "Path contains invalid characters.";
     }
     if (/[. ]$/.test(trimmed)) {
@@ -244,6 +252,30 @@ export default function HomePage({
       setSettingsSection("cloud");
     }
   }, [openCloudSettingsSignal]);
+
+  useEffect(() => { recordingKeyRef.current = recordingKey; }, [recordingKey]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const id = recordingKeyRef.current;
+      if (!id) return;
+      if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const parts = [];
+      if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+      if (e.altKey) parts.push("Alt");
+      if (e.shiftKey) parts.push("Shift");
+      parts.push(e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
+      const updated = { ...keybinds, [id]: { ...keybinds[id], keys: parts } };
+      setRecordingKey(null);
+      recordingKeyRef.current = null;
+      onKeybindsChange?.(updated);
+      saveKeybinds(updated);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [keybinds, onKeybindsChange]);
 
   useEffect(() => {
     if (previousViewRef.current === "settings" && view !== "settings") {
@@ -920,15 +952,13 @@ export default function HomePage({
                 >
                   Files
                 </button>
-                {false && (
-                  <button
-                    type="button"
-                    className={`settings-sidebar-item${settingsSection === "cloud" ? " is-active" : ""}`}
-                    onClick={() => setSettingsSection("cloud")}
-                  >
-                    Cloud (Experimental)
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`settings-sidebar-item${settingsSection === "hotkeys" ? " is-active" : ""}`}
+                  onClick={() => setSettingsSection("hotkeys")}
+                >
+                  Hotkeys
+                </button>
               </div>
               <div className="settings-content">
                 {settingsSection === "general" && (
@@ -1111,6 +1141,56 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
+                  </>
+                )}
+
+                {settingsSection === "hotkeys" && (
+                  <>
+                    {Object.entries(keybinds).map(([id, { label, keys }]) => (
+                      <div className="settings-row" key={id}>
+                        <div className="settings-row-left">
+                          <div className="settings-row-label">{label}</div>
+                        </div>
+                        <div className="settings-row-right">
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            {recordingKey === id ? (
+                              <span
+                                className="hotkey-badge hotkey-badge-recording"
+                              >
+                                Press a key…
+                              </span>
+                            ) : (
+                              <span className="hotkey-badge">
+                                {keys.join(" + ")}
+                              </span>
+                            )}
+                            <button
+                              className="hotkey-icon-button"
+                              type="button"
+                              title={recordingKey === id ? "Cancel" : "Edit"}
+                              onClick={() => setRecordingKey(recordingKey === id ? null : id)}
+                            >
+                              {recordingKey === id ? <X size={13} /> : <Pencil size={13} />}
+                            </button>
+                            <button
+                              className="hotkey-icon-button"
+                              type="button"
+                              title="Reset to default"
+                              onClick={() => {
+                                const updated = {
+                                  ...keybinds,
+                                  [id]: { ...keybinds[id], keys: [...DEFAULT_KEYBINDS[id].keys] },
+                                };
+                                onKeybindsChange?.(updated);
+                                saveKeybinds(updated);
+                              }}
+                            >
+                              <RotateCcw size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </>
                 )}
 

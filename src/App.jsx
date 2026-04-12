@@ -27,6 +27,7 @@ import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTi
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
+import { cloneDefaultKeybinds, loadKeybinds, matchesKeybind } from "./utils/keybinds";
 import { apiGetTimelineById, apiUpdateTimeline } from "./lib/api.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
@@ -160,6 +161,7 @@ function App() {
   const [notesSubfolderEnabled, setNotesSubfolderEnabled] = useState(false);
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [appFontSize, setAppFontSize] = useState(14);
+  const [keybinds, setKeybinds] = useState(() => cloneDefaultKeybinds());
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
   const [hiddenTags, setHiddenTags] = useState([]);
@@ -292,28 +294,22 @@ function App() {
 
   useEffect(() => {
     function handleKeyDown(e) {
-      if ((e.key === 'Backspace' || e.key === 'Delete') && selectedId) {
-        const target = e.target;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-          return;
-        }
-
-        e.preventDefault();
-
-        if (!timelineData?.elements) return;
-        const element = timelineData.elements.find(el => el.id === selectedId);
-        if (!element) return;
-
-        handleRequestDelete(element.id);
-      }
+      if (!selectedId) return;
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      const deleteBind = keybinds.delete;
+      const altDeleteBind = { keys: ["Backspace"] };
+      if (!matchesKeybind(e, deleteBind) && !matchesKeybind(e, altDeleteBind)) return;
+      e.preventDefault();
+      if (!timelineData?.elements) return;
+      const element = timelineData.elements.find(el => el.id === selectedId);
+      if (!element) return;
+      handleRequestDelete(element.id);
     }
 
     window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-    window.removeEventListener("keydown", handleKeyDown);
-  };
-}, [selectedId, timelineData]);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedId, timelineData, keybinds]);
 
 
   const refreshUserThemes = async () => {
@@ -466,10 +462,6 @@ function App() {
   useEffect(() => {
     const handleUndoRedo = (e) => {
       if (!timelineData) return;
-      const isMac = navigator.platform.includes("Mac");
-      const isMod = isMac ? e.metaKey : e.ctrlKey;
-      if (!isMod) return;
-
       const target = e.target;
       const isEditable =
         target?.tagName === "INPUT" ||
@@ -477,15 +469,10 @@ function App() {
         target?.tagName === "SELECT" ||
         target?.isContentEditable;
       if (isEditable) return;
-
-      if (e.key === "z" || e.key === "Z") {
+      if (matchesKeybind(e, keybinds.undo)) {
         e.preventDefault();
-        if (e.shiftKey) {
-          redoTimeline();
-        } else {
-          undoTimeline();
-        }
-      } else if (e.key === "y" || e.key === "Y") {
+        undoTimeline();
+      } else if (matchesKeybind(e, keybinds.redo)) {
         e.preventDefault();
         redoTimeline();
       }
@@ -493,14 +480,12 @@ function App() {
 
     window.addEventListener("keydown", handleUndoRedo);
     return () => window.removeEventListener("keydown", handleUndoRedo);
-  }, [timelineData, currentTimelineId]);
+  }, [timelineData, currentTimelineId, keybinds]);
 
   useEffect(() => {
     if (!timelineData) return;
     const handleSearchKey = (e) => {
-      const isMac = navigator.platform.includes("Mac");
-      const isMod = isMac ? e.metaKey : e.ctrlKey;
-      if (!isMod || (e.key !== "f" && e.key !== "F")) return;
+      if (!matchesKeybind(e, keybinds.search)) return;
       const target = e.target;
       const isEditable =
         target?.tagName === "INPUT" ||
@@ -513,8 +498,34 @@ function App() {
     };
     window.addEventListener("keydown", handleSearchKey);
     return () => window.removeEventListener("keydown", handleSearchKey);
-  }, [timelineData]);
+  }, [timelineData, keybinds]);
 
+  useEffect(() => {
+    if (!timelineData) return;
+    const handleAddShortcuts = (e) => {
+      const target = e.target;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+      if (isEditable) return;
+
+      if (matchesKeybind(e, keybinds.newEvent)) {
+        e.preventDefault();
+        handleAddEvent();
+      } else if (matchesKeybind(e, keybinds.newSpan)) {
+        e.preventDefault();
+        handleAddSpan();
+      } else if (matchesKeybind(e, keybinds.newEra)) {
+        e.preventDefault();
+        handleAddEra();
+      }
+    };
+
+    window.addEventListener("keydown", handleAddShortcuts);
+    return () => window.removeEventListener("keydown", handleAddShortcuts);
+  }, [timelineData, keybinds, viewportYear]);
 
   const handleSelect = (id) => {
     setSelectedId(id);
@@ -1305,7 +1316,7 @@ function App() {
     let isMounted = true;
 
     const loadAppSettings = async () => {
-      const settings = await getAppSettings();
+      const [settings, savedKeybinds] = await Promise.all([getAppSettings(), loadKeybinds()]);
       if (!isMounted) return;
       setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
@@ -1320,6 +1331,7 @@ function App() {
       setNotesSubfolderEnabled(storedNotesSubfolderEnabled);
       setAppFontFamily(storedFontFamily);
       setAppFontSize(storedFontSize);
+      setKeybinds(savedKeybinds);
     };
 
     loadAppSettings();
@@ -1622,6 +1634,62 @@ function App() {
     }
   }, [filteredElements, selectedId]);
 
+  useEffect(() => {
+    if (!selectedId || !timelineData) return;
+
+    const compareElementsByTimelineOrder = (a, b) => {
+      if (a.type === "event" && b.type === "event") {
+        if ((a.date ?? 0) !== (b.date ?? 0)) return (a.date ?? 0) - (b.date ?? 0);
+        return String(a.id).localeCompare(String(b.id));
+      }
+      if (a.type === "span" && b.type === "span") {
+        if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
+        if ((a.end ?? 0) !== (b.end ?? 0)) return (a.end ?? 0) - (b.end ?? 0);
+        return String(a.id).localeCompare(String(b.id));
+      }
+      if (a.type === "era" && b.type === "era") {
+        if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
+        if ((a.end ?? 0) !== (b.end ?? 0)) return (b.end ?? 0) - (a.end ?? 0);
+        return String(a.id).localeCompare(String(b.id));
+      }
+      return 0;
+    };
+
+    const handleSelectionNavigation = (e) => {
+      const target = e.target;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+      if (isEditable) return;
+
+      const selectedElement = filteredElements.find((element) => element.id === selectedId);
+      if (!selectedElement) return;
+
+      const sameTypeElements = filteredElements
+        .filter((element) => element.type === selectedElement.type)
+        .sort(compareElementsByTimelineOrder);
+      const currentIndex = sameTypeElements.findIndex((element) => element.id === selectedId);
+      if (currentIndex === -1) return;
+
+      if (matchesKeybind(e, keybinds.selectPrevious)) {
+        const previous = sameTypeElements[currentIndex - 1];
+        if (!previous) return;
+        e.preventDefault();
+        handleSelect(previous.id);
+      } else if (matchesKeybind(e, keybinds.selectNext)) {
+        const next = sameTypeElements[currentIndex + 1];
+        if (!next) return;
+        e.preventDefault();
+        handleSelect(next.id);
+      }
+    };
+
+    window.addEventListener("keydown", handleSelectionNavigation);
+    return () => window.removeEventListener("keydown", handleSelectionNavigation);
+  }, [selectedId, timelineData, filteredElements, keybinds]);
+
   // Show HomePage if no timeline is loaded
   if (!timelineData) {
     return (
@@ -1655,6 +1723,8 @@ function App() {
             openSettingsSignal={homeSettingsSignal}
             openCloudSettingsSignal={openCloudSettingsSignal}
             onAppSettingsClosed={handleAppSettingsClosedFromHome}
+            keybinds={keybinds}
+            onKeybindsChange={setKeybinds}
           />
         </div>
         {sessionExpired && (
@@ -1768,6 +1838,7 @@ function App() {
             onTogglePinnedTag={handleTogglePinnedTag}
             onViewportYearChange={setViewportYear}
             tagColors={timelineData.file?.tagColors || {}}
+            keybinds={keybinds}
           />
           </ErrorBoundary>
       </main>
@@ -1816,6 +1887,8 @@ function App() {
           openSettingsSignal={homeSettingsSignal}
           openCloudSettingsSignal={openCloudSettingsSignal}
           onAppSettingsClosed={handleAppSettingsClosedFromHome}
+          keybinds={keybinds}
+          onKeybindsChange={setKeybinds}
         />
       )}
 
