@@ -89,23 +89,25 @@ const NoteEditor = forwardRef(function NoteEditor(
   return (
     <div className="note-editor">
       <div className="note-toolbar">
-        <button type="button" onClick={() => insertHeading(1)} title="Heading 1"><Heading1 size={14} /></button>
-        <button type="button" onClick={() => insertHeading(2)} title="Heading 2"><Heading2 size={14} /></button>
-        <button type="button" onClick={() => insertHeading(3)} title="Heading 3"><Heading3 size={14} /></button>
-        <div className="note-toolbar-divider" />
-        <button type="button" onClick={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
-        <button type="button" onClick={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
-        <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough"><Strikethrough size={14} /></button>
-        <button type="button" onClick={() => wrapSelection('__')} title="Underline"><Underline size={14} /></button>
-        <button type="button" onClick={() => wrapSelection('==')} title="Highlight"><Highlighter size={14} /></button>
-        <div className="note-toolbar-divider" />
-        <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
+        <div className="note-toolbar-format">
+          <button type="button" onClick={() => insertHeading(1)} title="Heading 1"><Heading1 size={14} /></button>
+          <button type="button" onClick={() => insertHeading(2)} title="Heading 2"><Heading2 size={14} /></button>
+          <button type="button" onClick={() => insertHeading(3)} title="Heading 3"><Heading3 size={14} /></button>
+          <div className="note-toolbar-divider" />
+          <button type="button" onClick={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
+          <button type="button" onClick={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
+          <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough"><Strikethrough size={14} /></button>
+          <button type="button" onClick={() => wrapSelection('__')} title="Underline"><Underline size={14} /></button>
+          <button type="button" onClick={() => wrapSelection('==')} title="Highlight"><Highlighter size={14} /></button>
+          <div className="note-toolbar-divider" />
+          <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
+        </div>
         {noteExists && (
-          <>
+          <div className="note-toolbar-actions">
             <div className="note-toolbar-divider" />
             <button type="button" onClick={onUnlink} title="Unlink Note"><Unlink size={14} /></button>
             <button type="button" onClick={onDelete} title="Delete Note"><Trash2 size={14} /></button>
-          </>
+          </div>
         )}
       </div>
       <textarea
