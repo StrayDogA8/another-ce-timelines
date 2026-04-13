@@ -182,7 +182,7 @@ export default function RightPanel({
     return () => {
       isMounted = false;
     };
-  }, [selectedElement, timelineData]);
+  }, [selectedElement, timelineData?.file?.id]);
 
   useEffect(() => {
     if (!selectedElement?.wikiUrl) {
