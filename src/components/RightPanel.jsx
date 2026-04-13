@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from "react";
 import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear, getReadableTextColor } from "../utils/timelineUtils";
@@ -7,6 +7,118 @@ import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, fetchWikipedia } from "../utils/electronApi";
+
+const NoteEditor = forwardRef(function NoteEditor(
+  { initialContent, isNoteLoading, noteExists, onSave, onUnlink, onDelete },
+  ref
+) {
+  const [noteContent, setNoteContent] = useState(initialContent ?? "");
+  const noteContentRef = useRef(noteContent);
+  noteContentRef.current = noteContent;
+
+  // Sync when parent resets content (element switch, note create/link/delete)
+  useEffect(() => {
+    setNoteContent(initialContent ?? "");
+  }, [initialContent]);
+
+  // Trigger save on outside-click
+  useImperativeHandle(ref, () => ({
+    save: () => onSave(noteContentRef.current),
+  }), [onSave]);
+
+  const wrapSelection = (prefix, suffix = prefix) => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const before = noteContentRef.current.slice(0, start);
+    const selected = noteContentRef.current.slice(start, end);
+    const after = noteContentRef.current.slice(end);
+    const next = `${before}${prefix}${selected || ''}${suffix}${after}`;
+    setNoteContent(next);
+    const cursorStart = start + prefix.length;
+    const cursorEnd = cursorStart + (selected || '').length;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorStart, cursorEnd);
+    });
+  };
+
+  const insertHeading = (level) => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const content = noteContentRef.current;
+    const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+    const lineEnd = content.indexOf('\n', end);
+    const actualLineEnd = lineEnd === -1 ? content.length : lineEnd;
+    const line = content.slice(lineStart, actualLineEnd);
+    const cleaned = line.replace(/^#{1,6}\s+/, '');
+    const prefix = `${'#'.repeat(level)} `;
+    const nextLine = `${prefix}${cleaned}`;
+    const next = `${content.slice(0, lineStart)}${nextLine}${content.slice(actualLineEnd)}`;
+    setNoteContent(next);
+    const cursor = lineStart + prefix.length + (start - lineStart);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const insertLink = () => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const content = noteContentRef.current;
+    const before = content.slice(0, start);
+    const selected = content.slice(start, end) || 'link text';
+    const after = content.slice(end);
+    const token = `[${selected}](https://)`;
+    const next = `${before}${token}${after}`;
+    setNoteContent(next);
+    const urlStart = before.length + token.indexOf('https://');
+    const urlEnd = urlStart + 'https://'.length;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(urlStart, urlEnd);
+    });
+  };
+
+  return (
+    <div className="note-editor">
+      <div className="note-toolbar">
+        <button type="button" onClick={() => insertHeading(1)} title="Heading 1"><Heading1 size={14} /></button>
+        <button type="button" onClick={() => insertHeading(2)} title="Heading 2"><Heading2 size={14} /></button>
+        <button type="button" onClick={() => insertHeading(3)} title="Heading 3"><Heading3 size={14} /></button>
+        <div className="note-toolbar-divider" />
+        <button type="button" onClick={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
+        <button type="button" onClick={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
+        <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough"><Strikethrough size={14} /></button>
+        <button type="button" onClick={() => wrapSelection('__')} title="Underline"><Underline size={14} /></button>
+        <button type="button" onClick={() => wrapSelection('==')} title="Highlight"><Highlighter size={14} /></button>
+        <div className="note-toolbar-divider" />
+        <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
+        {noteExists && (
+          <>
+            <div className="note-toolbar-divider" />
+            <button type="button" onClick={onUnlink} title="Unlink Note"><Unlink size={14} /></button>
+            <button type="button" onClick={onDelete} title="Delete Note"><Trash2 size={14} /></button>
+          </>
+        )}
+      </div>
+      <textarea
+        className="note-textarea"
+        value={noteContent}
+        onChange={(e) => setNoteContent(e.target.value)}
+        onBlur={() => onSave(noteContentRef.current)}
+        placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
+        rows={8}
+      />
+    </div>
+  );
+});
 
 export default function RightPanel({
   onSelect,
@@ -27,9 +139,10 @@ export default function RightPanel({
   const [validationErrors, setValidationErrors] = useState([]);
   const [copied, setCopied] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [noteContent, setNoteContent] = useState("");
+  const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
+  const noteEditorRef = useRef(null);
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const [notesBasePath, setNotesBasePath] = useState("");
   const prevSelectedIdRef = useRef(null);
@@ -153,7 +266,7 @@ export default function RightPanel({
     let isMounted = true;
     const loadNote = async () => {
       if (!selectedElement?.noteFile) {
-        setNoteContent("");
+        setNoteInitialContent("");
         setNoteExists(false);
         return;
       }
@@ -164,7 +277,7 @@ export default function RightPanel({
       if (!isMounted) return;
       setIsNoteLoading(false);
       if (result?.success) {
-        setNoteContent(result.content ?? "");
+        setNoteInitialContent(result.content ?? "");
         setNoteExists(true);
       } else {
         if (result?.error === "NOT_FOUND") {
@@ -173,7 +286,7 @@ export default function RightPanel({
           setFormData(next);
           onUpdate?.(next);
         }
-        setNoteContent("");
+        setNoteInitialContent("");
         setNoteExists(false);
       }
     };
@@ -253,7 +366,7 @@ export default function RightPanel({
       if (formData) {
         commitDraft(formData);
         if (formData.noteFile) {
-          handleNoteSave();
+          noteEditorRef.current?.save();
         }
       }
     };
@@ -262,7 +375,7 @@ export default function RightPanel({
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick, true);
     };
-  }, [isEditMode, formData, noteContent]);
+  }, [isEditMode, formData]);
 
   // Cleanup all menu timeouts on unmount
   useEffect(() => {
@@ -592,7 +705,7 @@ export default function RightPanel({
     const next = { ...formData, noteFile: result.filename || `${formData.id}.md` };
     setFormData(next);
     onUpdate?.(next);
-    setNoteContent(result?.content ?? `# ${formData.title}\n\n`);
+    setNoteInitialContent(result?.content ?? `# ${formData.title}\n\n`);
   };
 
   const handleAddExistingNote = async () => {
@@ -610,18 +723,18 @@ export default function RightPanel({
     const next = { ...formData, noteFile: result.filename };
     setFormData(next);
     onUpdate?.(next);
-    setNoteContent(result?.content ?? "");
+    setNoteInitialContent(result?.content ?? "");
     setNoteExists(true);
   };
 
-  const handleNoteSave = async () => {
+  const handleNoteSave = async (content) => {
     if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
     const timelineId = timelineData?.file?.id?.replace('-timeline', '');
     if (!timelineId) return;
     await writeNote({
       timelineId,
       filename: formData.noteFile,
-      content: noteContent,
+      content,
     });
   };
 
@@ -646,7 +759,7 @@ export default function RightPanel({
     const next = { ...formData };
     delete next.noteFile;
     setFormData(next);
-    setNoteContent("");
+    setNoteInitialContent("");
     onUpdate?.(next);
   };
 
@@ -655,7 +768,7 @@ export default function RightPanel({
     const next = { ...formData };
     delete next.noteFile;
     setFormData(next);
-    setNoteContent("");
+    setNoteInitialContent("");
     setNoteExists(false);
     onUpdate?.(next);
   };
@@ -1052,64 +1165,6 @@ export default function RightPanel({
     return doc.body.innerHTML;
   };
 
-  const wrapSelection = (prefix, suffix = prefix) => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const before = noteContent.slice(0, start);
-    const selected = noteContent.slice(start, end);
-    const after = noteContent.slice(end);
-    const next = `${before}${prefix}${selected || ''}${suffix}${after}`;
-    setNoteContent(next);
-
-    const cursorStart = start + prefix.length;
-    const cursorEnd = cursorStart + (selected || '').length;
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursorStart, cursorEnd);
-    });
-  };
-
-  const insertHeading = (level) => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const lineStart = noteContent.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = noteContent.indexOf('\n', end);
-    const actualLineEnd = lineEnd === -1 ? noteContent.length : lineEnd;
-    const line = noteContent.slice(lineStart, actualLineEnd);
-    const cleaned = line.replace(/^#{1,6}\s+/, '');
-    const prefix = `${'#'.repeat(level)} `;
-    const nextLine = `${prefix}${cleaned}`;
-    const next = `${noteContent.slice(0, lineStart)}${nextLine}${noteContent.slice(actualLineEnd)}`;
-    setNoteContent(next);
-    const cursor = lineStart + prefix.length + (start - lineStart);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  };
-
-  const insertLink = () => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const before = noteContent.slice(0, start);
-    const selected = noteContent.slice(start, end) || 'link text';
-    const after = noteContent.slice(end);
-    const token = `[${selected}](https://)`;
-    const next = `${before}${token}${after}`;
-    setNoteContent(next);
-    const urlStart = before.length + token.indexOf('https://');
-    const urlEnd = urlStart + 'https://'.length;
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(urlStart, urlEnd);
-    });
-  };
 
   const showLegacyBreaks = timelineData?.file?.allowLegacyBreaks === true;
   const toggleEditSection = (key) => {
@@ -1335,7 +1390,7 @@ export default function RightPanel({
                 <div
                   className="note-render"
                   dangerouslySetInnerHTML={{
-                    __html: renderNoteMarkdown(noteContent, isNoteLoading),
+                    __html: renderNoteMarkdown(noteInitialContent, isNoteLoading),
                   }}
                 />
               </>
@@ -2465,58 +2520,16 @@ export default function RightPanel({
                   )}
                 </div>
               ) : (
-                <div className="note-editor">
-                  <div className="note-toolbar">
-                    <button type="button" onClick={() => insertHeading(1)} title="Heading 1">
-                      <Heading1 size={14} />
-                    </button>
-                    <button type="button" onClick={() => insertHeading(2)} title="Heading 2">
-                      <Heading2 size={14} />
-                    </button>
-                    <button type="button" onClick={() => insertHeading(3)} title="Heading 3">
-                      <Heading3 size={14} />
-                    </button>
-                    <div className="note-toolbar-divider" />
-                    <button type="button" onClick={() => wrapSelection('**')} title="Bold">
-                      <Bold size={14} />
-                    </button>
-                    <button type="button" onClick={() => wrapSelection('*')} title="Italic">
-                      <Italic size={14} />
-                    </button>
-                    <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough">
-                      <Strikethrough size={14} />
-                    </button>
-                    <button type="button" onClick={() => wrapSelection('__')} title="Underline">
-                      <Underline size={14} />
-                    </button>
-                    <button type="button" onClick={() => wrapSelection('==')} title="Highlight">
-                      <Highlighter size={14} />
-                    </button>
-                    <div className="note-toolbar-divider" />
-                    <button type="button" onClick={insertLink} title="Link">
-                      <Link2 size={14} />
-                    </button>
-                    {noteExists && (
-                      <>
-                        <div className="note-toolbar-divider" />
-                        <button type="button" onClick={handleUnlinkNote} title="Unlink Note">
-                          <Unlink size={14} />
-                        </button>
-                        <button type="button" onClick={handleDeleteNote} title="Delete Note">
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  <textarea
-                    className="note-textarea"
-                    value={noteContent}
-                    onChange={(e) => setNoteContent(e.target.value)}
-                    onBlur={handleNoteSave}
-                    placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
-                    rows={8}
-                  />
-                </div>
+                <NoteEditor
+                  ref={noteEditorRef}
+                  key={`${selectedElement?.id}-${formData?.noteFile}`}
+                  initialContent={noteInitialContent}
+                  isNoteLoading={isNoteLoading}
+                  noteExists={noteExists}
+                  onSave={handleNoteSave}
+                  onUnlink={handleUnlinkNote}
+                  onDelete={handleDeleteNote}
+                />
               )}
               {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
                 <div className="wiki-url-display">
