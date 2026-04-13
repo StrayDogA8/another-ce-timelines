@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback, lazy, Suspense } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -12,7 +12,8 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, MoveVertical, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff } from "lucide-react";
+import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
+const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
 
@@ -205,6 +206,8 @@ const TimelineView = forwardRef(function TimelineView({
   const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
   const [filterMenu, setFilterMenu] = useState(null);
+  const [showMap, setShowMap] = useState(false);
+  const mapViewRef = useRef(null);
   const [sliderValue, setSliderValue] = useState(0);
   const [sliderYearLabel, setSliderYearLabel] = useState("");
   const [currentScale, setCurrentScale] = useState(1);
@@ -224,6 +227,16 @@ const TimelineView = forwardRef(function TimelineView({
   const viewportIndicatorRef = useRef(null);
   const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
   const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
+
+  const mapElements = useMemo(() => {
+    if (!showMap) return [];
+    const hiddenGroupIds = new Set(
+      (timelineData?.file?.groups ?? []).filter((g) => g.visible === false).map((g) => g.id)
+    );
+    return (timelineData?.elements ?? []).filter(
+      (el) => !el.groupId || !hiddenGroupIds.has(el.groupId)
+    );
+  }, [showMap, timelineData?.file?.groups, timelineData?.elements]);
 
   const {
     file,
@@ -1063,12 +1076,7 @@ const TimelineView = forwardRef(function TimelineView({
     };
   };
 
-  const centerVertical = () => {
-    const container = containerRef.current;
-    if (!container) return;
-    translateRef.current.y = container.clientHeight * 0.25;
-    applyTransform();
-  };
+
 
   const zoomToPoint = (zoomFactor, mouseX, mouseY) => {
     const container = containerRef.current;
@@ -1099,6 +1107,7 @@ const TimelineView = forwardRef(function TimelineView({
   };
 
   const handleZoomIn = () => {
+    if (showMap) { mapViewRef.current?.zoomIn(); return; }
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
@@ -1106,6 +1115,7 @@ const TimelineView = forwardRef(function TimelineView({
   };
 
   const handleZoomOut = () => {
+    if (showMap) { mapViewRef.current?.zoomOut(); return; }
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
@@ -2045,10 +2055,11 @@ const TimelineView = forwardRef(function TimelineView({
   const resolvedElementBg = rootStyles.getPropertyValue('--element-bg').trim();
 
   return (
+    <>
     <div
       ref={containerRef}
       className="timeline-scroll"
-      onClick={() => handleSelect(null)} // clear selection on background click
+      onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
       {file.showGrid && (
@@ -3090,6 +3101,12 @@ const TimelineView = forwardRef(function TimelineView({
         </div>
       )}
 
+      {showMap && (
+        <Suspense fallback={<div className="timeline-map-placeholder" />}>
+          <MapView ref={mapViewRef} elements={mapElements} onSelect={onSelect} selectedId={selectedId} fileConfig={file} />
+        </Suspense>
+      )}
+
       <div className="timeline-canvas-bar" style={{ right: `${zoomButtonOffset}px` }}>
         <button
           type="button"
@@ -3103,15 +3120,6 @@ const TimelineView = forwardRef(function TimelineView({
         <button
           type="button"
           className="timeline-canvas-button"
-          onClick={centerVertical}
-          aria-label="Center vertically"
-          title="Center vertically"
-        >
-          <MoveVertical size={16} />
-        </button>
-        <button
-          type="button"
-          className="timeline-canvas-button"
           onClick={handleZoomOut}
           aria-label="Zoom out"
           title="Zoom out"
@@ -3119,6 +3127,17 @@ const TimelineView = forwardRef(function TimelineView({
           <Minus size={16} />
         </button>
         <div className="timeline-canvas-divider" />
+        {timelineData?.file?.useMaps && (
+          <button
+            type="button"
+            className="timeline-canvas-button"
+            aria-label={showMap ? "Timeline View" : "Map View"}
+            title={showMap ? "Timeline View" : "Map View"}
+            onClick={() => setShowMap((v) => !v)}
+          >
+            {showMap ? <GanttChartSquare size={16} /> : <MapIcon size={16} />}
+          </button>
+        )}
         <button
           type="button"
           className={`timeline-canvas-button${(activeTags.length > 0 || hiddenTags.length > 0) ? ' timeline-canvas-button-active' : ''}`}
@@ -3285,6 +3304,7 @@ const TimelineView = forwardRef(function TimelineView({
         <div ref={yearLabelRef} className="slider-year">{sliderYearLabel}</div>
       </div>
     </div>
+    </>
   );
 });
 
