@@ -151,7 +151,7 @@ function App() {
   const [exportPngOptions, setExportPngOptions] = useState(null);
   const [isExportVideoModalOpen, setIsExportVideoModalOpen] = useState(false);
   const [editRequestId, setEditRequestId] = useState(null);
-  const defaultThemeKey = getInitialThemeKey(themeConfig);
+  const defaultThemeKey = useMemo(() => getInitialThemeKey(themeConfig), [themeConfig]);
   const [themeKey, setThemeKey] = useState(defaultThemeKey);
   const [appThemeKey, setAppThemeKey] = useState(defaultThemeKey);
   const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
@@ -357,7 +357,7 @@ function App() {
       prevTimelineRef.current = timelineData;
       lastTimelineIdRef.current = fileId;
     }
-  }, [timelineData?.file?.id, timelineData]);
+  }, [timelineData?.file?.id]);
 
   useEffect(() => {
     if (!timelineData) {
