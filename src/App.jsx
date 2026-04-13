@@ -986,6 +986,8 @@ function App() {
     hideDecimals,
     showGrid,
     useWikipedia,
+    useMaps,
+    mapTileUrl,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1027,6 +1029,8 @@ function App() {
         hideDecimals,
         showGrid,
         useWikipedia,
+        useMaps,
+        mapTileUrl,
       };
 
       // Clean up legacy breaks field when saving with new scaleSections
@@ -1044,6 +1048,8 @@ function App() {
       if (!hideDecimals) delete nextFile.hideDecimals;
       if (!showGrid) delete nextFile.showGrid;
       if (!useWikipedia) delete nextFile.useWikipedia;
+      if (!useMaps) delete nextFile.useMaps;
+      if (!mapTileUrl) delete nextFile.mapTileUrl;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {

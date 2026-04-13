@@ -41,6 +41,8 @@ export default function SettingsModal({
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
+  const [useMaps, setUseMaps] = useState(false);
+  const [mapTileUrl, setMapTileUrl] = useState("");
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -151,6 +153,8 @@ export default function SettingsModal({
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
+        setUseMaps(Boolean(timelineData.file.useMaps));
+        setMapTileUrl(timelineData.file.mapTileUrl || "");
         setValidationErrors([]);
         setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
@@ -239,6 +243,8 @@ export default function SettingsModal({
           hideDecimals,
           showGrid,
           useWikipedia,
+          useMaps,
+          mapTileUrl,
         });
       }
     }, 300);
@@ -269,6 +275,8 @@ export default function SettingsModal({
     hideDecimals,
     showGrid,
     useWikipedia,
+    useMaps,
+    mapTileUrl,
     isInitialized,
     onUpdateTimeline,
   ]);
@@ -358,6 +366,15 @@ export default function SettingsModal({
             >
               Advanced
             </button>
+            {useMaps && (
+              <button
+                type="button"
+                className={`settings-sidebar-item${settingsSection === "maps" ? " is-active" : ""}`}
+                onClick={() => setSettingsSection("maps")}
+              >
+                Maps
+              </button>
+            )}
           </div>
 
           <div className="settings-content">
@@ -780,6 +797,27 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Maps */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Maps</div>
+                  <div className="settings-row-description">Enable adding coordinates to events, eras, and spans to view them on a map.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useMaps}
+                      onChange={(e) => {
+                        setUseMaps(e.target.checked);
+                        if (!e.target.checked && settingsSection === "maps") setSettingsSection("advanced");
+                      }}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
               {/* Negative Era */}
               <div className="settings-row no-border-bottom">
                 <div className="settings-row-left">
@@ -812,6 +850,28 @@ export default function SettingsModal({
                     onChange={(e) => setPosID(e.target.value)}
                     placeholder="e.g., CE"
                     maxLength={10}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {settingsSection === "maps" && useMaps && (
+            <>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Tile URL</div>
+                  <div className="settings-row-description">
+                    Custom map tile URL. Use {"{z}"}, {"{x}"}, {"{y}"} as placeholders. Leave blank to use OpenStreetMap.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <input
+                    type="text"
+                    className="settings-input"
+                    value={mapTileUrl}
+                    onChange={(e) => setMapTileUrl(e.target.value)}
+                    placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                 </div>
               </div>

@@ -58,10 +58,12 @@ export default function RightPanel({
   const wikiRenderRef = useRef(null);
   const WIKI_SANITIZE_VERSION = "collapsible-1";
   const [editSectionsOpen, setEditSectionsOpen] = useState({
+    details: true,
     relations: true,
     style: true,
-    breaks: false,
+    breaks: true,
     custom: true,
+    maps: true,
   });
   const panelRef = useRef(null);
   const TAG_MAX_LENGTH = 32;
@@ -138,10 +140,12 @@ export default function RightPanel({
 
   useEffect(() => {
     setEditSectionsOpen({
+      details: true,
       relations: true,
       style: true,
-      breaks: false,
+      breaks: true,
       custom: true,
+      maps: true,
     });
   }, [selectedElement?.id]);
 
@@ -1337,6 +1341,14 @@ export default function RightPanel({
               </>
             )}
 
+            {timelineData?.file?.useMaps && (formData.lat != null || formData.lng != null) && (
+              <div className="view-group">
+                <label>Coordinates</label>
+                <div className="view-separator" />
+                <p>{[formData.lat, formData.lng].filter((v) => v !== "" && v != null).join(", ")}</p>
+              </div>
+            )}
+
             {timelineData?.file?.useWikipedia && formData.wikiUrl && (
               <>
                 <div className="note-divider" />
@@ -1385,7 +1397,17 @@ export default function RightPanel({
             )}
 
             {/* Details Section */}
-            <div className="edit-section-label">Details</div>
+            <div className="rp-edit-section">
+              <button
+                type="button"
+                className="rp-edit-section-head"
+                onClick={() => toggleEditSection("details")}
+                aria-expanded={editSectionsOpen.details ? "true" : "false"}
+              >
+                <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.details ? " open" : ""}`} />
+                <span className="rp-edit-section-label">Details</span>
+              </button>
+              {editSectionsOpen.details && <div className="rp-edit-section-body">
 
             {/* Title */}
             <div className="form-group">
@@ -1627,6 +1649,9 @@ export default function RightPanel({
                 </div>
               );
             })()}
+
+              </div>}
+            </div>
 
             {(formData.type === "event" || formData.type === "span") && (
               <div className="rp-edit-section">
@@ -2367,6 +2392,56 @@ export default function RightPanel({
                   </button>
                 </div>
                 </div>}
+              </div>
+            )}
+
+            {timelineData?.file?.useMaps && (
+              <div className="rp-edit-section">
+                <button
+                  type="button"
+                  className="rp-edit-section-head"
+                  onClick={() => toggleEditSection("maps")}
+                  aria-expanded={editSectionsOpen.maps ? "true" : "false"}
+                >
+                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.maps ? " open" : ""}`} />
+                  <span className="rp-edit-section-label">Map</span>
+                </button>
+                {editSectionsOpen.maps && (
+                  <div className="rp-edit-section-body">
+                    <div className="form-group">
+                      <div className="edit-row">
+                        <label htmlFor="lat">Latitude</label>
+                        <div className="edit-separator" />
+                        <input
+                          id="lat"
+                          type="number"
+                          className="edit-input"
+                          value={formData.lat ?? ""}
+                          onChange={(e) => handleChange("lat", e.target.value === "" ? null : Number(e.target.value))}
+                          onBlur={(e) => commitDraft({ ...formData, lat: e.target.value === "" ? null : Number(e.target.value) })}
+                          placeholder="e.g. 48.8566"
+                          step="any"
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <div className="edit-row">
+                        <label htmlFor="lng">Longitude</label>
+                        <div className="edit-separator" />
+                        <input
+                          id="lng"
+                          type="number"
+                          className="edit-input"
+                          value={formData.lng ?? ""}
+                          onChange={(e) => handleChange("lng", e.target.value === "" ? null : Number(e.target.value))}
+                          onBlur={(e) => commitDraft({ ...formData, lng: e.target.value === "" ? null : Number(e.target.value) })}
+                          placeholder="e.g. 2.3522"
+                          step="any"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
