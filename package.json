@@ -1,7 +1,7 @@
 {
   "name": "timelines",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0-alpha.1",
   "description": "A free, open-source app for creating interactive timelines for worldbuilding and history.",
   "author": "sreegjl",
   "type": "module",
@@ -16,7 +16,7 @@
   "build": {
     "appId": "com.timelines.app",
     "productName": "Timelines",
-    "artifactName": "Timelines-0.3.0-alpha.1-Setup.${ext}",
+    "artifactName": "Timelines-0.4.0-alpha.1-Setup.${ext}",
     "directories": {
       "output": "release"
     },

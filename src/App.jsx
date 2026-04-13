@@ -767,7 +767,7 @@ function App() {
     });
   };
 
-  const handleAddEvent = (groupId, clickYear) => {
+  const handleAddEvent = (groupId, clickYear, clickCoords) => {
     if (!timelineData?.file) return;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const fallbackMid =
@@ -787,6 +787,10 @@ function App() {
       eventBorderStyle: "solid",
       color: "#EDE6DA",
     };
+    if (Number.isFinite(clickCoords?.lat) && Number.isFinite(clickCoords?.lng)) {
+      newEvent.lat = clickCoords.lat;
+      newEvent.lng = clickCoords.lng;
+    }
 
     setTimelineData((prevData) => {
       const updatedData = {
@@ -804,7 +808,7 @@ function App() {
     setEditRequestId(newEvent.id);
   };
 
-  const handleAddSpan = (groupId, clickYear) => {
+  const handleAddSpan = (groupId, clickYear, clickCoords) => {
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const range = timelineData.file.end - timelineData.file.start;
     const duration = Math.max(1, Math.floor(range / 4));
@@ -824,6 +828,10 @@ function App() {
       groupId: defaultGroupId,
       color: "#A6977E",
     };
+    if (Number.isFinite(clickCoords?.lat) && Number.isFinite(clickCoords?.lng)) {
+      newSpan.lat = clickCoords.lat;
+      newSpan.lng = clickCoords.lng;
+    }
 
     setTimelineData((prevData) => {
       const updatedData = {
@@ -841,7 +849,7 @@ function App() {
     setEditRequestId(newSpan.id);
   };
 
-  const handleAddEra = () => {
+  const handleAddEra = (_clickYear, clickCoords) => {
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const tlStart = timelineData.file.start;
     const tlEnd = timelineData.file.end;
@@ -877,6 +885,10 @@ function App() {
       end,
       color: "#F4D05A",
     };
+    if (Number.isFinite(clickCoords?.lat) && Number.isFinite(clickCoords?.lng)) {
+      newEra.lat = clickCoords.lat;
+      newEra.lng = clickCoords.lng;
+    }
 
     setTimelineData((prevData) => {
       const updatedData = {
@@ -988,6 +1000,9 @@ function App() {
     useWikipedia,
     useMaps,
     mapTileUrl,
+    mapEventMarker,
+    mapSpanMarker,
+    mapEraMarker,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1031,6 +1046,9 @@ function App() {
         useWikipedia,
         useMaps,
         mapTileUrl,
+        mapEventMarker,
+        mapSpanMarker,
+        mapEraMarker,
       };
 
       // Clean up legacy breaks field when saving with new scaleSections
@@ -1050,6 +1068,9 @@ function App() {
       if (!useWikipedia) delete nextFile.useWikipedia;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;
+      if (!mapEventMarker || mapEventMarker === "pin") delete nextFile.mapEventMarker;
+      if (!mapSpanMarker || mapSpanMarker === "circle") delete nextFile.mapSpanMarker;
+      if (!mapEraMarker || mapEraMarker === "diamond") delete nextFile.mapEraMarker;
       if (!font || String(font).toLowerCase() === "default") delete nextFile.font;
 
       const updatedData = {
@@ -1203,7 +1224,7 @@ function App() {
         id: `${timelineId}-timeline`,
         type: "timeline",
         title: timelineConfig.title,
-        appVersion: "0.3.0-alpha.1",
+        appVersion: "0.4.0-alpha.1",
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
@@ -2056,5 +2077,3 @@ function App() {
 }
 
 export default App;
-
-

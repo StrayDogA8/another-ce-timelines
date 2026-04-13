@@ -1196,6 +1196,10 @@ const TimelineView = forwardRef(function TimelineView({
 
     // Zoom to cursor with transforms
       const handleWheel = (e) => {
+      if (e.target.closest(".leaflet-container")) {
+        return;
+      }
+
       if (!(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
 
@@ -1243,6 +1247,7 @@ const TimelineView = forwardRef(function TimelineView({
         ".event",
         ".span-item",
         ".era-item",
+        ".leaflet-container",
         ".timeline-canvas-bar",
         ".timeline-canvas-button",
         ".timeline-slider",
@@ -1407,6 +1412,9 @@ const TimelineView = forwardRef(function TimelineView({
 
   const handleContextMenu = (e) => {
     const target = e.target;
+    if (target?.closest?.(".leaflet-container")) {
+      return;
+    }
     const elementNode = target.closest('.event, .span-item, .era-item');
     const elementId = elementNode?.getAttribute('data-id');
     const element = elementId
@@ -1438,6 +1446,18 @@ const TimelineView = forwardRef(function TimelineView({
       element,
       groupId,
       clickYear,
+    });
+  };
+
+  const handleMapContextMenu = ({ x, y, lat, lng }) => {
+    setContextMenu({
+      x,
+      y,
+      element: null,
+      groupId: null,
+      clickYear: null,
+      lat,
+      lng,
     });
   };
 
@@ -3045,21 +3065,21 @@ const TimelineView = forwardRef(function TimelineView({
         >
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => onAddEvent(contextMenu.groupId, contextMenu.clickYear))}
+            onClick={() => handleMenuAction(() => onAddEvent(contextMenu.groupId, contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
             <RectangleHorizontal size={16} />
             <span>Add Event</span>
           </button>
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => onAddSpan(contextMenu.groupId, contextMenu.clickYear))}
+            onClick={() => handleMenuAction(() => onAddSpan(contextMenu.groupId, contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
             <RectangleEllipsis size={16} />
             <span>Add Span</span>
           </button>
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(onAddEra)}
+            onClick={() => handleMenuAction(() => onAddEra(contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
             <SquareSplitHorizontal size={16} />
             <span>Add Era</span>
@@ -3074,20 +3094,24 @@ const TimelineView = forwardRef(function TimelineView({
             <FileJson size={16} />
             <span>Download .json</span>
           </button>
-          <button
-            className="context-menu-item"
-            onClick={() => handleMenuAction(() => onExportPng?.())}
-          >
-            <Image size={16} />
-            <span>Download .png</span>
-          </button>
-          <button
-            className="context-menu-item"
-            onClick={() => handleMenuAction(() => onExportVideo?.())}
-          >
-            <Video size={16} />
-            <span>Export Video</span>
-          </button>
+          {!showMap && (
+            <>
+              <button
+                className="context-menu-item"
+                onClick={() => handleMenuAction(() => onExportPng?.())}
+              >
+                <Image size={16} />
+                <span>Download .png</span>
+              </button>
+              <button
+                className="context-menu-item"
+                onClick={() => handleMenuAction(() => onExportVideo?.())}
+              >
+                <Video size={16} />
+                <span>Export Video</span>
+              </button>
+            </>
+          )}
 
           <div className="context-menu-separator" />
 
@@ -3103,7 +3127,14 @@ const TimelineView = forwardRef(function TimelineView({
 
       {showMap && (
         <Suspense fallback={<div className="timeline-map-placeholder" />}>
-          <MapView ref={mapViewRef} elements={mapElements} onSelect={onSelect} selectedId={selectedId} fileConfig={file} />
+          <MapView
+            ref={mapViewRef}
+            elements={mapElements}
+            onSelect={onSelect}
+            onOpenContextMenu={handleMapContextMenu}
+            selectedId={selectedId}
+            fileConfig={file}
+          />
         </Suspense>
       )}
 

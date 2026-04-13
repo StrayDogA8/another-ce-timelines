@@ -5,6 +5,17 @@ import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, clamp, detailToSlider, sliderToDeta
 import { sanitizeTitle, loadScaleSections, validateScaleSection } from "../utils/validation";
 import "../styles/07-modals-menus.css";
 
+const MAP_MARKER_OPTIONS = [
+  { value: "pin", label: "Pin" },
+  { value: "circle", label: "Circle" },
+  { value: "square", label: "Square" },
+  { value: "diamond", label: "Diamond" },
+  { value: "triangle", label: "Triangle" },
+];
+const DEFAULT_EVENT_MARKER = "pin";
+const DEFAULT_SPAN_MARKER = "circle";
+const DEFAULT_ERA_MARKER = "diamond";
+
 export default function SettingsModal({
   isOpen,
   onClose,
@@ -43,6 +54,9 @@ export default function SettingsModal({
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
+  const [mapEventMarker, setMapEventMarker] = useState(DEFAULT_EVENT_MARKER);
+  const [mapSpanMarker, setMapSpanMarker] = useState(DEFAULT_SPAN_MARKER);
+  const [mapEraMarker, setMapEraMarker] = useState(DEFAULT_ERA_MARKER);
   const [settingsSection, setSettingsSection] = useState("general");
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -155,6 +169,9 @@ export default function SettingsModal({
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
+        setMapEventMarker(timelineData.file.mapEventMarker || DEFAULT_EVENT_MARKER);
+        setMapSpanMarker(timelineData.file.mapSpanMarker || DEFAULT_SPAN_MARKER);
+        setMapEraMarker(timelineData.file.mapEraMarker || DEFAULT_ERA_MARKER);
         setValidationErrors([]);
         setScaleSectionErrors([]);
         lastFilePathRef.current = currentPath;
@@ -245,6 +262,9 @@ export default function SettingsModal({
           useWikipedia,
           useMaps,
           mapTileUrl,
+          mapEventMarker,
+          mapSpanMarker,
+          mapEraMarker,
         });
       }
     }, 300);
@@ -277,6 +297,9 @@ export default function SettingsModal({
     useWikipedia,
     useMaps,
     mapTileUrl,
+    mapEventMarker,
+    mapSpanMarker,
+    mapEraMarker,
     isInitialized,
     onUpdateTimeline,
   ]);
@@ -873,6 +896,57 @@ export default function SettingsModal({
                     onChange={(e) => setMapTileUrl(e.target.value)}
                     placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Event Marker</div>
+                  <div className="settings-row-description">Choose the marker style used for events in map view.</div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={mapEventMarker}
+                    onChange={(e) => setMapEventMarker(e.target.value)}
+                  >
+                    {MAP_MARKER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Span Marker</div>
+                  <div className="settings-row-description">Choose the marker style used for spans in map view.</div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={mapSpanMarker}
+                    onChange={(e) => setMapSpanMarker(e.target.value)}
+                  >
+                    {MAP_MARKER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Era Marker</div>
+                  <div className="settings-row-description">Choose the marker style used for eras in map view.</div>
+                </div>
+                <div className="settings-row-right">
+                  <select
+                    className="settings-select"
+                    value={mapEraMarker}
+                    onChange={(e) => setMapEraMarker(e.target.value)}
+                  >
+                    {MAP_MARKER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </>

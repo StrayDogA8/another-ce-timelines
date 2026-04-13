@@ -965,7 +965,7 @@ export default function HomePage({
                   <>
                     <div className="settings-row">
                       <div className="settings-row-left">
-                        <div className="settings-row-label">Version 0.3.0-alpha.1</div>
+                        <div className="settings-row-label">Version 0.4.0-alpha.1</div>
                         <div className="settings-row-description">
                           {updateStatus === 'available'
                             ? 'Update available'
