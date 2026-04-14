@@ -1379,7 +1379,7 @@ const TimelineView = forwardRef(function TimelineView({
   }, [onZoomChange, timelineWidth, isPlaying]);
 
   // Pan to selected item with smooth animation
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!selectedId) return;
 
     const container = containerRef.current;

@@ -85,7 +85,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
       setTitleText(file.title || "");
       setExportRange({ startPercent: 0, endPercent: 100 });
     }
-  }, [isOpen, timelineData]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (resolution === "current" && showTitle) {

@@ -83,7 +83,7 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
       setTitleText(file.title || "");
       exportCancelRef.current = false;
     }
-  }, [isOpen, timelineData]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // preview image
   useEffect(() => {
