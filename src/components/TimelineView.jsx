@@ -2129,6 +2129,13 @@ const TimelineView = forwardRef(function TimelineView({
     }
   }, [showMap]);
 
+  // Reapply grid overlay transform after re-renders that update the grid labels
+  useLayoutEffect(() => {
+    if (!showMap && file.showGrid) {
+      applyTransform();
+    }
+  }, [ticks, file.showGrid]);
+
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
     sliderValueRef.current = sliderValue;
@@ -2193,14 +2200,14 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         className="grid-year-label grid-year-label-top"
                         data-px={px}
-                        style={{ left: `${screenX + 4}px` }}
+                        style={{ left: `${px * scale + 4}px` }}
                       >
                         {label}
                       </div>
                       <div
                         className="grid-year-label grid-year-label-bottom"
                         data-px={px}
-                        style={{ left: `${screenX + 4}px` }}
+                        style={{ left: `${px * scale + 4}px` }}
                       >
                         {label}
                       </div>
