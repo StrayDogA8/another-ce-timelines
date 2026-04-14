@@ -97,6 +97,21 @@ function resolveMarkerType(elType, fileConfig) {
   return fileConfig?.mapEventMarker || DEFAULT_MARKER_TYPES.event;
 }
 
+function isMarkerVisibleAtViewportYear(el, viewportYear, fileConfig) {
+  if (!fileConfig?.mapLimitToViewportYear || !Number.isFinite(viewportYear)) return true;
+
+  if (el.type === "event") {
+    return Number.isFinite(el.date) && Math.abs(el.date - viewportYear) < 1e-6;
+  }
+
+  const start = Number.isFinite(el.start) ? el.start : null;
+  const end = Number.isFinite(el.end) ? el.end : null;
+  if (start == null && end == null) return false;
+  if (start == null) return viewportYear <= end;
+  if (end == null) return viewportYear >= start;
+  return viewportYear >= start && viewportYear <= end;
+}
+
 function formatElementDate(el, fileConfig) {
   const { negID, posID, useMonths, hideDecimals } = fileConfig ?? {};
   if (el.type === "event") {
@@ -167,6 +182,41 @@ function MapControls({ controlRef }) {
   return null;
 }
 
+function WheelShortcutHandler({ onAltWheelPan, onCtrlWheelZoom }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!onAltWheelPan && !onCtrlWheelZoom) return undefined;
+
+    const container = map.getContainer();
+    const handleWheel = (e) => {
+      if (e.altKey && onAltWheelPan) {
+        e.preventDefault();
+        e.stopPropagation();
+        onAltWheelPan({
+          deltaX: e.deltaX,
+          deltaY: e.deltaY,
+          shiftKey: e.shiftKey,
+        });
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || !onCtrlWheelZoom) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCtrlWheelZoom({
+        deltaY: e.deltaY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    return () => container.removeEventListener("wheel", handleWheel, true);
+  }, [map, onAltWheelPan, onCtrlWheelZoom]);
+
+  return null;
+}
+
 function FlyToSelected({ markers, selectedId }) {
   const map = useMap();
   const lastSnappedId = useRef(null);
@@ -184,7 +234,7 @@ function FlyToSelected({ markers, selectedId }) {
 const DEFAULT_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpenContextMenu, selectedId, fileConfig }, ref) {
+export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpenContextMenu, onAltWheelPan, onCtrlWheelZoom, viewportYear, selectedId, fileConfig }, ref) {
   const spanById = useMemo(() => {
     const map = new Map();
     elements.forEach((el) => { if (el.type === "span") map.set(el.id, el); });
@@ -194,20 +244,22 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
   const markers = useMemo(() =>
     elements
       .filter((el) => el.lat != null && el.lat !== "" && el.lng != null && el.lng !== "")
+      .filter((el) => isMarkerVisibleAtViewportYear(el, viewportYear, fileConfig))
       .map((el) => ({ ...el, resolvedColor: resolveElementColor(el, spanById) })),
-    [elements, spanById]
+    [elements, spanById, viewportYear, fileConfig]
   );
   const [hoveredId, setHoveredId] = useState(null);
 
-  const center = markers.length > 0 ? [Number(markers[0].lat), Number(markers[0].lng)] : [20, 0];
-  const zoom = markers.length > 0 ? 5 : 2;
+  const [initialView] = useState(() => ({
+    center: markers.length > 0 ? [Number(markers[0].lat), Number(markers[0].lng)] : [20, 0],
+    zoom: markers.length > 0 ? 5 : 2,
+  }));
 
   return (
     <div className="timeline-map-view">
       <MapContainer
-        key={`${center[0]},${center[1]}`}
-        center={center}
-        zoom={zoom}
+        center={initialView.center}
+        zoom={initialView.zoom}
         style={{ width: "100%", height: "100%" }}
         zoomControl={true}
       >
@@ -215,6 +267,7 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         <MapContextMenuHandler onOpenContextMenu={onOpenContextMenu} />
         <HoverCleanupHandler onHoverChange={setHoveredId} />
         <MapControls controlRef={ref} />
+        <WheelShortcutHandler onAltWheelPan={onAltWheelPan} onCtrlWheelZoom={onCtrlWheelZoom} />
         <FlyToSelected markers={markers} selectedId={selectedId} />
         <TileLayer
           url={fileConfig?.mapTileUrl || DEFAULT_TILE_URL}

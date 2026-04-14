@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback, lazy, Suspense, useDeferredValue } from "react";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -218,6 +218,8 @@ const TimelineView = forwardRef(function TimelineView({
   const lastPlayTimeRef = useRef(null);
   const sliderInputRef = useRef(false);
   const lastViewportYearRef = useRef(null);
+  const [mapViewportYear, setMapViewportYear] = useState(null);
+  const deferredMapViewportYear = useDeferredValue(mapViewportYear);
   const lastSliderLabelRef = useRef("");
   const sliderRafRef = useRef(null);
   const pendingSliderValueRef = useRef(null);
@@ -225,8 +227,14 @@ const TimelineView = forwardRef(function TimelineView({
   const sliderElementRef = useRef(null);
   const yearLabelRef = useRef(null);
   const viewportIndicatorRef = useRef(null);
+  const lastGridScaleRef = useRef(null);
   const zoomButtonOffset = isRightPanelOpen ? rightPanelWidth + 20 : 20;
   const sliderOffset = (isLeftPanelOpen ? leftPanelWidth : 0) - (isRightPanelOpen ? rightPanelWidth : 0);
+
+  const publishViewportYear = useCallback((nextYear) => {
+    setMapViewportYear((current) => (current === nextYear ? current : nextYear));
+    onViewportYearChange?.(nextYear);
+  }, [onViewportYearChange]);
 
   const mapElements = useMemo(() => {
     if (!showMap) return [];
@@ -450,6 +458,78 @@ const TimelineView = forwardRef(function TimelineView({
 
     const yearToPx = (year) =>
       (compressYear(year) - compressedMin) * PX_PER_YEAR + TIMELINE_PADDING;
+
+    const buildTicks = () => {
+      const nextTicks = [];
+      const monthMode = useMonths && minYear >= 0 && maxYear <= 9999 && step < 1;
+      const monthLabels = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ];
+
+      if (monthMode) {
+        const startYear = Math.floor(minYear);
+        const endYear = Math.floor(maxYear);
+        const startMonthIndex = Math.max(
+          0,
+          Math.min(11, Math.floor((minYear - startYear) * 12))
+        );
+        const endMonthIndex = Math.max(
+          0,
+          Math.min(11, Math.floor((maxYear - endYear) * 12))
+        );
+        const startAbsMonth = startYear * 12 + startMonthIndex;
+        const endAbsMonth = endYear * 12 + endMonthIndex;
+
+        for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
+          const y = Math.floor(m / 12);
+          const monthIndex = m % 12;
+          const value = Number((y + monthIndex / 12).toFixed(6));
+          if (isYearInZeroScale(value) || isZeroScaleBoundary(value)) {
+            continue;
+          }
+          nextTicks.push({
+            value,
+            label: `${monthLabels[monthIndex]} ${y}`,
+          });
+        }
+      } else {
+        const startTick = Math.ceil(minYear / step) * step;
+        for (let y = startTick; y <= maxYear; y += step) {
+          if (isYearInZeroScale(y) || isZeroScaleBoundary(y)) {
+            continue;
+          }
+          nextTicks.push({
+            value: Number(y.toFixed(6)),
+          });
+        }
+      }
+
+      return nextTicks;
+    };
+
+    if (showMap) {
+      return {
+        file,
+        groupLayouts: [],
+        spanChildPlacement: {},
+        spanMergePlacement: {},
+        finalSpans: [],
+        finalEvents: [],
+        finalEras: [],
+        PX_PER_YEAR,
+        timelineWidth,
+        yearToPx,
+        calculatedHeight: 1000,
+        BASE_LINE_Y: 500,
+        ticks: buildTicks(),
+        normalizedScaleSections,
+        compressedMin,
+        compressedMax,
+        TIMELINE_PADDING,
+        decompressYear,
+      };
+    }
 
     // spans
     const SPAN_HEIGHT = 23;
@@ -771,50 +851,7 @@ const TimelineView = forwardRef(function TimelineView({
     }).filter((era) => era.width > 0);
 
     // ticks
-    const ticks = [];
-    const monthMode = useMonths && minYear >= 0 && maxYear <= 9999 && step < 1;
-    const monthLabels = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    ];
-
-    if (monthMode) {
-      const startYear = Math.floor(minYear);
-      const endYear = Math.floor(maxYear);
-      const startMonthIndex = Math.max(
-        0,
-        Math.min(11, Math.floor((minYear - startYear) * 12))
-      );
-      const endMonthIndex = Math.max(
-        0,
-        Math.min(11, Math.floor((maxYear - endYear) * 12))
-      );
-      const startAbsMonth = startYear * 12 + startMonthIndex;
-      const endAbsMonth = endYear * 12 + endMonthIndex;
-
-      for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
-        const y = Math.floor(m / 12);
-        const monthIndex = m % 12;
-        const value = Number((y + monthIndex / 12).toFixed(6));
-        if (isYearInZeroScale(value) || isZeroScaleBoundary(value)) {
-          continue;
-        }
-        ticks.push({
-          value,
-          label: `${monthLabels[monthIndex]} ${y}`,
-        });
-      }
-    } else {
-      const startTick = Math.ceil(minYear / step) * step;
-      for (let y = startTick; y <= maxYear; y += step) {
-        if (isYearInZeroScale(y) || isZeroScaleBoundary(y)) {
-          continue;
-        }
-        ticks.push({
-          value: Number(y.toFixed(6)),
-        });
-      }
-    }
+    const ticks = buildTicks();
 
     return {
       file,
@@ -836,7 +873,7 @@ const TimelineView = forwardRef(function TimelineView({
       TIMELINE_PADDING,
       decompressYear,
     };
-  }, [timelineData, pinnedTags]);
+  }, [timelineData, pinnedTags, showMap]);
 
   const finalSpanById = useMemo(
     () => new Map(finalSpans.map((span) => [span.id, span])),
@@ -1004,7 +1041,7 @@ const TimelineView = forwardRef(function TimelineView({
     const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
     if (snappedYear !== lastViewportYearRef.current) {
       lastViewportYearRef.current = snappedYear;
-      onViewportYearChange?.(snappedYear);
+      publishViewportYear(snappedYear);
     }
     const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
     const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths, file.hideDecimals);
@@ -1023,7 +1060,7 @@ const TimelineView = forwardRef(function TimelineView({
     TIMELINE_PADDING,
     decompressYear,
     file,
-    onViewportYearChange,
+    publishViewportYear,
   ]);
 
   // Helper function to apply transform
@@ -1038,11 +1075,15 @@ const TimelineView = forwardRef(function TimelineView({
     // Update grid year label positions
     const overlay = gridLabelsRef.current;
     if (overlay) {
-      const labels = overlay.children;
-      for (let i = 0; i < labels.length; i++) {
-        const el = labels[i];
-        const basePx = Number(el.dataset.px);
-        el.style.left = `${x + basePx * scale + 4}px`;
+      overlay.style.transform = `translateX(${x}px)`;
+      if (lastGridScaleRef.current !== scale) {
+        const labels = overlay.children;
+        for (let i = 0; i < labels.length; i++) {
+          const el = labels[i];
+          const basePx = Number(el.dataset.px);
+          el.style.left = `${basePx * scale + 4}px`;
+        }
+        lastGridScaleRef.current = scale;
       }
     }
   };
@@ -1104,6 +1145,34 @@ const TimelineView = forwardRef(function TimelineView({
     if (onZoomChange) {
       onZoomChange(newScale);
     }
+  };
+
+  const panTimelineFromWheel = ({ deltaX = 0, deltaY = 0, shiftKey = false }) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (shiftKey) {
+      translateRef.current.y -= deltaY;
+    } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      translateRef.current.x -= deltaX;
+    } else {
+      translateRef.current.x -= deltaY;
+    }
+
+    const { minX, maxX, range } = getPanBounds(container);
+    translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
+
+    applyTransform();
+
+    if (!isPlaying && range > 0) {
+      const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
+      queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
+    }
+  };
+
+  const zoomTimelineFromWheel = ({ deltaY = 0, clientX, clientY }) => {
+    const zoomFactor = deltaY < 0 ? 1.1 : 0.9;
+    zoomToPoint(zoomFactor, clientX, clientY);
   };
 
   const handleZoomIn = () => {
@@ -1195,47 +1264,46 @@ const TimelineView = forwardRef(function TimelineView({
     }
 
     // Zoom to cursor with transforms
-      const handleWheel = (e) => {
-      if (e.target.closest(".leaflet-container")) {
+    const handleWheel = (e) => {
+      const insideLeaflet = e.target.closest(".leaflet-container");
+      if (insideLeaflet) {
+        if (e.altKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          panTimelineFromWheel({
+            deltaX: e.deltaX,
+            deltaY: e.deltaY,
+            shiftKey: e.shiftKey,
+          });
+        } else if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          zoomTimelineFromWheel({
+            deltaY: e.deltaY,
+            clientX: e.clientX,
+            clientY: e.clientY,
+          });
+        }
         return;
       }
 
       if (!(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-
-        // Shift + scroll = vertical pan only
-        if (e.shiftKey) {
-          translateRef.current.y -= e.deltaY;
-        }
-        // Horizontal scroll (trackpad swipe) = horizontal pan only
-        else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-          translateRef.current.x -= e.deltaX;
-        }
-        // Regular scroll = horizontal pan (main timeline movement)
-        else {
-          translateRef.current.x -= e.deltaY;
-        }
-
-        // Clamp horizontal pan to timeline bounds
-        const { minX, maxX, range } = getPanBounds(container);
-        translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
-
-        applyTransform();
-
-        if (!isPlaying && range > 0) {
-          const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-          queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
-        }
-
+        panTimelineFromWheel({
+          deltaX: e.deltaX,
+          deltaY: e.deltaY,
+          shiftKey: e.shiftKey,
+        });
         return;
       }
 
       e.preventDefault();
       e.stopPropagation();
-
-      const delta = e.deltaY;
-      const zoomFactor = delta < 0 ? 1.1 : 0.9;
-      zoomToPoint(zoomFactor, e.clientX, e.clientY);
+      zoomTimelineFromWheel({
+        deltaY: e.deltaY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
     };
 
     // Pan with mouse drag
@@ -1388,7 +1456,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     let rafId = requestAnimationFrame(animate);
     return () => { if (rafId) cancelAnimationFrame(rafId); };
-  }, [selectedId, timelineData.elements]);
+  }, [selectedId, timelineData.elements, showMap]);
 
   // Close context menu on click outside or Escape
   useEffect(() => {
@@ -1739,11 +1807,11 @@ const TimelineView = forwardRef(function TimelineView({
         setSliderYearLabel(yearLabelRef.current.textContent || "");
       }
       if (lastViewportYearRef.current !== null) {
-        onViewportYearChange?.(lastViewportYearRef.current);
+        publishViewportYear(lastViewportYearRef.current);
       }
     }
     setIsPlaying(!isPlaying);
-  }, [isPlaying, onViewportYearChange]);
+  }, [isPlaying, publishViewportYear]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1778,7 +1846,7 @@ const TimelineView = forwardRef(function TimelineView({
         setSliderYearLabel(yearLabelRef.current.textContent || "");
       }
       if (lastViewportYearRef.current !== null) {
-        onViewportYearChange?.(lastViewportYearRef.current);
+        publishViewportYear(lastViewportYearRef.current);
       }
       setIsPlaying(false);
     }
@@ -1872,14 +1940,17 @@ const TimelineView = forwardRef(function TimelineView({
         yearLabelRef.current.textContent = nextLabel;
       }
 
-      // Track viewport year for sync when animation ends (don't call during animation to avoid jitter)
-      lastViewportYearRef.current = snappedYear;
+      // Keep the map filter responsive during autoplay without forcing App-level updates every frame.
+      if (snappedYear !== lastViewportYearRef.current) {
+        lastViewportYearRef.current = snappedYear;
+        setMapViewportYear((current) => (current === snappedYear ? current : snappedYear));
+      }
 
       if (nextX <= minX + 0.5) {
         // Sync React state when animation ends
         setSliderValue(clampedPercentage);
         setSliderYearLabel(nextLabel);
-        onViewportYearChange?.(snappedYear);
+        publishViewportYear(snappedYear);
         setIsPlaying(false);
         return;
       }
@@ -2051,6 +2122,13 @@ const TimelineView = forwardRef(function TimelineView({
     },
   }), [calculatedHeight, yearToPx, timelineWidth, file, TIMELINE_PADDING, PX_PER_YEAR, compressedMin, compressedMax, decompressYear, timelineData]);
 
+  // Reapply transform when timeline DOM is recreated after switching back from map view
+  useLayoutEffect(() => {
+    if (!showMap) {
+      applyTransform();
+    }
+  }, [showMap]);
+
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
     sliderValueRef.current = sliderValue;
@@ -2082,60 +2160,62 @@ const TimelineView = forwardRef(function TimelineView({
       onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
-      {file.showGrid && (
-        <div ref={gridLabelsRef} className="grid-year-labels-overlay">
-          {(() => {
-            const MIN_TICK_GAP = 6;
-            const getLocalYearScale = (year) => {
-              const section = normalizedScaleSections.find(
-                (s) => year >= s.start && year <= s.end
-              );
-              return section ? Math.max(section.scale, 0.0001) : 1;
-            };
-            const tx = translateRef.current.x;
-            const scale = scaleRef.current;
-            const SCREEN_LABEL_WIDTH = 14;
-            const MIN_SCREEN_GAP = 20;
-            let lastScreenX = -Infinity;
-            let lastTickPx = -Infinity;
-            return ticks.map((tick) => {
-              const px = yearToPx(tick.value);
-              const localScale = getLocalYearScale(tick.value);
-              const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
-              if (px < lastTickPx + dynamicTickGap) return null;
-              lastTickPx = px;
-              const screenX = tx + px * scale;
-              if (screenX < lastScreenX + SCREEN_LABEL_WIDTH + MIN_SCREEN_GAP) return null;
-              lastScreenX = screenX;
-              const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
-              return (
-                <Fragment key={`grid-label-${tick.value}`}>
-                  <div
-                    className="grid-year-label grid-year-label-top"
-                    data-px={px}
-                    style={{ left: `${screenX + 4}px` }}
-                  >
-                    {label}
-                  </div>
-                  <div
-                    className="grid-year-label grid-year-label-bottom"
-                    data-px={px}
-                    style={{ left: `${screenX + 4}px` }}
-                  >
-                    {label}
-                  </div>
-                </Fragment>
-              );
-            });
-          })()}
-        </div>
-      )}
+      {!showMap && (
+        <>
+          {file.showGrid && (
+            <div ref={gridLabelsRef} className="grid-year-labels-overlay">
+              {(() => {
+                const MIN_TICK_GAP = 6;
+                const getLocalYearScale = (year) => {
+                  const section = normalizedScaleSections.find(
+                    (s) => year >= s.start && year <= s.end
+                  );
+                  return section ? Math.max(section.scale, 0.0001) : 1;
+                };
+                const tx = translateRef.current.x;
+                const scale = scaleRef.current;
+                const SCREEN_LABEL_WIDTH = 14;
+                const MIN_SCREEN_GAP = 20;
+                let lastScreenX = -Infinity;
+                let lastTickPx = -Infinity;
+                return ticks.map((tick) => {
+                  const px = yearToPx(tick.value);
+                  const localScale = getLocalYearScale(tick.value);
+                  const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
+                  if (px < lastTickPx + dynamicTickGap) return null;
+                  lastTickPx = px;
+                  const screenX = tx + px * scale;
+                  if (screenX < lastScreenX + SCREEN_LABEL_WIDTH + MIN_SCREEN_GAP) return null;
+                  lastScreenX = screenX;
+                  const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
+                  return (
+                    <Fragment key={`grid-label-${tick.value}`}>
+                      <div
+                        className="grid-year-label grid-year-label-top"
+                        data-px={px}
+                        style={{ left: `${screenX + 4}px` }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        className="grid-year-label grid-year-label-bottom"
+                        data-px={px}
+                        style={{ left: `${screenX + 4}px` }}
+                      >
+                        {label}
+                      </div>
+                    </Fragment>
+                  );
+                });
+              })()}
+            </div>
+          )}
 
-      <div
-        ref={timelineRef}
-        className="timeline"
-        style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
-      >
+          <div
+            ref={timelineRef}
+            className="timeline"
+            style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
+          >
         {/* Timeline line with scale section gaps */}
         {normalizedScaleSections.filter((s) => s.scale === 0).length === 0 ? (
           <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
@@ -3016,7 +3096,9 @@ const TimelineView = forwardRef(function TimelineView({
             );
           });
         })()}
-      </div>
+          </div>
+        </>
+      )}
 
       {contextMenu && contextMenu.element && (
         <div
@@ -3132,6 +3214,9 @@ const TimelineView = forwardRef(function TimelineView({
             elements={mapElements}
             onSelect={onSelect}
             onOpenContextMenu={handleMapContextMenu}
+            onAltWheelPan={panTimelineFromWheel}
+            onCtrlWheelZoom={zoomTimelineFromWheel}
+            viewportYear={deferredMapViewportYear}
             selectedId={selectedId}
             fileConfig={file}
           />

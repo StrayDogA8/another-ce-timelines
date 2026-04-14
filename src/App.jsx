@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback, startTransition } from "react";
 import TimelineView from "./components/TimelineView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
@@ -42,6 +42,7 @@ const DEFAULT_GROUP = {
   visible: true,
   locked: false,
 };
+const SELECTION_NAV_REPEAT_INTERVAL_MS = 140;
 
 function App() {
   const normalizeTimelineData = useCallback((data) => {
@@ -167,6 +168,11 @@ function App() {
   const [hiddenTags, setHiddenTags] = useState([]);
   const [pinnedTags, setPinnedTags] = useState([]);
   const [viewportYear, setViewportYear] = useState(null);
+  const handleViewportYearChange = useCallback((year) => {
+    startTransition(() => {
+      setViewportYear(year);
+    });
+  }, []);
   const [homeSettingsSignal, setHomeSettingsSignal] = useState(0);
   const [openCloudSettingsSignal, setOpenCloudSettingsSignal] = useState(0);
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
@@ -181,6 +187,7 @@ function App() {
   const lastTimelineIdRef = useRef(null);
   const timelineDataRef = useRef(null);
   const selectedIdRef = useRef(null);
+  const selectionNavRepeatRef = useRef({ previous: 0, next: 0 });
   const leftWidthRef = useRef(DEFAULT_LEFT_WIDTH);
   const rightWidthRef = useRef(DEFAULT_RIGHT_WIDTH);
   const leftCollapsedRef = useRef(false);
@@ -1000,6 +1007,7 @@ function App() {
     useWikipedia,
     useMaps,
     mapTileUrl,
+    mapLimitToViewportYear,
     mapEventMarker,
     mapSpanMarker,
     mapEraMarker,
@@ -1046,6 +1054,7 @@ function App() {
         useWikipedia,
         useMaps,
         mapTileUrl,
+        mapLimitToViewportYear,
         mapEventMarker,
         mapSpanMarker,
         mapEraMarker,
@@ -1068,6 +1077,7 @@ function App() {
       if (!useWikipedia) delete nextFile.useWikipedia;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;
+      if (!mapLimitToViewportYear) delete nextFile.mapLimitToViewportYear;
       if (!mapEventMarker || mapEventMarker === "pin") delete nextFile.mapEventMarker;
       if (!mapSpanMarker || mapSpanMarker === "circle") delete nextFile.mapSpanMarker;
       if (!mapEraMarker || mapEraMarker === "diamond") delete nextFile.mapEraMarker;
@@ -1704,11 +1714,21 @@ function App() {
       if (matchesKeybind(e, keybinds.selectPrevious)) {
         const previous = sameTypeElements[currentIndex - 1];
         if (!previous) return;
+        const now = performance.now();
+        if (e.repeat && now - selectionNavRepeatRef.current.previous < SELECTION_NAV_REPEAT_INTERVAL_MS) {
+          return;
+        }
+        selectionNavRepeatRef.current.previous = now;
         e.preventDefault();
         handleSelect(previous.id);
       } else if (matchesKeybind(e, keybinds.selectNext)) {
         const next = sameTypeElements[currentIndex + 1];
         if (!next) return;
+        const now = performance.now();
+        if (e.repeat && now - selectionNavRepeatRef.current.next < SELECTION_NAV_REPEAT_INTERVAL_MS) {
+          return;
+        }
+        selectionNavRepeatRef.current.next = now;
         e.preventDefault();
         handleSelect(next.id);
       }
@@ -1864,7 +1884,7 @@ function App() {
             onClearTags={handleClearTags}
             pinnedTags={pinnedTags}
             onTogglePinnedTag={handleTogglePinnedTag}
-            onViewportYearChange={setViewportYear}
+            onViewportYearChange={handleViewportYearChange}
             tagColors={timelineData.file?.tagColors || {}}
             keybinds={keybinds}
           />

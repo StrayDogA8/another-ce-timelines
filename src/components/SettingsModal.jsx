@@ -54,6 +54,7 @@ export default function SettingsModal({
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
+  const [mapLimitToViewportYear, setMapLimitToViewportYear] = useState(false);
   const [mapEventMarker, setMapEventMarker] = useState(DEFAULT_EVENT_MARKER);
   const [mapSpanMarker, setMapSpanMarker] = useState(DEFAULT_SPAN_MARKER);
   const [mapEraMarker, setMapEraMarker] = useState(DEFAULT_ERA_MARKER);
@@ -169,6 +170,7 @@ export default function SettingsModal({
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
+        setMapLimitToViewportYear(Boolean(timelineData.file.mapLimitToViewportYear));
         setMapEventMarker(timelineData.file.mapEventMarker || DEFAULT_EVENT_MARKER);
         setMapSpanMarker(timelineData.file.mapSpanMarker || DEFAULT_SPAN_MARKER);
         setMapEraMarker(timelineData.file.mapEraMarker || DEFAULT_ERA_MARKER);
@@ -262,6 +264,7 @@ export default function SettingsModal({
           useWikipedia,
           useMaps,
           mapTileUrl,
+          mapLimitToViewportYear,
           mapEventMarker,
           mapSpanMarker,
           mapEraMarker,
@@ -297,6 +300,7 @@ export default function SettingsModal({
     useWikipedia,
     useMaps,
     mapTileUrl,
+    mapLimitToViewportYear,
     mapEventMarker,
     mapSpanMarker,
     mapEraMarker,
@@ -896,6 +900,24 @@ export default function SettingsModal({
                     onChange={(e) => setMapTileUrl(e.target.value)}
                     placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Scrollbar Year Only</div>
+                  <div className="settings-row-description">
+                    Only show map markers active at the current year shown in the scrollbar.
+                  </div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={mapLimitToViewportYear}
+                      onChange={(e) => setMapLimitToViewportYear(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
                 </div>
               </div>
               <div className="settings-row">
