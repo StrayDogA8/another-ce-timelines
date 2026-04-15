@@ -1249,8 +1249,7 @@ const TimelineView = forwardRef(function TimelineView({
   // DPI + zoom/pan effect
   useEffect(() => {
     const container = containerRef.current;
-    const timelineEl = timelineRef.current;
-    if (!container || !timelineEl) return;
+    if (!container) return;
 
     // Initialize with vertical centering (similar to margin-top: 25vh)
     if (translateRef.current.x === 0 && translateRef.current.y === 0) {
