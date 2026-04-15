@@ -255,6 +255,8 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
     zoom: markers.length > 0 ? 5 : 2,
   }));
 
+  const noWrap = Boolean(fileConfig?.mapNoWrap);
+
   return (
     <div className="timeline-map-view">
       <MapContainer
@@ -262,6 +264,8 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         zoom={initialView.zoom}
         style={{ width: "100%", height: "100%" }}
         zoomControl={true}
+        maxBounds={noWrap ? [[-90, -180], [90, 180]] : undefined}
+        maxBoundsViscosity={noWrap ? 1.0 : undefined}
       >
         <MapClickHandler onSelect={onSelect} />
         <MapContextMenuHandler onOpenContextMenu={onOpenContextMenu} />

@@ -2138,7 +2138,7 @@ const TimelineView = forwardRef(function TimelineView({
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
     sliderValueRef.current = sliderValue;
-    if (sliderElementRef.current && !isPlaying) {
+    if (sliderElementRef.current && !isPlaying && !sliderInputRef.current) {
       sliderElementRef.current.value = sliderValue;
     }
   }, [sliderValue, isPlaying]);
