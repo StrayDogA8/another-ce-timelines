@@ -1393,9 +1393,7 @@ const TimelineView = forwardRef(function TimelineView({
     const rect = dom.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
 
-    // Find the selected element to check its type
-    const selectedElement = timelineData.elements.find(el => el.id === selectedId);
-    const isSpan = selectedElement?.type === 'span';
+    const isSpan = dom.classList.contains('span-item');
 
     // Calculate target position
     let elementTargetX, elementTargetY;
@@ -1456,7 +1454,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     let rafId = requestAnimationFrame(animate);
     return () => { if (rafId) cancelAnimationFrame(rafId); };
-  }, [selectedId, timelineData.elements, showMap]);
+  }, [selectedId, showMap]);
 
   // Close context menu on click outside or Escape
   useEffect(() => {
@@ -1786,6 +1784,7 @@ const TimelineView = forwardRef(function TimelineView({
     const value = parseFloat(e.target.value);
     if (!Number.isFinite(value)) return;
     if (Math.abs(value - sliderValueRef.current) < 0.01) return;
+    sliderValueRef.current = value;
     sliderInputRef.current = true;
     setSliderValue(value);
 

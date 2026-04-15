@@ -605,7 +605,43 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
-          
+
+
+              {/* Negative Era */}
+              <div className="settings-row no-border-bottom">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Negative Era</div>
+                  <div className="settings-row-description">Optional label for negative years (e.g., BCE).</div>
+                </div>
+                <div className="settings-row-right">
+                  <input
+                    type="text"
+                    className="settings-input settings-input-small"
+                    value={negID}
+                    onChange={(e) => setNegID(e.target.value)}
+                    placeholder="e.g., BCE"
+                    maxLength={10}
+                  />
+                </div>
+              </div>
+
+              {/* Positive Era */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Positive Era</div>
+                  <div className="settings-row-description">Optional label for positive years (e.g., CE).</div>
+                </div>
+                <div className="settings-row-right">
+                  <input
+                    type="text"
+                    className="settings-input settings-input-small"
+                    value={posID}
+                    onChange={(e) => setPosID(e.target.value)}
+                    placeholder="e.g., CE"
+                    maxLength={10}
+                  />
+                </div>
+              </div>
 
             </>
           )}
@@ -845,41 +881,6 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Negative Era */}
-              <div className="settings-row no-border-bottom">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Negative Era</div>
-                  <div className="settings-row-description">Optional label for negative years (e.g., BCE).</div>
-                </div>
-                <div className="settings-row-right">
-                  <input
-                    type="text"
-                    className="settings-input settings-input-small"
-                    value={negID}
-                    onChange={(e) => setNegID(e.target.value)}
-                    placeholder="e.g., BCE"
-                    maxLength={10}
-                  />
-                </div>
-              </div>
-
-              {/* Positive Era */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Positive Era</div>
-                  <div className="settings-row-description">Optional label for positive years (e.g., CE).</div>
-                </div>
-                <div className="settings-row-right">
-                  <input
-                    type="text"
-                    className="settings-input settings-input-small"
-                    value={posID}
-                    onChange={(e) => setPosID(e.target.value)}
-                    placeholder="e.g., CE"
-                    maxLength={10}
-                  />
-                </div>
-              </div>
             </>
           )}
 

@@ -6,6 +6,18 @@ const fsSync = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DEFAULT_THEME_KEY = 'parchment';
 
+// Must run before app.ready
+try {
+  const settingsPath = path.join(app.getPath('userData'), 'app-settings.json');
+  const raw = fsSync.readFileSync(settingsPath, 'utf8');
+  const settings = JSON.parse(raw);
+  if (settings?.hardwareAcceleration === false) {
+    app.disableHardwareAcceleration();
+  }
+} catch {
+  // Leave hardware acceleration at default (enabled)
+}
+
 let mainWindow;
 const appSettingsPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 const defaultTimelinesDir = () => path.join(app.getPath('userData'), 'timelines');
@@ -810,7 +822,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'timelineStorageDir', 'storageDir', 'notesStorageDir',
   'pluginsStorageDir', 'themeKey', 'enabledPlugins',
   'theme', 'notesSubfolder', 'notesSubfolderEnabled',
-  'appFontFamily', 'appFontSize', 'keybinds',
+  'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration',
 ]);
 
 ipcMain.handle('set-app-settings', async (event, settings) => {
@@ -993,6 +1005,35 @@ ipcMain.handle('choose-notes-subfolder', async () => {
     return { success: true, subfolder: normalizedRelative };
   } catch (error) {
     console.error('Error choosing notes subfolder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('relaunch-app', () => {
+  app.relaunch();
+  app.exit(0);
+});
+
+ipcMain.handle('open-timelines-folder', async () => {
+  try {
+    const dir = await getTimelinesDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    console.error('Error opening timelines folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-notes-folder', async () => {
+  try {
+    const dir = await getNotesRootDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    console.error('Error opening notes folder:', error);
     return { success: false, error: error.message };
   }
 });

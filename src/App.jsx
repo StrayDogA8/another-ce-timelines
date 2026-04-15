@@ -17,6 +17,8 @@ import {
   chooseNotesSubfolder,
   listFonts,
   openFontsFolder,
+  openTimelinesFolder,
+  openNotesFolder,
   deleteNote,
   renameTimeline,
   saveCloudCache,
@@ -162,6 +164,7 @@ function App() {
   const [notesSubfolderEnabled, setNotesSubfolderEnabled] = useState(false);
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [appFontSize, setAppFontSize] = useState(14);
+  const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
   const [keybinds, setKeybinds] = useState(() => cloneDefaultKeybinds());
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
@@ -1368,6 +1371,7 @@ function App() {
       setNotesSubfolderEnabled(storedNotesSubfolderEnabled);
       setAppFontFamily(storedFontFamily);
       setAppFontSize(storedFontSize);
+      setHardwareAcceleration(settings?.hardwareAcceleration !== false);
       setKeybinds(savedKeybinds);
     };
 
@@ -1483,6 +1487,7 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
+      hardwareAcceleration,
     });
   };
 
@@ -1519,6 +1524,7 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
+      hardwareAcceleration,
     });
   };
 
@@ -1532,6 +1538,7 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
+      hardwareAcceleration,
     });
   };
 
@@ -1546,6 +1553,7 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
+      hardwareAcceleration,
     });
   };
 
@@ -1559,6 +1567,7 @@ function App() {
       notesSubfolderEnabled: nextEnabled,
       appFontFamily,
       appFontSize,
+      hardwareAcceleration,
     });
   };
 
@@ -1573,6 +1582,7 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily,
       appFontSize: next,
+      hardwareAcceleration,
     });
   };
 
@@ -1586,7 +1596,26 @@ function App() {
       notesSubfolderEnabled,
       appFontFamily: nextFont,
       appFontSize,
+      hardwareAcceleration,
     });
+  };
+
+  const handleHardwareAccelerationChange = async (next) => {
+    setHardwareAcceleration(next);
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      notesSubfolder,
+      notesSubfolderEnabled,
+      appFontFamily,
+      appFontSize,
+      hardwareAcceleration: next,
+    });
+    if (window.electron?.relaunchApp) {
+      const confirmed = window.confirm("Restart required to apply hardware acceleration change. Restart now?");
+      if (confirmed) window.electron.relaunchApp();
+    }
   };
 
   const handlePickTimelinesDir = async () => {
@@ -1612,6 +1641,14 @@ function App() {
 
   const handleOpenFontsFolder = async () => {
     await openFontsFolder();
+  };
+
+  const handleOpenTimelinesFolder = async () => {
+    await openTimelinesFolder();
+  };
+
+  const handleOpenNotesFolder = async () => {
+    await openNotesFolder();
   };
 
   const filteredElements = useMemo(() => {
@@ -1765,8 +1802,12 @@ function App() {
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
             onOpenFontsFolder={handleOpenFontsFolder}
+            onOpenTimelinesFolder={handleOpenTimelinesFolder}
+            onOpenNotesFolder={handleOpenNotesFolder}
             onAppFontChange={handleAppFontChange}
             onAppFontSizeChange={handleAppFontSizeChange}
+            hardwareAcceleration={hardwareAcceleration}
+            onHardwareAccelerationChange={handleHardwareAccelerationChange}
             onRefreshThemes={refreshUserThemes}
             openSettingsSignal={homeSettingsSignal}
             openCloudSettingsSignal={openCloudSettingsSignal}
@@ -1929,8 +1970,12 @@ function App() {
           onPickTimelinesDir={handlePickTimelinesDir}
           onPickNotesDir={handlePickNotesDir}
           onOpenFontsFolder={handleOpenFontsFolder}
+          onOpenTimelinesFolder={handleOpenTimelinesFolder}
+          onOpenNotesFolder={handleOpenNotesFolder}
           onAppFontChange={handleAppFontChange}
           onAppFontSizeChange={handleAppFontSizeChange}
+          hardwareAcceleration={hardwareAcceleration}
+          onHardwareAccelerationChange={handleHardwareAccelerationChange}
           onRefreshThemes={refreshUserThemes}
           openSettingsSignal={homeSettingsSignal}
           openCloudSettingsSignal={openCloudSettingsSignal}

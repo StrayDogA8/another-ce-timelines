@@ -456,6 +456,15 @@
   white-space: nowrap;
 }
 
+.settings-path-pill-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.settings-path-pill-clickable:hover {
+  opacity: 0.7;
+}
+
 .settings-path-error {
   width: 100%;
   font-size: var(--text-2xs);

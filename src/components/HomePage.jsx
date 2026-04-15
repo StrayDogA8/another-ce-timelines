@@ -46,6 +46,10 @@ export default function HomePage({
   onPickTimelinesDir,
   onPickNotesDir,
   onOpenFontsFolder,
+  onOpenTimelinesFolder,
+  onOpenNotesFolder,
+  hardwareAcceleration = true,
+  onHardwareAccelerationChange,
   onRefreshThemes,
   openSettingsSignal = 0,
   openCloudSettingsSignal = 0,
@@ -1026,7 +1030,7 @@ export default function HomePage({
                               type="button"
                               onClick={() =>
                                 window.electron?.openExternal?.({
-                                  url: "https://github.com/sreegjl/timelines",
+                                  url: "https://github.com/sreegjl/timelines/wiki",
                                 })
                               }
                             >
@@ -1141,6 +1145,25 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
+
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Hardware Acceleration</div>
+                        <div className="settings-row-description">
+                          Disable if you experience visual glitches. Requires restart.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <label className="settings-toggle">
+                          <input
+                            type="checkbox"
+                            checked={hardwareAcceleration}
+                            onChange={(e) => onHardwareAccelerationChange?.(e.target.checked)}
+                          />
+                          <span className="settings-toggle-slider"></span>
+                        </label>
+                      </div>
+                    </div>
                   </>
                 )}
 
@@ -1200,8 +1223,9 @@ export default function HomePage({
                       <div className="settings-row-left">
                         <div className="settings-row-label">Timeline Folder</div>
                         <div
-                          className="settings-path-pill"
+                          className="settings-path-pill settings-path-pill-clickable"
                           title={timelineStorageDir || "Default app storage"}
+                          onClick={() => onOpenTimelinesFolder?.()}
                         >
                           <Folder className="settings-path-icon" size={14} />
                           <span className="settings-path-text">
@@ -1237,8 +1261,9 @@ export default function HomePage({
                       <div className="settings-row-left">
                         <div className="settings-row-label">Notes Folder</div>
                         <div
-                          className="settings-path-pill"
+                          className="settings-path-pill settings-path-pill-clickable"
                           title={notesStorageDir || "Default app storage"}
+                          onClick={() => onOpenNotesFolder?.()}
                         >
                           <Folder className="settings-path-icon" size={14} />
                           <span className="settings-path-text">

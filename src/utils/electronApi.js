@@ -257,6 +257,26 @@ export async function chooseNotesSubfolder() {
   }
 }
 
+export async function openTimelinesFolder() {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.openTimelinesFolder();
+  } catch (error) {
+    console.error('Error opening timelines folder:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function openNotesFolder() {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.openNotesFolder();
+  } catch (error) {
+    console.error('Error opening notes folder:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function openFontsFolder() {
   if (!isElectron()) {
     console.warn('Not running in Electron');
