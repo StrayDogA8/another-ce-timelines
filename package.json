@@ -50,7 +50,7 @@
     }
   },
   "dependencies": {
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.4.0",
     "electron-updater": "^6.3.9",
     "html2canvas": "^1.4.1",
     "leaflet": "^1.9.4",
