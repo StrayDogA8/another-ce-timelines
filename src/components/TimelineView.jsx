@@ -2134,6 +2134,13 @@ const TimelineView = forwardRef(function TimelineView({
     }
   }, [ticks, file.showGrid]);
 
+  // Auto-exit map view if maps are disabled in settings
+  useEffect(() => {
+    if (!file.useMaps && showMap) {
+      setShowMap(false);
+    }
+  }, [file.useMaps, showMap]);
+
   // Sync slider element with state (for non-animation updates like panning)
   useEffect(() => {
     sliderValueRef.current = sliderValue;

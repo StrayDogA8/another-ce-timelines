@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useRef, useState, memo, forwardRef, useImperativeHandle } from "react";
-import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, Rectangle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { formatYear } from "../utils/timelineUtils";
@@ -182,6 +182,27 @@ function MapControls({ controlRef }) {
   return null;
 }
 
+function MinZoomEnforcer() {
+  const map = useMap();
+
+  useEffect(() => {
+    const update = () => {
+      const h = map.getContainer().clientHeight;
+      // At zoom z, world height = 256 * 2^z px — find min z where it fills the container
+      const minZoom = Math.ceil(Math.log2(h / 256));
+      map.setMinZoom(minZoom);
+      if (map.getZoom() < minZoom) map.setZoom(minZoom);
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+
+  return null;
+}
+
 function WheelShortcutHandler({ onAltWheelPan, onCtrlWheelZoom }) {
   const map = useMap();
 
@@ -231,6 +252,17 @@ function FlyToSelected({ markers, selectedId }) {
   return null;
 }
 
+const REPEAT_OVERLAY_OPTIONS = { fillColor: "#000", fillOpacity: 0.25, stroke: false, interactive: false };
+
+function RepeatOverlay() {
+  return (
+    <>
+      <Rectangle bounds={[[-200, -10000], [200, -180]]} pathOptions={REPEAT_OVERLAY_OPTIONS} />
+      <Rectangle bounds={[[-200, 180], [200, 10000]]} pathOptions={REPEAT_OVERLAY_OPTIONS} />
+    </>
+  );
+}
+
 const DEFAULT_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
@@ -255,8 +287,6 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
     zoom: markers.length > 0 ? 5 : 2,
   }));
 
-  const noWrap = Boolean(fileConfig?.mapNoWrap);
-
   return (
     <div className="timeline-map-view">
       <MapContainer
@@ -264,19 +294,21 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         zoom={initialView.zoom}
         style={{ width: "100%", height: "100%" }}
         zoomControl={true}
-        maxBounds={noWrap ? [[-90, -180], [90, 180]] : undefined}
-        maxBoundsViscosity={noWrap ? 1.0 : undefined}
+        maxBounds={[[-85.0511, -270], [85.0511, 270]]}
+        maxBoundsViscosity={1.0}
       >
         <MapClickHandler onSelect={onSelect} />
         <MapContextMenuHandler onOpenContextMenu={onOpenContextMenu} />
         <HoverCleanupHandler onHoverChange={setHoveredId} />
         <MapControls controlRef={ref} />
+        <MinZoomEnforcer />
         <WheelShortcutHandler onAltWheelPan={onAltWheelPan} onCtrlWheelZoom={onCtrlWheelZoom} />
         <FlyToSelected markers={markers} selectedId={selectedId} />
         <TileLayer
           url={fileConfig?.mapTileUrl || DEFAULT_TILE_URL}
           attribution={fileConfig?.mapTileUrl ? "" : DEFAULT_ATTRIBUTION}
         />
+        <RepeatOverlay />
         {markers.map((el) => {
           const dateStr = formatElementDate(el, fileConfig);
           const tags = Array.isArray(el.tags) && el.tags.length > 0 ? el.tags : null;

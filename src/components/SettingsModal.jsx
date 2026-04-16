@@ -55,7 +55,6 @@ export default function SettingsModal({
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
   const [mapLimitToViewportYear, setMapLimitToViewportYear] = useState(false);
-  const [mapNoWrap, setMapNoWrap] = useState(false);
   const [mapEventMarker, setMapEventMarker] = useState(DEFAULT_EVENT_MARKER);
   const [mapSpanMarker, setMapSpanMarker] = useState(DEFAULT_SPAN_MARKER);
   const [mapEraMarker, setMapEraMarker] = useState(DEFAULT_ERA_MARKER);
@@ -172,7 +171,6 @@ export default function SettingsModal({
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
         setMapLimitToViewportYear(Boolean(timelineData.file.mapLimitToViewportYear));
-        setMapNoWrap(Boolean(timelineData.file.mapNoWrap));
         setMapEventMarker(timelineData.file.mapEventMarker || DEFAULT_EVENT_MARKER);
         setMapSpanMarker(timelineData.file.mapSpanMarker || DEFAULT_SPAN_MARKER);
         setMapEraMarker(timelineData.file.mapEraMarker || DEFAULT_ERA_MARKER);
@@ -267,7 +265,6 @@ export default function SettingsModal({
           useMaps,
           mapTileUrl,
           mapLimitToViewportYear,
-          mapNoWrap,
           mapEventMarker,
           mapSpanMarker,
           mapEraMarker,
@@ -304,7 +301,6 @@ export default function SettingsModal({
     useMaps,
     mapTileUrl,
     mapLimitToViewportYear,
-    mapNoWrap,
     mapEventMarker,
     mapSpanMarker,
     mapEraMarker,
@@ -920,24 +916,6 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={mapLimitToViewportYear}
                       onChange={(e) => setMapLimitToViewportYear(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Disable Map Repeat</div>
-                  <div className="settings-row-description">
-                    Prevent the map from tiling/repeating at the edges of the world.
-                  </div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={mapNoWrap}
-                      onChange={(e) => setMapNoWrap(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>
