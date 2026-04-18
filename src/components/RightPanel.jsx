@@ -738,6 +738,7 @@ export default function RightPanel({
       filename: formData.noteFile,
       content,
     });
+    setNoteInitialContent(content);
   };
 
   const handleDeleteNote = async () => {
@@ -1203,7 +1204,12 @@ export default function RightPanel({
             </button>
             <button
               className="copy-id-button"
-              onClick={() => setIsEditMode((prev) => !prev)}
+              onClick={() => {
+                if (isEditMode && formData?.noteFile) {
+                  noteEditorRef.current?.save();
+                }
+                setIsEditMode((prev) => !prev);
+              }}
               title={isEditMode ? "View details" : "Edit details"}
               type="button"
             >

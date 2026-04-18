@@ -1147,6 +1147,12 @@ const TimelineView = forwardRef(function TimelineView({
     }
   };
 
+  const panTimelineFromWheelRef = useRef(null);
+  const zoomTimelineFromWheelRef = useRef(null);
+  // Stable wrappers so MapView (and its WheelShortcutHandler effect) never re-run due to new function refs
+  const stablePanTimelineFromWheel = useCallback((...args) => panTimelineFromWheelRef.current?.(...args), []);
+  const stableZoomTimelineFromWheel = useCallback((...args) => zoomTimelineFromWheelRef.current?.(...args), []);
+
   const panTimelineFromWheel = ({ deltaX = 0, deltaY = 0, shiftKey = false }) => {
     const container = containerRef.current;
     if (!container) return;
@@ -1174,6 +1180,8 @@ const TimelineView = forwardRef(function TimelineView({
     const zoomFactor = deltaY < 0 ? 1.1 : 0.9;
     zoomToPoint(zoomFactor, clientX, clientY);
   };
+  panTimelineFromWheelRef.current = panTimelineFromWheel;
+  zoomTimelineFromWheelRef.current = zoomTimelineFromWheel;
 
   const handleZoomIn = () => {
     if (showMap) { mapViewRef.current?.zoomIn(); return; }
@@ -1514,7 +1522,7 @@ const TimelineView = forwardRef(function TimelineView({
     });
   };
 
-  const handleMapContextMenu = ({ x, y, lat, lng }) => {
+  const handleMapContextMenu = useCallback(({ x, y, lat, lng }) => {
     setContextMenu({
       x,
       y,
@@ -1524,7 +1532,7 @@ const TimelineView = forwardRef(function TimelineView({
       lat,
       lng,
     });
-  };
+  }, []);
 
   const handleMenuAction = (action) => {
     setContextMenu(null);
@@ -3226,8 +3234,8 @@ const TimelineView = forwardRef(function TimelineView({
             elements={mapElements}
             onSelect={onSelect}
             onOpenContextMenu={handleMapContextMenu}
-            onAltWheelPan={panTimelineFromWheel}
-            onCtrlWheelZoom={zoomTimelineFromWheel}
+            onAltWheelPan={stablePanTimelineFromWheel}
+            onCtrlWheelZoom={stableZoomTimelineFromWheel}
             viewportYear={deferredMapViewportYear}
             selectedId={selectedId}
             fileConfig={file}
