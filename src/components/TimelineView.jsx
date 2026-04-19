@@ -222,6 +222,11 @@ const TimelineView = forwardRef(function TimelineView({
   const deferredMapViewportYear = useDeferredValue(mapViewportYear);
   const lastSliderLabelRef = useRef("");
   const sliderRafRef = useRef(null);
+  const zoomVelocityRef = useRef(0);
+  const zoomMomentumRafRef = useRef(null);
+  const zoomMomentumOriginRef = useRef({ x: 0, y: 0 });
+  const panVelocityRef = useRef({ x: 0, y: 0 });
+  const panMomentumRafRef = useRef(null);
   const pendingSliderValueRef = useRef(null);
   const sliderValueRef = useRef(0);
   const sliderElementRef = useRef(null);
@@ -1063,8 +1068,7 @@ const TimelineView = forwardRef(function TimelineView({
     publishViewportYear,
   ]);
 
-  // Helper function to apply transform
-  const applyTransform = () => {
+  const applyTransform = ({ skipLabels = false } = {}) => {
     const timelineEl = timelineRef.current;
     if (!timelineEl) return;
 
@@ -1072,11 +1076,10 @@ const TimelineView = forwardRef(function TimelineView({
     const scale = scaleRef.current;
     timelineEl.style.transformOrigin = "0 0";
     timelineEl.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    // Update grid year label positions
     const overlay = gridLabelsRef.current;
     if (overlay) {
       overlay.style.transform = `translateX(${x}px)`;
-      if (lastGridScaleRef.current !== scale) {
+      if (!skipLabels && lastGridScaleRef.current !== scale) {
         const labels = overlay.children;
         for (let i = 0; i < labels.length; i++) {
           const el = labels[i];
@@ -1119,7 +1122,7 @@ const TimelineView = forwardRef(function TimelineView({
 
 
 
-  const zoomToPoint = (zoomFactor, mouseX, mouseY) => {
+  const zoomToPoint = (zoomFactor, mouseX, mouseY, { commitState = true, skipLabels = false } = {}) => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -1140,10 +1143,10 @@ const TimelineView = forwardRef(function TimelineView({
     const { minX, maxX } = getPanBounds(container);
     translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
 
-    applyTransform();
-    setCurrentScale(newScale);
-    if (onZoomChange) {
-      onZoomChange(newScale);
+    applyTransform({ skipLabels });
+    if (commitState) {
+      setCurrentScale(newScale);
+      if (onZoomChange) onZoomChange(newScale);
     }
   };
 
@@ -1158,6 +1161,14 @@ const TimelineView = forwardRef(function TimelineView({
     if (!container) return;
 
     if (shiftKey) {
+      panVelocityRef.current.y += deltaY * 0.3;
+    } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      panVelocityRef.current.x += deltaX * 0.3;
+    } else {
+      panVelocityRef.current.x += deltaY * 0.3;
+    }
+
+    if (shiftKey) {
       translateRef.current.y -= deltaY;
     } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
       translateRef.current.x -= deltaX;
@@ -1167,18 +1178,58 @@ const TimelineView = forwardRef(function TimelineView({
 
     const { minX, maxX, range } = getPanBounds(container);
     translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
-
     applyTransform();
 
     if (!isPlaying && range > 0) {
       const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
       queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
     }
+
+    if (panMomentumRafRef.current) cancelAnimationFrame(panMomentumRafRef.current);
+    const tick = () => {
+      panVelocityRef.current.x *= 0.75;
+      panVelocityRef.current.y *= 0.75;
+      if (Math.abs(panVelocityRef.current.x) < 0.1 && Math.abs(panVelocityRef.current.y) < 0.1) {
+        panMomentumRafRef.current = null;
+        return;
+      }
+      const c = containerRef.current;
+      if (!c) { panMomentumRafRef.current = null; return; }
+      translateRef.current.x -= panVelocityRef.current.x;
+      translateRef.current.y -= panVelocityRef.current.y;
+      const { minX: mn, maxX: mx, range: r } = getPanBounds(c);
+      translateRef.current.x = Math.min(mx, Math.max(mn, translateRef.current.x));
+      applyTransform();
+      if (!isPlaying && r > 0) {
+        const pct = ((mx - translateRef.current.x) / r) * 100;
+        queueSliderValue(Math.min(100, Math.max(0, pct)));
+      }
+      panMomentumRafRef.current = requestAnimationFrame(tick);
+    };
+    panMomentumRafRef.current = requestAnimationFrame(tick);
   };
 
   const zoomTimelineFromWheel = ({ deltaY = 0, clientX, clientY }) => {
-    const zoomFactor = deltaY < 0 ? 1.1 : 0.9;
-    zoomToPoint(zoomFactor, clientX, clientY);
+    zoomVelocityRef.current += deltaY * 0.3;
+    zoomMomentumOriginRef.current = { x: clientX, y: clientY };
+
+    zoomToPoint(Math.pow(0.999, deltaY), clientX, clientY);
+
+    if (zoomMomentumRafRef.current) cancelAnimationFrame(zoomMomentumRafRef.current);
+    const tick = () => {
+      zoomVelocityRef.current *= 0.75;
+      if (Math.abs(zoomVelocityRef.current) < 0.1) {
+        zoomMomentumRafRef.current = null;
+        applyTransform();
+        setCurrentScale(scaleRef.current);
+        if (onZoomChange) onZoomChange(scaleRef.current);
+        return;
+      }
+      const { x, y } = zoomMomentumOriginRef.current;
+      zoomToPoint(Math.pow(0.999, zoomVelocityRef.current), x, y, { commitState: false, skipLabels: true });
+      zoomMomentumRafRef.current = requestAnimationFrame(tick);
+    };
+    zoomMomentumRafRef.current = requestAnimationFrame(tick);
   };
   panTimelineFromWheelRef.current = panTimelineFromWheel;
   zoomTimelineFromWheelRef.current = zoomTimelineFromWheel;
