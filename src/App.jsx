@@ -1320,7 +1320,7 @@ function App() {
     if (lower === "system") {
       return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     }
-    const safeName = normalized.replace(/"/g, '\\"');
+    const safeName = normalized.replace(/([\\"])/g, "\\$1");
     return `"${safeName}", ${fallback}`;
   };
 
@@ -1403,7 +1403,7 @@ function App() {
     style.id = styleId;
     const css = (availableFonts || [])
       .map((font) => {
-        const name = String(font.name || "").replace(/"/g, '\\"');
+        const name = String(font.name || "").replace(/([\\"])/g, "\\$1");
         if (!name || !font.fileUrl) return "";
         const isItalic = /italic/i.test(name);
         return `@font-face{font-family:"${name}";src:url("${font.fileUrl}") format("${font.format}");font-weight:normal;font-style:${isItalic ? "italic" : "normal"};font-display:swap;}`;
