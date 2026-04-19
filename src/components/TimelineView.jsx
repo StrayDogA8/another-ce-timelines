@@ -554,7 +554,7 @@ const TimelineView = forwardRef(function TimelineView({
     const fallbackFont = '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     let resolvedFont;
     if (fileFontSetting && String(fileFontSetting).toLowerCase() !== "default") {
-      const safeName = String(fileFontSetting).replace(/"/g, '\\"');
+      const safeName = String(fileFontSetting).replace(/([\\"])/g, "\\$1");
       resolvedFont = `"${safeName}", ${fallbackFont}`;
     } else {
       resolvedFont = getComputedStyle(document.documentElement).getPropertyValue("--app-font-family").trim() || fallbackFont;
