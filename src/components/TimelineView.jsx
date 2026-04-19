@@ -1226,7 +1226,7 @@ const TimelineView = forwardRef(function TimelineView({
         return;
       }
       const { x, y } = zoomMomentumOriginRef.current;
-      zoomToPoint(Math.pow(0.999, zoomVelocityRef.current), x, y, { commitState: false, skipLabels: true });
+      zoomToPoint(Math.pow(0.999, zoomVelocityRef.current), x, y, { commitState: false });
       zoomMomentumRafRef.current = requestAnimationFrame(tick);
     };
     zoomMomentumRafRef.current = requestAnimationFrame(tick);
