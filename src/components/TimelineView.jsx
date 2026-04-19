@@ -2222,6 +2222,7 @@ const TimelineView = forwardRef(function TimelineView({
   const rootStyles = getComputedStyle(document.documentElement);
   const resolvedActiveBg = rootStyles.getPropertyValue('--active-bg').trim();
   const resolvedElementBg = rootStyles.getPropertyValue('--element-bg').trim();
+  const resolvedSecondaryBg = rootStyles.getPropertyValue('--secondary-bg').trim();
 
   return (
     <>
@@ -2788,6 +2789,9 @@ const TimelineView = forwardRef(function TimelineView({
                       eventBorderStyle === "none"
                         ? "none"
                         : `2px ${eventBorderStyle} ${borderColor}`;
+                    const eventBg = file?.spanColorEvents && parentColor
+                      ? blendColors(parentColor, resolvedSecondaryBg, 0.2)
+                      : undefined;
                     return (
                       <div
                         key={event.id}
@@ -2799,6 +2803,7 @@ const TimelineView = forwardRef(function TimelineView({
                           position: "absolute",
                           border: borderValue,
                           height: event._isMultiLine ? "auto" : undefined,
+                          ...(eventBg && { backgroundColor: eventBg }),
                         }}
                         onClick={(e) => {
                           e.stopPropagation();

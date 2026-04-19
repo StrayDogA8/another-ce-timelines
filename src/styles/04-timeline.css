@@ -417,6 +417,14 @@
   font-size: 7px;
 }
 
+.event.multi-lane {
+  min-height: 25px;
+}
+
+.event.event-compact.multi-lane {
+  min-height: 21px;
+}
+
 .event.multi-lane .event-title {
   white-space: normal;
 }

@@ -51,6 +51,7 @@ export default function SettingsModal({
   const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [spanColorEvents, setSpanColorEvents] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
@@ -167,6 +168,7 @@ export default function SettingsModal({
         setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
+        setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
@@ -261,6 +263,7 @@ export default function SettingsModal({
           eventLinesToGroupBottom,
           hideDecimals,
           showGrid,
+          spanColorEvents,
           useWikipedia,
           useMaps,
           mapTileUrl,
@@ -297,6 +300,7 @@ export default function SettingsModal({
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
+    spanColorEvents,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -691,6 +695,96 @@ export default function SettingsModal({
                   </select>
                 </div>
               </div>
+
+              {/* Show Grid */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Show Grid</div>
+                  <div className="settings-row-description">Display subtle vertical grid lines aligned with tick marks.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showGrid}
+                      onChange={(e) => setShowGrid(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Compact Events */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Compact Events</div>
+                  <div className="settings-row-description">Render event boxes with smaller size and smaller text.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={compactEvents}
+                      onChange={(e) => setCompactEvents(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Fixed Event Height */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Fixed Event Height</div>
+                  <div className="settings-row-description">Lock all events to a single-line height, truncating long titles with ellipsis.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={fixedEventHeight}
+                      onChange={(e) => setFixedEventHeight(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Thin Connectors */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Thin Connectors</div>
+                  <div className="settings-row-description">Use thin-style span connectors with rounded endpoints.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={thinConnectors}
+                      onChange={(e) => setThinConnectors(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Span Color Events */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Color Events by Parent Span</div>
+                  <div className="settings-row-description">Tint event backgrounds to match their parent span's color.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={spanColorEvents}
+                      onChange={(e) => setSpanColorEvents(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
             </>
           )}
 
@@ -734,29 +828,11 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Fixed Event Height */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Fixed Event Height</div>
-                  <div className="settings-row-description">Lock all events to a single-line height, truncating long titles with ellipsis.</div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={fixedEventHeight}
-                      onChange={(e) => setFixedEventHeight(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-
               {/* Event Line Anchoring */}
               <div className="settings-row">
                 <div className="settings-row-left">
                   <div className="settings-row-label">Connect Event Lines to Group</div>
-                  <div className="settings-row-description">For unparented events, connect to the bottom of the event's group band instead of the main timeline line.</div>
+                  <div className="settings-row-description">Anchor unparented event lines to their group band instead of the main timeline.</div>
                 </div>
                 <div className="settings-row-right">
                   <label className="settings-toggle">
@@ -770,47 +846,11 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Compact Events */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Compact Events</div>
-                  <div className="settings-row-description">Render event boxes with smaller size and smaller text.</div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={compactEvents}
-                      onChange={(e) => setCompactEvents(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Thin Connectors */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Thin Connectors</div>
-                  <div className="settings-row-description">Render span connectors with thin-style width and rounded thin endpoints.</div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={thinConnectors}
-                      onChange={(e) => setThinConnectors(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-
               {/* Hide Decimals */}
               <div className="settings-row">
                 <div className="settings-row-left">
                   <div className="settings-row-label">Hide Decimals</div>
-                  <div className="settings-row-description">Round displayed years to whole numbers (e.g., -323.5 shows as 323 BC).</div>
+                  <div className="settings-row-description">Round displayed years to whole numbers.</div>
                 </div>
                 <div className="settings-row-right">
                   <label className="settings-toggle">
@@ -818,24 +858,6 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={hideDecimals}
                       onChange={(e) => setHideDecimals(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Show Grid */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Show Grid</div>
-                  <div className="settings-row-description">Display subtle vertical grid lines aligned with tick marks.</div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={showGrid}
-                      onChange={(e) => setShowGrid(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>
