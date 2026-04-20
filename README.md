@@ -3,7 +3,7 @@
 
 A free, open-source app for creating customizable, interactive timelines for worldbuilding and history. Events, spans, and eras form the core of each timeline, with tag and group filtering to organize them, and note vault integration to link Markdown notes directly to elements.
 
-**An [early alpha](https://github.com/sreegjl/timelines/releases/tag/v0.3.0-alpha.1) version is now available for testing.**
+**An [early alpha](https://github.com/sreegjl/timelines/releases/tag/v0.4.0-alpha.1) version is now available for testing.**
 
 [![React](https://img.shields.io/badge/React-%2320232a.svg?logo=react&logoColor=%2361DAFB)](#)
 [![Electron](https://img.shields.io/badge/Electron-2B2E3A?logo=electron&logoColor=fff)](#)
