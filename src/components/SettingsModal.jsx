@@ -52,6 +52,7 @@ export default function SettingsModal({
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [spanColorEvents, setSpanColorEvents] = useState(false);
+  const [disableGroups, setDisableGroups] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
@@ -169,6 +170,7 @@ export default function SettingsModal({
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
         setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
+        setDisableGroups(Boolean(timelineData.file.disableGroups));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
@@ -264,6 +266,7 @@ export default function SettingsModal({
           hideDecimals,
           showGrid,
           spanColorEvents,
+          disableGroups,
           useWikipedia,
           useMaps,
           mapTileUrl,
@@ -301,6 +304,7 @@ export default function SettingsModal({
     hideDecimals,
     showGrid,
     spanColorEvents,
+    disableGroups,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -858,6 +862,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={hideDecimals}
                       onChange={(e) => setHideDecimals(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Disable Groups */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Disable Groups</div>
+                  <div className="settings-row-description">Flatten all elements into a single group and hide group bands.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={disableGroups}
+                      onChange={(e) => setDisableGroups(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

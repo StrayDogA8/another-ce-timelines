@@ -310,7 +310,9 @@ const TimelineView = forwardRef(function TimelineView({
       locked: false,
     };
     const configuredGroups =
-      Array.isArray(file?.groups) && file.groups.length > 0 ? file.groups : [DEFAULT_GROUP];
+      file?.disableGroups
+        ? [DEFAULT_GROUP]
+        : Array.isArray(file?.groups) && file.groups.length > 0 ? file.groups : [DEFAULT_GROUP];
     const groups = configuredGroups.map((group, index) => ({
       ...group,
       id: group?.id || `g-${index}`,
@@ -2654,7 +2656,7 @@ const TimelineView = forwardRef(function TimelineView({
         </div>
 
         <div className="group-bands-layer">
-          {groupLayouts
+          {!file?.disableGroups && groupLayouts
             .filter((group) => group.visible)
             .map((group) => {
               const box = groupBandBoxes.find((item) => item.groupId === group.id);

@@ -1008,6 +1008,7 @@ function App() {
     hideDecimals,
     showGrid,
     spanColorEvents,
+    disableGroups,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -1056,6 +1057,7 @@ function App() {
         hideDecimals,
         showGrid,
         spanColorEvents,
+        disableGroups,
         useWikipedia,
         useMaps,
         mapTileUrl,
@@ -1080,6 +1082,7 @@ function App() {
       if (!hideDecimals) delete nextFile.hideDecimals;
       if (!showGrid) delete nextFile.showGrid;
       if (!spanColorEvents) delete nextFile.spanColorEvents;
+      if (!disableGroups) delete nextFile.disableGroups;
       if (!useWikipedia) delete nextFile.useWikipedia;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;
