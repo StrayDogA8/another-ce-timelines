@@ -2044,6 +2044,8 @@ function App() {
                 onToggleTag={handleToggleTag}
                 onUpdateGroups={handleUpdateGroups}
                 tagColors={timelineData.file?.tagColors || {}}
+                onRequestDelete={handleRequestDelete}
+                onDuplicateElement={handleDuplicateElement}
               />
               </ErrorBoundary>
             </aside>

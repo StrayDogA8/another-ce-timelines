@@ -12,7 +12,7 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, Copy, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
+import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -3197,7 +3197,7 @@ const TimelineView = forwardRef(function TimelineView({
             className="context-menu-item"
             onClick={() => handleMenuAction(() => onDuplicateElement?.(contextMenu.element.id))}
           >
-            <Copy size={16} />
+            <CopyPlus size={16} />
             <span>Duplicate {contextMenu.element.type.charAt(0).toUpperCase() + contextMenu.element.type.slice(1)}</span>
           </button>
           <div className="context-menu-separator" />

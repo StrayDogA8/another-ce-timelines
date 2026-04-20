@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from "react";
-import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown } from "lucide-react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, forwardRef, useImperativeHandle } from "react";
+import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown, MoreHorizontal, CopyPlus } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear, getReadableTextColor } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseWikipediaUrl, buildValidatedUpdate } from "../utils/validation";
@@ -136,10 +136,16 @@ export default function RightPanel({
   onToggleTag,
   onUpdateGroups,
   tagColors = {},
+  onRequestDelete,
+  onDuplicateElement,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAlignRight, setMenuAlignRight] = useState(false);
+  const menuRef = useRef(null);
+  const menuDropdownRef = useRef(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
@@ -682,6 +688,21 @@ export default function RightPanel({
   };
 
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuDropdownRef.current) return;
+    const rect = menuDropdownRef.current.getBoundingClientRect();
+    setMenuAlignRight(rect.right > window.innerWidth);
+  }, [menuOpen]);
+
   const handleCopyId = async () => {
     try {
       await navigator.clipboard.writeText(formData.id);
@@ -1215,6 +1236,37 @@ export default function RightPanel({
             >
               {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
             </button>
+            <div ref={menuRef} style={{ position: "relative" }}>
+              <button
+                className="copy-id-button"
+                onClick={() => { setMenuAlignRight(false); setMenuOpen((v) => !v); }}
+                title="More actions"
+                type="button"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+              {menuOpen && (
+                <div ref={menuDropdownRef} className="timeline-context-menu" style={{ position: "absolute", top: "100%", marginTop: 4, ...(menuAlignRight ? { right: 0 } : { left: 0 }) }}>
+                  <button
+                    className="context-menu-item"
+                    onClick={() => { setMenuOpen(false); onDuplicateElement?.(formData.id); }}
+                    type="button"
+                  >
+                    <CopyPlus size={14} />
+                    Duplicate
+                  </button>
+                  <div className="context-menu-separator" />
+                  <button
+                    className="context-menu-item context-menu-item-danger"
+                    onClick={() => { setMenuOpen(false); onRequestDelete?.(formData.id); }}
+                    type="button"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <button
