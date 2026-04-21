@@ -889,8 +889,8 @@ export default function SettingsModal({
               {/* Wikipedia Integration */}
               <div className="settings-row">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Wikipedia Integration</div>
-                  <div className="settings-row-description">Enable attaching Wikipedia articles to timeline elements.</div>
+                  <div className="settings-row-label">Wiki Integration</div>
+                  <div className="settings-row-description">Enable attaching MediaWiki articles to timeline elements.</div>
                 </div>
                 <div className="settings-row-right">
                   <label className="settings-toggle">

@@ -680,17 +680,34 @@ ipcMain.handle('fetch-wikipedia', async (event, { url }) => {
       return { success: false, error: 'Missing URL' };
     }
     const parsed = new URL(url);
-    if (!/^[a-z]{2,3}\.wikipedia\.org$/.test(parsed.hostname)) {
-      return { success: false, error: 'Invalid Wikipedia URL' };
+    if (parsed.protocol !== 'https:') {
+      return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
-    const response = await net.fetch(url);
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      /^\d+\.\d+\.\d+\.\d+$/.test(hostname) ||
+      /^\[.*\]$/.test(hostname) ||
+      hostname === 'localhost' ||
+      /^127\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      hostname === '::1' ||
+      hostname === '0.0.0.0'
+    ) {
+      return { success: false, error: 'Private or local URLs are not allowed' };
+    }
+    const response = await net.fetch(url, {
+      headers: { 'User-Agent': 'Timelines/0.4.0 (https://timelines.studio)' },
+    });
     if (!response.ok) {
-      return { success: false, error: `Wikipedia returned ${response.status}` };
+      return { success: false, error: `Request returned ${response.status}` };
     }
     const html = await response.text();
     return { success: true, html };
   } catch (error) {
-    console.error('Error fetching Wikipedia:', error);
+    console.error('Error fetching wiki:', error);
     return { success: false, error: error.message };
   }
 });

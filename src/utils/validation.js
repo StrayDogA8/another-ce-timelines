@@ -15,16 +15,27 @@ export const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");
 
 // --- URL helpers ---
 
-export const parseWikipediaUrl = (url) => {
+export const parseMediaWikiUrl = (url) => {
   try {
     const parsed = new URL(url);
-    const match = parsed.hostname.match(/^([a-z]{2,3})\.wikipedia\.org$/);
-    if (!match) return null;
-    const lang = match[1];
+    if (parsed.protocol !== "https:") return null;
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      /^\d+\.\d+\.\d+\.\d+$/.test(hostname) ||
+      /^\[.*\]$/.test(hostname) ||
+      hostname === "localhost" ||
+      /^127\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      hostname === "::1" ||
+      hostname === "0.0.0.0"
+    ) return null;
     const pathMatch = parsed.pathname.match(/^\/wiki\/(.+)$/);
     if (!pathMatch) return null;
     const title = decodeURIComponent(pathMatch[1]);
-    return { lang, title };
+    return { host: parsed.origin, title };
   } catch {
     return null;
   }

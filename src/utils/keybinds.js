@@ -3,6 +3,8 @@ import { getAppSettings, saveAppSettings } from "./appSettings";
 export const DEFAULT_KEYBINDS = {
   search: { label: "Search", keys: ["Ctrl", "F"] },
   play: { label: "Play / Pause", keys: ["Space"] },
+  zoomIn: { label: "Zoom In", keys: ["="] },
+  zoomOut: { label: "Zoom Out", keys: ["-"] },
   undo: { label: "Undo", keys: ["Ctrl", "Z"] },
   redo: { label: "Redo", keys: ["Ctrl", "Y"] },
   delete: { label: "Delete", keys: ["Delete"] },

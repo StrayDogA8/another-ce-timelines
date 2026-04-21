@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, forwardRef, useI
 import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown, MoreHorizontal, CopyPlus } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear, getReadableTextColor } from "../utils/timelineUtils";
-import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseWikipediaUrl, buildValidatedUpdate } from "../utils/validation";
+import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
 import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -797,8 +797,13 @@ export default function RightPanel({
     onUpdate?.(next);
   };
 
-  const sanitizeWikiHtml = (html, lang = "en") => {
-    const sanitized = DOMPurify.sanitize(html, {
+  const sanitizeWikiHtml = (html, host = "https://en.wikipedia.org") => {
+    const preDoc = new DOMParser().parseFromString(html, "text/html");
+    preDoc.querySelectorAll("img").forEach((img) => {
+      const lazySrc = img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original");
+      if (lazySrc) img.setAttribute("src", lazySrc);
+    });
+    const sanitized = DOMPurify.sanitize(preDoc.body.innerHTML, {
       ALLOWED_TAGS: [
         "a", "abbr", "b", "blockquote", "br", "caption", "cite", "code",
         "col", "colgroup", "dd", "del", "details", "dfn", "div", "dl", "dt",
@@ -825,19 +830,23 @@ export default function RightPanel({
       node.setAttribute("rel", "noopener noreferrer");
       const href = node.getAttribute("href");
       if (href && href.startsWith("/wiki/")) {
-        node.setAttribute("href", `https://${lang}.wikipedia.org${href}`);
+        node.setAttribute("href", `${host}${href}`);
       } else if (href && href.startsWith("./")) {
-        node.setAttribute("href", `https://${lang}.wikipedia.org/wiki/${href.slice(2)}`);
+        node.setAttribute("href", `${host}/wiki/${href.slice(2)}`);
       }
     });
     doc.body.querySelectorAll("img").forEach((node) => {
-      const src = node.getAttribute("src");
+      let src = node.getAttribute("src");
       if (src && src.startsWith("//")) {
-        node.setAttribute("src", `https:${src}`);
+        src = `https:${src}`;
+      } else if (src && src.startsWith("/")) {
+        src = `${host}${src}`;
       }
-      if (!node.getAttribute("loading")) {
-        node.setAttribute("loading", "lazy");
+      if (src) {
+        src = src.replace(/\/revision\/latest\/[^?]+/, "/revision/latest");
+        node.setAttribute("src", src);
       }
+      node.setAttribute("loading", "eager");
     });
 
     // Remove embedded map widgets and coordinate/map-link blocks that render as noisy lists in-panel.
@@ -917,9 +926,9 @@ export default function RightPanel({
       return;
     }
 
-    const parsed = parseWikipediaUrl(url);
+    const parsed = parseMediaWikiUrl(url);
     if (!parsed) {
-      setWikiError("Invalid Wikipedia URL");
+      setWikiError("Invalid wiki URL");
       setWikiContent("");
       return;
     }
@@ -928,16 +937,22 @@ export default function RightPanel({
     setWikiError("");
 
     try {
-      const apiUrl = `https://${parsed.lang}.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(parsed.title)}`;
-      const result = await fetchWikipedia({ url: apiUrl });
-      if (!result?.success) {
-        throw new Error(result?.error || "Unknown error");
+      const apiPaths = [`${parsed.host}/api.php`, `${parsed.host}/w/api.php`];
+      const query = `?action=parse&page=${encodeURIComponent(parsed.title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
+      let data = null;
+      for (const base of apiPaths) {
+        const result = await fetchWikipedia({ url: base + query });
+        if (!result?.success) continue;
+        const parsed2 = JSON.parse(result.html);
+        if (parsed2?.parse?.text) { data = parsed2; break; }
       }
-      const sanitized = sanitizeWikiHtml(result.html, parsed.lang);
+      if (!data) throw new Error("No content returned");
+      const wikiHtml = data.parse.text;
+      const sanitized = sanitizeWikiHtml(wikiHtml, parsed.host);
       wikiCacheRef.current.set(cacheKey, sanitized);
       setWikiContent(sanitized);
     } catch (err) {
-      setWikiError(`Failed to load Wikipedia article: ${err.message}`);
+      setWikiError(`Failed to load wiki article: ${err.message}`);
       setWikiContent("");
     } finally {
       setIsWikiLoading(false);
@@ -963,8 +978,8 @@ export default function RightPanel({
       setWikiUrlInputError("");
       return;
     }
-    if (!parseWikipediaUrl(trimmed)) {
-      setWikiUrlInputError("Enter a valid Wikipedia URL (e.g., https://en.wikipedia.org/wiki/Ancient_Greece)");
+    if (!parseMediaWikiUrl(trimmed)) {
+      setWikiUrlInputError("Enter a valid MediaWiki URL (e.g., https://en.wikipedia.org/wiki/Ancient_Greece)");
       return;
     }
     const next = { ...formData, wikiUrl: trimmed };
@@ -1468,7 +1483,7 @@ export default function RightPanel({
               <>
                 <div className="note-divider" />
                 <div className="wiki-header">
-                  <span className="wiki-header-label">Wikipedia</span>
+                  <span className="wiki-header-label">Wiki</span>
                   <a
                     className="wiki-header-link"
                     href={formData.wikiUrl}
@@ -1480,7 +1495,7 @@ export default function RightPanel({
                   </a>
                 </div>
                 {isWikiLoading ? (
-                  <div className="wiki-loading">Loading Wikipedia article...</div>
+                  <div className="wiki-loading">Loading wiki article...</div>
                 ) : wikiError ? (
                   <div className="wiki-error">{wikiError}</div>
                 ) : (
@@ -2575,7 +2590,7 @@ export default function RightPanel({
                   </button>
                   {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
                     <button type="button" className="btn-secondary btn-note" onClick={handleOpenWikiInput}>
-                      Add Wikipedia
+                      Add Wiki
                     </button>
                   )}
                 </div>
@@ -2594,7 +2609,7 @@ export default function RightPanel({
               {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
                 <div className="wiki-url-display">
                   <div className="wiki-url-row">
-                    <span className="wiki-url-label">Wikipedia</span>
+                    <span className="wiki-url-label">Wiki</span>
                     <button
                       type="button"
                       className="wiki-url-remove"
@@ -2628,7 +2643,7 @@ export default function RightPanel({
               {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (
                 <div className="wiki-url-display">
                   <div className="wiki-url-row">
-                    <span className="wiki-url-label">Wikipedia</span>
+                    <span className="wiki-url-label">Wiki</span>
                     <button
                       type="button"
                       className="wiki-url-change"
