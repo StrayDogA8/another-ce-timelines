@@ -263,7 +263,7 @@ function RepeatOverlay() {
   );
 }
 
-const DEFAULT_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpenContextMenu, onAltWheelPan, onCtrlWheelZoom, viewportYear, selectedId, fileConfig }, ref) {
@@ -307,6 +307,7 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         <TileLayer
           url={fileConfig?.mapTileUrl || DEFAULT_TILE_URL}
           attribution={fileConfig?.mapTileUrl ? "" : DEFAULT_ATTRIBUTION}
+          referrerPolicy="strict-origin-when-cross-origin"
         />
         <RepeatOverlay />
         {markers.map((el) => {

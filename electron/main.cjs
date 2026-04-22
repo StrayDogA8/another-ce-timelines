@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, protocol, net, session } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
@@ -280,6 +280,37 @@ function setupAutoUpdater() {
   });
 }
 
+function setupOsmTileRequestHeaders() {
+  const tileFilter = {
+    urls: [
+      'https://tile.openstreetmap.org/*',
+      'https://*.tile.openstreetmap.org/*',
+    ],
+  };
+
+  session.defaultSession.webRequest.onBeforeSendHeaders(tileFilter, (details, callback) => {
+    const requestHeaders = { ...(details.requestHeaders || {}) };
+    const appVersion = app.getVersion?.() || 'dev';
+    requestHeaders['User-Agent'] = `Timelines/${appVersion} (+https://github.com/sreegjl/timelines)`;
+
+    if (!requestHeaders.Referer && !requestHeaders.referer) {
+      const currentUrl = mainWindow?.webContents?.getURL?.() || '';
+      try {
+        const parsed = new URL(currentUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          requestHeaders.Referer = `${parsed.origin}/`;
+        } else {
+          requestHeaders.Referer = 'https://github.com/sreegjl/timelines';
+        }
+      } catch {
+        requestHeaders.Referer = 'https://github.com/sreegjl/timelines';
+      }
+    }
+
+    callback({ requestHeaders });
+  });
+}
+
 ipcMain.handle('check-for-updates', async () => {
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
@@ -307,6 +338,7 @@ ipcMain.handle('install-update', () => {
 });
 
 app.whenReady().then(async () => {
+  setupOsmTileRequestHeaders();
   // Register protocol handler for local fonts
   protocol.handle('local-font', async (request) => {
     try {

@@ -977,7 +977,7 @@ export default function SettingsModal({
                     className="settings-input"
                     value={mapTileUrl}
                     onChange={(e) => setMapTileUrl(e.target.value)}
-                    placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                 </div>
               </div>

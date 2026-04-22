@@ -11,7 +11,6 @@ import {
   getReadableTextColor,
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { matchesKeybind } from "../utils/keybinds";
 import { withAlpha, blendColors } from "../utils/colorUtils";
 import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
 const MapView = lazy(() => import("./MapView"));
@@ -1904,19 +1903,24 @@ const TimelineView = forwardRef(function TimelineView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handlePlayPause, keybinds]);
 
-  const zoomKeyHandlerRef = useRef(null);
-  zoomKeyHandlerRef.current = { handleZoomIn, handleZoomOut, keybinds };
   useEffect(() => {
     const handleKeyDown = (e) => {
       const target = e.target;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
-      const { handleZoomIn: zoomIn, handleZoomOut: zoomOut, keybinds: kb } = zoomKeyHandlerRef.current;
-      if (matchesKeybind(e, kb.zoomIn ?? { keys: ["="] })) { e.preventDefault(); zoomIn(); }
-      else if (matchesKeybind(e, kb.zoomOut ?? { keys: ["-"] })) { e.preventDefault(); zoomOut(); }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key?.toLowerCase();
+      const code = e.code?.toLowerCase();
+      if (key === "=" || key === "+" || code === "equal" || code === "numpadadd") {
+        e.preventDefault();
+        handleZoomIn();
+      } else if (key === "-" || key === "_" || code === "minus" || code === "numpadsubtract") {
+        e.preventDefault();
+        handleZoomOut();
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleZoomIn, handleZoomOut]);
 
   // Stop animation and select an element
   const handleSelect = (id) => {
