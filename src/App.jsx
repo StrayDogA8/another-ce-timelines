@@ -1009,6 +1009,7 @@ function App() {
     showGrid,
     spanColorEvents,
     disableGroups,
+    useEraGroupsInPanel,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -1058,6 +1059,7 @@ function App() {
         showGrid,
         spanColorEvents,
         disableGroups,
+        useEraGroupsInPanel,
         useWikipedia,
         useMaps,
         mapTileUrl,
@@ -1083,6 +1085,7 @@ function App() {
       if (!showGrid) delete nextFile.showGrid;
       if (!spanColorEvents) delete nextFile.spanColorEvents;
       if (!disableGroups) delete nextFile.disableGroups;
+      if (!useEraGroupsInPanel) delete nextFile.useEraGroupsInPanel;
       if (!useWikipedia) delete nextFile.useWikipedia;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;

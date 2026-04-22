@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, List, Layers3, GripVertical, Palette } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, List, Layers3, GripVertical, Palette, Search } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -43,6 +43,42 @@ const resolveThemeGroupColor = () => {
   return normalizeColorForInput(computed);
 };
 
+const resolveSecondaryBg = () => {
+  if (typeof window === "undefined") return null;
+  const computed = getComputedStyle(document.documentElement).getPropertyValue("--secondary-bg");
+  return normalizeColorForInput(computed);
+};
+
+// Returns a version of eraColor that reads well on bgHex while keeping the hue recognizable.
+function getEraLabelColor(eraColor, bgHex) {
+  const hex = normalizeHexColor(eraColor);
+  if (!hex) return null;
+  const eR = parseInt(hex.slice(1, 3), 16);
+  const eG = parseInt(hex.slice(3, 5), 16);
+  const eB = parseInt(hex.slice(5, 7), 16);
+  const eraLum = (0.2126 * eR + 0.7152 * eG + 0.0722 * eB) / 255;
+
+  let bgLum = 0.93; // assume light sidebar by default
+  if (bgHex) {
+    const bR = parseInt(bgHex.slice(1, 3), 16);
+    const bG = parseInt(bgHex.slice(3, 5), 16);
+    const bB = parseInt(bgHex.slice(5, 7), 16);
+    bgLum = (0.2126 * bR + 0.7152 * bG + 0.0722 * bB) / 255;
+  }
+
+  const lightBg = bgLum > 0.4;
+  // Push toward dark on light bg, light on dark bg
+  const target = lightBg ? 0 : 255;
+  // Blend more aggressively for colors that clash (very light on light bg, very dark on dark bg)
+  const clash = lightBg ? eraLum : (1 - eraLum);
+  const blendAmount = 0.2 + clash * 0.25; // 0.2–0.45 range
+
+  const outR = Math.round(eR + (target - eR) * blendAmount);
+  const outG = Math.round(eG + (target - eG) * blendAmount);
+  const outB = Math.round(eB + (target - eB) * blendAmount);
+  return `#${outR.toString(16).padStart(2, "0")}${outG.toString(16).padStart(2, "0")}${outB.toString(16).padStart(2, "0")}`;
+}
+
 function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu }) {
   const isSelected = selectedId && selectedId === item.id;
   const leftIndent = 16 + level * 16;
@@ -77,6 +113,50 @@ function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef,
     >
       <span className="sb-row-title">{item.title}</span>
       <span className="sb-row-right">{rightText}</span>
+    </button>
+  );
+}
+
+function ElementRow({ element, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu, tagColors = {}, spanById, fmtYear }) {
+  const isSelected = selectedId === element.id;
+  const isSpan = element.type === "span";
+  const isEra = element.type === "era";
+  const firstTag = element.tags?.[0];
+  const tagColor = (firstTag && tagColors[firstTag]) || null;
+  const parentSpanColor = (!isSpan && !isEra && element.parents?.[0])
+    ? spanById?.get(element.parents[0])?.color
+    : null;
+  const glyphColor = isEra || isSpan
+    ? (element.color || tagColor || "var(--element-bg)")
+    : (parentSpanColor || tagColor || "var(--element-bg)");
+  const dateText = (isSpan || isEra)
+    ? `${element.startLabel ?? fmtYear(element.start)}–${element.endLabel ?? fmtYear(element.end)}`
+    : (element.dateLabel ?? fmtYear(element.date));
+  return (
+    <button
+      className={`sb-el-row${isSelected ? " is-selected" : ""}`}
+      onClick={() => {
+        if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop;
+        onSelect?.(element.id);
+        requestAnimationFrame(() => {
+          if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current;
+        });
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setElementMenu({ x: e.clientX, y: e.clientY, element });
+      }}
+    >
+      <span className="sb-el-glyph" style={{ color: isSelected ? "var(--dark-bg)" : glyphColor }}>
+        {isSpan
+          ? <span className="sb-el-glyph-span-bar" style={{ background: isSelected ? "var(--dark-bg)" : glyphColor }} />
+          : isEra
+            ? <span className="sb-el-glyph-era-box" style={{ borderColor: isSelected ? "var(--dark-bg)" : glyphColor }} />
+            : "●"}
+      </span>
+      <span className="sb-el-name">{element.title || element.id}</span>
+      <span className="sb-el-date">{dateText}</span>
     </button>
   );
 }
@@ -123,6 +203,10 @@ export default function Sidebar({
   const [openEras, setOpenEras] = useState(true);
   const [openSpans, setOpenSpans] = useState(true);
   const [openEvents, setOpenEvents] = useState(true);
+  const [openEraGroups, setOpenEraGroups] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef(null);
   const [timelineMenu, setTimelineMenu] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const [sidebarTab, setSidebarTab] = useState("timeline");
@@ -143,6 +227,7 @@ export default function Sidebar({
   const groupColorInputRefs = useRef({});
   const tagColorInputRefs = useRef({});
   const themeGroupColor = resolveThemeGroupColor() || DEFAULT_GROUP_COLOR;
+  const sidebarBgHex = resolveSecondaryBg();
 
   const displayName = useMemo(() => {
     if (!file) return "";
@@ -157,23 +242,124 @@ export default function Sidebar({
     return formatYear(y, file.negID, file.posID, file.useMonths === true, file.hideDecimals);
   };
 
-  const eraRoots = useMemo(
-    () => [...eras].sort((a, b) => a.start - b.start),
-    [eras]
-  );
+  const spanById = useMemo(() => new Map(spans.map((s) => [s.id, s])), [spans]);
 
-  const spanRows = useMemo(
-    () =>
-      [...spans].sort((a, b) =>
-        a.start === b.start ? a.title.localeCompare(b.title) : a.start - b.start
-      ),
-    [spans]
-  );
+  const eraGroups = useMemo(() => {
+    const sortedEras = [...eras].sort((a, b) => a.start - b.start);
+    const allItems = [...events, ...spans].sort((a, b) => {
+      const aDate = a.type === "event" ? a.date : a.start;
+      const bDate = b.type === "event" ? b.date : b.start;
+      return aDate - bDate;
+    });
+    if (sortedEras.length === 0) return { groups: [], ungrouped: allItems };
+    const allDates = [
+      ...sortedEras.flatMap((e) => [e.start, e.end]),
+      ...allItems.map((el) => el.type === "event" ? el.date : el.start),
+      ...allItems.filter((el) => el.type === "span").map((el) => el.end),
+    ];
+    const minDate = Math.min(...allDates);
+    const maxDate = Math.max(...allDates);
 
-  const eventRows = useMemo(
-    () => [...events].sort((a, b) => a.date - b.date),
-    [events]
-  );
+    // Build compressYear using the same scale sections logic as the timeline
+    const rawSections = Array.isArray(file?.scaleSections) && file.scaleSections.length > 0
+      ? file.scaleSections
+      : Array.isArray(file?.breaks) && file.breaks.length > 0
+        ? file.breaks.map((b) => ({ ...b, scale: 0 }))
+        : [];
+    const normalizedSections = rawSections
+      .map((item) => {
+        const s = typeof item?.start === "number" ? item.start : Number(item?.start);
+        const e = typeof item?.end === "number" ? item.end : Number(item?.end);
+        if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+        const start = Math.max(minDate, Math.min(s, e));
+        const end = Math.min(maxDate, Math.max(s, e));
+        if (end <= start) return null;
+        return { start, end, scale: Math.max(0, Math.min(2, Number(item?.scale) || 0)) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.start - b.start);
+    const compressYear = (year) => {
+      let adjustment = 0;
+      for (const section of normalizedSections) {
+        const duration = section.end - section.start;
+        if (year >= section.end) { adjustment += duration * (1 - section.scale); continue; }
+        if (year > section.start) {
+          const partial = year - section.start;
+          return year - adjustment - partial * (1 - section.scale);
+        }
+        break;
+      }
+      return year - adjustment;
+    };
+    const cMin = compressYear(minDate);
+    const range = (compressYear(maxDate) - cMin) || 1;
+
+    // Build era parent map: each era's smallest containing era
+    const eraParentMap = new Map();
+    sortedEras.forEach((era) => {
+      let bestParent = null, bestRange = Infinity;
+      sortedEras.forEach((candidate) => {
+        if (candidate.id === era.id) return;
+        if (candidate.start <= era.start && era.end <= candidate.end) {
+          const r = candidate.end - candidate.start;
+          if (r < bestRange) { bestRange = r; bestParent = candidate; }
+        }
+      });
+      if (bestParent) eraParentMap.set(era.id, bestParent.id);
+    });
+
+    const rootEras = sortedEras.filter((e) => !eraParentMap.has(e.id));
+    const subEras = sortedEras.filter((e) => eraParentMap.has(e.id));
+
+    // Find root ancestor for any sub-era
+    const getRootAncestorId = (eraId) => {
+      let current = eraId;
+      while (eraParentMap.has(current)) current = eraParentMap.get(current);
+      return current;
+    };
+
+    // Assign items to their most specific era (any era, including sub-eras)
+    const elementToAnyEraId = new Map();
+    allItems.forEach((el) => {
+      const elDate = el.type === "event" ? el.date : el.start;
+      let bestEra = null, bestRange = Infinity;
+      sortedEras.forEach((era) => {
+        if (elDate >= era.start && elDate <= era.end) {
+          const r = era.end - era.start;
+          if (r < bestRange) { bestRange = r; bestEra = era; }
+        }
+      });
+      if (bestEra) elementToAnyEraId.set(el.id, bestEra.id);
+    });
+
+    const sortItems = (items) => [...items].sort((a, b) => {
+      const aDate = a.type === "event" ? a.date : a.start;
+      const bDate = b.type === "event" ? b.date : b.start;
+      return aDate - bDate;
+    });
+
+    // Build groups: root eras with nested sub-era subGroups
+    const groups = rootEras.map((era) => {
+      const directItems = sortItems(allItems.filter((el) => elementToAnyEraId.get(el.id) === era.id));
+      const childSubEras = subEras
+        .filter((se) => getRootAncestorId(se.id) === era.id)
+        .sort((a, b) => a.start - b.start);
+      const subGroups = childSubEras.map((subEra) => ({
+        era: subEra,
+        items: sortItems(allItems.filter((el) => elementToAnyEraId.get(el.id) === subEra.id)),
+      }));
+      return {
+        era,
+        items: directItems,
+        subGroups,
+        barLeft: ((compressYear(era.start) - cMin) / range) * 100,
+        barWidth: Math.max(1, ((compressYear(era.end) - compressYear(era.start)) / range) * 100),
+      };
+    });
+
+    const ungrouped = sortItems(allItems.filter((el) => !elementToAnyEraId.has(el.id)));
+    return { groups, ungrouped };
+  }, [eras, events, spans]);
 
   const groups = useMemo(() => {
     const fallback = [{ id: "g-main", title: "Main", order: 0, stack: 0, visible: true, locked: false }];
@@ -381,6 +567,15 @@ export default function Sidebar({
     };
   }, [elementMenu]);
 
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const handleClick = (e) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target)) setNewMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [newMenuOpen]);
+
   useLayoutEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = lastScrollTopRef.current;
@@ -416,8 +611,6 @@ export default function Sidebar({
       submenuCloseTimer.current = null;
     }
   };
-
-  const rowProps = { selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu };
 
   const startGroupTitleEdit = (group) => {
     setEditingGroupId(group.id);
@@ -458,6 +651,62 @@ export default function Sidebar({
       [groupId]: !prev[groupId],
     }));
   };
+
+  const eraRoots = useMemo(
+    () => [...eras].sort((a, b) => a.start - b.start),
+    [eras]
+  );
+  const spanRows = useMemo(
+    () => [...spans].sort((a, b) => a.start === b.start ? a.title.localeCompare(b.title) : a.start - b.start),
+    [spans]
+  );
+  const eventRows = useMemo(
+    () => [...events].sort((a, b) => a.date - b.date),
+    [events]
+  );
+
+  const searchActive = searchQuery.trim().length > 0;
+  const q = searchQuery.trim().toLowerCase();
+  const matchesSearch = (value) => (value || "").toLowerCase().includes(q);
+
+  const visibleEras = searchActive ? eraRoots.filter((e) => matchesSearch(e.title || e.id)) : eraRoots;
+  const visibleSpans = searchActive ? spanRows.filter((s) => matchesSearch(s.title || s.id)) : spanRows;
+  const visibleEvents = searchActive ? eventRows.filter((ev) => matchesSearch(ev.title || ev.id)) : eventRows;
+
+  const visibleGroups = searchActive
+    ? eraGroups.groups
+        .map((group) => {
+          const eraMatches = matchesSearch(group.era.title || group.era.id);
+          const filteredItems = eraMatches
+            ? group.items
+            : group.items.filter((el) => matchesSearch(el.title || el.id));
+          const filteredSubGroups = (group.subGroups || [])
+            .map((subGroup) => {
+              const subEraMatches = matchesSearch(subGroup.era.title || subGroup.era.id);
+              return {
+                ...subGroup,
+                items: subEraMatches
+                  ? subGroup.items
+                  : subGroup.items.filter((el) => matchesSearch(el.title || el.id)),
+              };
+            })
+            .filter((subGroup) => subGroup.items.length > 0 || matchesSearch(subGroup.era.title || subGroup.era.id));
+
+          if (!eraMatches && filteredItems.length === 0 && filteredSubGroups.length === 0) {
+            return null;
+          }
+
+          return {
+            ...group,
+            items: filteredItems,
+            subGroups: filteredSubGroups,
+          };
+        })
+        .filter(Boolean)
+    : eraGroups.groups;
+  const visibleUngrouped = searchActive
+    ? eraGroups.ungrouped.filter((el) => (el.title || el.id || "").toLowerCase().includes(q))
+    : eraGroups.ungrouped;
 
   return (
     <div className="sidebar-root">
@@ -617,158 +866,212 @@ export default function Sidebar({
 
       {!isCollapsed && (
         <>
-        <div className="sidebar-add-container">
+        <div className="sidebar-controls">
           <div className="sidebar-tabs">
-            <button
-              type="button"
-              className={`sidebar-tab-button${sidebarTab === "timeline" ? " is-active" : ""}`}
-              onClick={() => setSidebarTab("timeline")}
-              aria-label="Timeline tab"
-              title="Timeline"
-            >
+            <button type="button" className={`sidebar-tab-button${sidebarTab === "timeline" ? " is-active" : ""}`} onClick={() => setSidebarTab("timeline")} aria-label="Timeline tab" title="Timeline">
               <List size={15} strokeWidth={2.2} />
             </button>
-            <button
-              type="button"
-              className={`sidebar-tab-button${sidebarTab === "tags" ? " is-active" : ""}`}
-              onClick={() => setSidebarTab("tags")}
-              aria-label="Tags tab"
-              title="Tags"
-            >
+            <button type="button" className={`sidebar-tab-button${sidebarTab === "tags" ? " is-active" : ""}`} onClick={() => setSidebarTab("tags")} aria-label="Tags tab" title="Tags">
               <Tag size={15} strokeWidth={2.2} />
             </button>
-            <button
-              type="button"
-              className={`sidebar-tab-button${sidebarTab === "groups" ? " is-active" : ""}`}
-              onClick={() => setSidebarTab("groups")}
-              aria-label="Groups tab"
-              title="Groups"
-            >
+            <button type="button" className={`sidebar-tab-button${sidebarTab === "groups" ? " is-active" : ""}`} onClick={() => setSidebarTab("groups")} aria-label="Groups tab" title="Groups">
               <Layers3 size={15} strokeWidth={2.2} />
             </button>
           </div>
-          <div className="sidebar-add-buttons">
+          <div className="sb-new-wrapper" ref={newMenuRef}>
+            <button className="sb-new-btn" onClick={() => setNewMenuOpen((v) => !v)}>
+              <Plus size={13} strokeWidth={2.5} />
+              <span>New</span>
+              <ChevronDown size={11} strokeWidth={2.5} />
+            </button>
+            {newMenuOpen && (
+              <div className="sb-new-menu">
+                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddEra?.(); }}>
+                  <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 9, height: 9, border: "2px solid currentColor", borderRadius: 2 }} /></span>
+                  Era
+                </button>
+                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddSpan?.(); }}>
+                  <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor" }} /></span>
+                  Span
+                </button>
+                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddEvent?.(); }}>
+                  <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} /></span>
+                  Event
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
+        {sidebarTab === "timeline" && (
+          <div className="sb-search-row">
+            <Search size={12} strokeWidth={2} className="sb-search-icon" />
+            <input
+              className="sb-search-input"
+              type="text"
+              placeholder="Search spans, events, eras..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        )}
+
       <div className={`sidebar-content${sidebarTab === "tags" ? " is-tags-tab" : ""}`} ref={listRef}>
         {sidebarTab === "timeline" ? (
-        <>
-          {/* ERAS */}
-          <div className="sb-section">
-            <div className="sb-section-head">
-              <button
-                className="sb-section-toggle"
-                onClick={() => setOpenEras((v) => !v)}
-              >
-                <ChevronDown
-                  className={`sb-caret ${openEras ? "open" : ""}`}
-                  size={16}
-                  strokeWidth={2}
-                />
-                <span className="sb-section-label">Eras</span>
-              </button>
-              <button
-                className="sb-section-add"
-                type="button"
-                title="Add Era"
-                aria-label="Add Era"
-                onClick={() => onAddEra?.()}
-              >
-                <Plus size={18} strokeWidth={2.5} />
-              </button>
+        !file?.useEraGroupsInPanel ? (
+          <>
+            <div className="sb-section">
+              <div className="sb-section-head">
+                <button className="sb-section-toggle" onClick={() => setOpenEras((v) => !v)}>
+                  <ChevronDown className={`sb-caret ${openEras ? "open" : ""}`} size={16} strokeWidth={2} />
+                  <span className="sb-section-label">Eras</span>
+                </button>
+              </div>
+              {(openEras || searchActive) && (
+                <div className="sb-section-body">
+                  {visibleEras.map((e) => (
+                    <SidebarRow key={e.id} item={e} rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)} level={0} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} />
+                  ))}
+                </div>
+              )}
             </div>
-            {openEras && (
-              <div className="sb-section-body">
-                {eraRoots.map((e) => (
-                  <SidebarRow
-                    key={e.id}
-                    item={e}
-                    rightText={formatRange(e.start, e.end, e.startLabel, e.endLabel)}
-                    level={0}
-                    {...rowProps}
-                  />
+            <div className="sb-section">
+              <div className="sb-section-head">
+                <button className="sb-section-toggle" onClick={() => setOpenSpans((v) => !v)}>
+                  <ChevronDown className={`sb-caret ${openSpans ? "open" : ""}`} size={16} strokeWidth={2} />
+                  <span className="sb-section-label">Spans</span>
+                </button>
+              </div>
+              {(openSpans || searchActive) && (
+                <div className="sb-section-body">
+                  {visibleSpans.map((s) => (
+                    <SidebarRow key={s.id} item={s} rightText={formatRange(s.start, s.end, s.startLabel, s.endLabel)} level={0} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="sb-section">
+              <div className="sb-section-head">
+                <button className="sb-section-toggle" onClick={() => setOpenEvents((v) => !v)}>
+                  <ChevronDown className={`sb-caret ${openEvents ? "open" : ""}`} size={16} strokeWidth={2} />
+                  <span className="sb-section-label">Events</span>
+                </button>
+              </div>
+              {(openEvents || searchActive) && (
+                <div className="sb-section-body">
+                  {visibleEvents.map((ev) => (
+                    <SidebarRow key={ev.id} item={ev} rightText={ev.dateLabel ?? fmtYear(ev.date)} level={0} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+        <div className="sb-era-groups">
+          {visibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
+            const isOpen = searchActive || openEraGroups[era.id] !== false;
+            const eraColor = era.color || "var(--element-bg)";
+            const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
+            return (
+              <div key={era.id} className="sb-era-group">
+                <div className="sb-era-header">
+                  <button
+                    className="sb-era-toggle"
+                    onClick={() => setOpenEraGroups((prev) => ({ ...prev, [era.id]: !isOpen }))}
+                  >
+                    <ChevronDown className={`sb-caret ${isOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
+                  </button>
+                  <button
+                    className="sb-era-title-btn"
+                    onClick={() => {
+                      if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop;
+                      onSelect?.(era.id);
+                      requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; });
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: era }); }}
+                  >
+                    <span
+                      className={`sb-era-name${selectedId === era.id ? " is-selected" : ""}`}
+                      style={selectedId === era.id ? undefined : { color: getEraLabelColor(era.color, sidebarBgHex) || undefined }}
+                    >
+                      {(era.title || era.id).toUpperCase()}
+                    </span>
+                  </button>
+                  <span className="sb-era-count">{totalCount}</span>
+                </div>
+                {eraGroups.groups.length > 1 && (
+                  <div className="sb-era-bar-track">
+                    <div className="sb-era-bar" style={{ left: `${barLeft}%`, width: `${barWidth}%`, background: getEraLabelColor(era.color, sidebarBgHex) || eraColor }} />
+                  </div>
+                )}
+                {isOpen && (
+                  <div className="sb-era-items">
+                    {items.map((el) => (
+                      <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                    ))}
+                    {subGroups?.map(({ era: subEra, items: subItems }) => {
+                      const isSubOpen = searchActive || openEraGroups[subEra.id] !== false;
+                      return (
+                        <div key={subEra.id} className="sb-sub-era-group">
+                          <div className="sb-sub-era-header">
+                            <button
+                              className="sb-era-toggle"
+                              onClick={() => setOpenEraGroups((prev) => ({ ...prev, [subEra.id]: !isSubOpen }))}
+                            >
+                              <ChevronDown className={`sb-caret ${isSubOpen ? "open" : ""}`} size={10} strokeWidth={2.5} />
+                            </button>
+                            <button
+                              className="sb-era-title-btn"
+                              onClick={() => {
+                                if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop;
+                                onSelect?.(subEra.id);
+                                requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; });
+                              }}
+                              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: subEra }); }}
+                            >
+                              <span
+                                className={`sb-sub-era-name${selectedId === subEra.id ? " is-selected" : ""}`}
+                                style={selectedId === subEra.id ? undefined : { color: getEraLabelColor(subEra.color, sidebarBgHex) || undefined }}
+                              >
+                                {(subEra.title || subEra.id).toUpperCase()}
+                              </span>
+                            </button>
+                            <span className="sb-sub-era-range">
+                              {formatRange(subEra.start, subEra.end, subEra.startLabel, subEra.endLabel)}
+                            </span>
+                          </div>
+                          {isSubOpen && subItems.length > 0 && (
+                            <div className="sb-sub-era-items">
+                              {subItems.map((el) => (
+                                <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {visibleUngrouped.length > 0 && (
+            <div className="sb-era-group">
+              {eraGroups.groups.length > 0 && (
+                <div className="sb-era-header">
+                  <span className="sb-era-name">OTHER</span>
+                  <span className="sb-era-count">{visibleUngrouped.length}</span>
+                </div>
+              )}
+              <div className="sb-era-items">
+                {visibleUngrouped.map((el) => (
+                  <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                 ))}
               </div>
-            )}
-          </div>
-
-          <div className="sb-section">
-            <div className="sb-section-head">
-              <button
-                className="sb-section-toggle"
-                onClick={() => setOpenSpans((v) => !v)}
-              >
-                <ChevronDown
-                  className={`sb-caret ${openSpans ? "open" : ""}`}
-                  size={16}
-                  strokeWidth={2}
-                />
-                <span className="sb-section-label">Spans</span>
-              </button>
-              <button
-                className="sb-section-add"
-                type="button"
-                title="Add Span"
-                aria-label="Add Span"
-                onClick={() => onAddSpan?.()}
-              >
-                <Plus size={18} strokeWidth={2.5} />
-              </button>
             </div>
-            {openSpans && (
-              <div className="sb-section-body">
-                {spanRows.map((s) => (
-                  <SidebarRow
-                    key={s.id}
-                    item={s}
-                    rightText={formatRange(s.start, s.end, s.startLabel, s.endLabel)}
-                    level={0}
-                    {...rowProps}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="sb-section">
-            <div className="sb-section-head">
-              <button
-                className="sb-section-toggle"
-                onClick={() => setOpenEvents((v) => !v)}
-              >
-                <ChevronDown
-                  className={`sb-caret ${openEvents ? "open" : ""}`}
-                  size={16}
-                  strokeWidth={2}
-                />
-                <span className="sb-section-label">Events</span>
-              </button>
-              <button
-                className="sb-section-add"
-                type="button"
-                title="Add Event"
-                aria-label="Add Event"
-                onClick={() => onAddEvent?.()}
-              >
-                <Plus size={18} strokeWidth={2.5} />
-              </button>
-            </div>
-            {openEvents && (
-              <div className="sb-section-body">
-                {eventRows.map((ev) => (
-                  <SidebarRow
-                    key={ev.id}
-                    item={ev}
-                    rightText={ev.dateLabel ?? fmtYear(ev.date)}
-                    level={0}
-                    {...rowProps}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+          )}
+        </div>
+        )
         ) : sidebarTab === "tags" ? (
           <div className="sidebar-tags-panel">
             <div className="sidebar-tags-dropdown">

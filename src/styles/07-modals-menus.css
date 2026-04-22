@@ -729,15 +729,23 @@
   border-bottom: none;
 }
 
-.settings-row-section {
-  padding-top: 6px;
-  padding-bottom: 6px;
+.settings-row:has(+ .settings-row-section) {
   border-bottom: none;
 }
 
+.settings-row-section {
+  padding-top: 20px;
+  padding-bottom: 4px;
+  border-bottom: none;
+  border-top: 1px solid color-mix(in srgb, var(--active-bg), var(--dark-bg) 25%);
+}
+
 .settings-row-section .settings-row-label {
+  font-size: var(--text-2xs, 11px);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--element-bg);
-  font-weight: 600;
 }
 
 .settings-row-left {

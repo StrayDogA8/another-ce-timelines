@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Search, Minus, AlignLeft, LayoutTemplate } from "lucide-react";
+import { Search } from "lucide-react";
+
+const TypeDot = () => <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor", flexShrink: 0 }} />;
+const TypeBar = () => <span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor", flexShrink: 0 }} />;
+const TypeBox = () => <span style={{ display: "inline-block", width: 9, height: 9, border: "2px solid currentColor", borderRadius: 2, flexShrink: 0 }} />;
 
 function formatElementDate(el, fileSettings) {
   const negID = fileSettings?.negativeYearIdentifier || "BCE";
@@ -32,9 +36,9 @@ function formatElementDate(el, fileSettings) {
 }
 
 const TYPE_ICONS = {
-  event: <Minus size={13} strokeWidth={2.5} />,
-  span: <AlignLeft size={13} strokeWidth={2.5} />,
-  era: <LayoutTemplate size={13} strokeWidth={2.5} />,
+  event: <TypeDot />,
+  span: <TypeBar />,
+  era: <TypeBox />,
 };
 
 const TYPE_LABELS = { event: "Event", span: "Span", era: "Era" };

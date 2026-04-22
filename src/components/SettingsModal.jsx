@@ -53,6 +53,7 @@ export default function SettingsModal({
   const [showGrid, setShowGrid] = useState(false);
   const [spanColorEvents, setSpanColorEvents] = useState(false);
   const [disableGroups, setDisableGroups] = useState(false);
+  const [useEraGroupsInPanel, setUseEraGroupsInPanel] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
@@ -171,6 +172,7 @@ export default function SettingsModal({
         setShowGrid(Boolean(timelineData.file.showGrid));
         setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
         setDisableGroups(Boolean(timelineData.file.disableGroups));
+        setUseEraGroupsInPanel(Boolean(timelineData.file.useEraGroupsInPanel));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
@@ -267,6 +269,7 @@ export default function SettingsModal({
           showGrid,
           spanColorEvents,
           disableGroups,
+          useEraGroupsInPanel,
           useWikipedia,
           useMaps,
           mapTileUrl,
@@ -305,6 +308,7 @@ export default function SettingsModal({
     showGrid,
     spanColorEvents,
     disableGroups,
+    useEraGroupsInPanel,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -794,13 +798,57 @@ export default function SettingsModal({
 
           {settingsSection === "advanced" && (
             <>
+              {/* Wiki Integration */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Wiki Integration</div>
+                  <div className="settings-row-description">Enable attaching MediaWiki articles to timeline elements.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useWikipedia}
+                      onChange={(e) => setUseWikipedia(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Maps */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Maps</div>
+                  <div className="settings-row-description">Enable adding coordinates to events, eras, and spans to view them on a map.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useMaps}
+                      onChange={(e) => {
+                        setUseMaps(e.target.checked);
+                        if (!e.target.checked && settingsSection === "maps") setSettingsSection("advanced");
+                      }}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* — Timeline View — */}
+              <div className="settings-row settings-row-section">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Timeline View</div>
+                </div>
+              </div>
+
               {/* Branch Ordering */}
               <div className="settings-row">
                 <div className="settings-row-left">
                   <div className="settings-row-label">Branch Ordering</div>
-                  <div className="settings-row-description">
-                    Choose whether later-starting branches stay closer to the parent.
-                  </div>
+                  <div className="settings-row-description">Choose whether later-starting branches stay closer to the parent.</div>
                 </div>
                 <div className="settings-row-right">
                   <select
@@ -886,39 +934,25 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Wikipedia Integration */}
-              <div className="settings-row">
+              {/* — Left Panel — */}
+              <div className="settings-row settings-row-section">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Wiki Integration</div>
-                  <div className="settings-row-description">Enable attaching MediaWiki articles to timeline elements.</div>
-                </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={useWikipedia}
-                      onChange={(e) => setUseWikipedia(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
+                  <div className="settings-row-label">Left Panel</div>
                 </div>
               </div>
 
-              {/* Maps */}
+              {/* Era Groups in Panel */}
               <div className="settings-row">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Maps</div>
-                  <div className="settings-row-description">Enable adding coordinates to events, eras, and spans to view them on a map.</div>
+                  <div className="settings-row-label">Use Eras for Groups <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
+                  <div className="settings-row-description">Group elements by era in the left panel instead of collapsible sections.</div>
                 </div>
                 <div className="settings-row-right">
                   <label className="settings-toggle">
                     <input
                       type="checkbox"
-                      checked={useMaps}
-                      onChange={(e) => {
-                        setUseMaps(e.target.checked);
-                        if (!e.target.checked && settingsSection === "maps") setSettingsSection("advanced");
-                      }}
+                      checked={useEraGroupsInPanel}
+                      onChange={(e) => setUseEraGroupsInPanel(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

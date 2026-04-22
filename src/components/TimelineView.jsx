@@ -13,7 +13,7 @@ import {
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
 import { matchesKeybind } from "../utils/keybinds";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, RectangleHorizontal, RectangleEllipsis, SquareSplitHorizontal, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
+import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -3242,21 +3242,27 @@ const TimelineView = forwardRef(function TimelineView({
             className="context-menu-item"
             onClick={() => handleMenuAction(() => onAddEvent(contextMenu.groupId, contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
-            <RectangleHorizontal size={16} />
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 16, height: 16 }}>
+              <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} />
+            </span>
             <span>Add Event</span>
           </button>
           <button
             className="context-menu-item"
             onClick={() => handleMenuAction(() => onAddSpan(contextMenu.groupId, contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
-            <RectangleEllipsis size={16} />
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 16, height: 16 }}>
+              <span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor" }} />
+            </span>
             <span>Add Span</span>
           </button>
           <button
             className="context-menu-item"
             onClick={() => handleMenuAction(() => onAddEra(contextMenu.clickYear, { lat: contextMenu.lat, lng: contextMenu.lng }))}
           >
-            <SquareSplitHorizontal size={16} />
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 16, height: 16 }}>
+              <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid currentColor", borderRadius: 2 }} />
+            </span>
             <span>Add Era</span>
           </button>
 
