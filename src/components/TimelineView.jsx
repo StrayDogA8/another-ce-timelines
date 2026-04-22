@@ -321,6 +321,9 @@ const TimelineView = forwardRef(function TimelineView({
       stack: Number.isFinite(group?.stack) ? group.stack : index,
       visible: group?.visible !== false,
     }));
+    const visibleGroupIds = new Set(
+      groups.filter((group) => group.visible !== false).map((group) => group.id)
+    );
     const groupIdSet = new Set(groups.map((group) => group.id));
     const defaultGroupId = groups[0]?.id || "g-main";
     const getSafeGroupId = (groupId) => (groupIdSet.has(groupId) ? groupId : defaultGroupId);
@@ -336,6 +339,8 @@ const TimelineView = forwardRef(function TimelineView({
       start: resolveDate(span.start, span.startLabel),
       end: resolveDate(span.end, span.endLabel),
     }));
+    const visibleAdjustedEvents = adjustedEvents.filter((event) => visibleGroupIds.has(event.groupId));
+    const visibleAdjustedSpans = adjustedSpans.filter((span) => visibleGroupIds.has(span.groupId));
     const adjustedEras = eras.map((era) => ({
       ...era,
       start: resolveDate(era.start, era.startLabel),
@@ -568,16 +573,18 @@ const TimelineView = forwardRef(function TimelineView({
       resolvedFont = getComputedStyle(document.documentElement).getPropertyValue("--app-font-family").trim() || fallbackFont;
     }
 
-    const groupsByStack = [...groups].sort((a, b) => {
+    const groupsByStack = groups
+      .filter((group) => group.visible !== false)
+      .sort((a, b) => {
       const stackDiff = (a.stack ?? 0) - (b.stack ?? 0); // bottom -> top
       if (stackDiff !== 0) return stackDiff;
       return (a.order ?? 0) - (b.order ?? 0);
     });
     const globalSpanChildPlacement = buildSpanChildPlacement(
-      adjustedSpans,
+      visibleAdjustedSpans,
       timelineData?.file?.branchOrdering || "later-first"
     );
-    const globalSpanMergePlacement = buildSpanMergePlacement(adjustedSpans);
+    const globalSpanMergePlacement = buildSpanMergePlacement(visibleAdjustedSpans);
 
     // First pass: calculate with temporary BASE_LINE_Y to determine content extent
     const TEMP_BASE_LINE_Y = 500;
@@ -585,8 +592,8 @@ const TimelineView = forwardRef(function TimelineView({
     const GROUP_BAND_PADDING_Y = 8;
     const EMPTY_GROUP_HEIGHT = EVENT_MIN_HEIGHT;
     const tempGroupLayoutsRaw = groupsByStack.map((group, index) => {
-      const spansInGroup = adjustedSpans.filter((span) => span.groupId === group.id);
-      const eventsInGroup = adjustedEvents.filter((event) => event.groupId === group.id);
+      const spansInGroup = visibleAdjustedSpans.filter((span) => span.groupId === group.id);
+      const eventsInGroup = visibleAdjustedEvents.filter((event) => event.groupId === group.id);
       const spanIdsInGroup = new Set(spansInGroup.map((span) => span.id));
       const groupSpanChildPlacement = Object.fromEntries(
         Object.entries(globalSpanChildPlacement).filter(

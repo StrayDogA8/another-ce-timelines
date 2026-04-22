@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, List, Layers3, GripVertical, Palette, Search } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -77,6 +77,14 @@ function getEraLabelColor(eraColor, bgHex) {
   const outG = Math.round(eG + (target - eG) * blendAmount);
   const outB = Math.round(eB + (target - eB) * blendAmount);
   return `#${outR.toString(16).padStart(2, "0")}${outG.toString(16).padStart(2, "0")}${outB.toString(16).padStart(2, "0")}`;
+}
+
+function compareEraGroupItems(a, b) {
+  const aDate = a.type === "event" ? a.date : a.start;
+  const bDate = b.type === "event" ? b.date : b.start;
+  if (aDate !== bDate) return aDate - bDate;
+  if (a.type !== b.type) return a.type === "span" ? -1 : 1;
+  return (a.title || a.id).localeCompare(b.title || b.id);
 }
 
 function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef, lastScrollTopRef, setElementMenu }) {
@@ -214,7 +222,10 @@ export default function Sidebar({
   const [timelineFiles, setTimelineFiles] = useState([]);
   const [submenuPosition, setSubmenuPosition] = useState(null);
   const [editingGroupId, setEditingGroupId] = useState(null);
+  const [groupMenuOpenId, setGroupMenuOpenId] = useState(null);
+  const groupMenuRef = useRef(null);
   const [editingGroupTitle, setEditingGroupTitle] = useState("");
+  const [pendingNewGroupEditId, setPendingNewGroupEditId] = useState(null);
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverPlacement, setDragOverPlacement] = useState(null);
   const [openGroupContents, setOpenGroupContents] = useState({});
@@ -246,11 +257,7 @@ export default function Sidebar({
 
   const eraGroups = useMemo(() => {
     const sortedEras = [...eras].sort((a, b) => a.start - b.start);
-    const allItems = [...events, ...spans].sort((a, b) => {
-      const aDate = a.type === "event" ? a.date : a.start;
-      const bDate = b.type === "event" ? b.date : b.start;
-      return aDate - bDate;
-    });
+    const allItems = [...events, ...spans].sort(compareEraGroupItems);
     if (sortedEras.length === 0) return { groups: [], ungrouped: allItems };
     const allDates = [
       ...sortedEras.flatMap((e) => [e.start, e.end]),
@@ -332,11 +339,7 @@ export default function Sidebar({
       if (bestEra) elementToAnyEraId.set(el.id, bestEra.id);
     });
 
-    const sortItems = (items) => [...items].sort((a, b) => {
-      const aDate = a.type === "event" ? a.date : a.start;
-      const bDate = b.type === "event" ? b.date : b.start;
-      return aDate - bDate;
-    });
+    const sortItems = (items) => [...items].sort(compareEraGroupItems);
 
     // Build groups: root eras with nested sub-era subGroups
     const groups = rootEras.map((era) => {
@@ -452,17 +455,18 @@ export default function Sidebar({
     return grouped;
   }, [allElements]);
 
-  const allTags = useMemo(() => {
-    const tags = new Set();
+  const { allTags, tagCounts } = useMemo(() => {
+    const counts = new Map();
     (allElements || []).forEach((element) => {
       if (element.type !== "event" && element.type !== "span") return;
       if (Array.isArray(element.tags)) {
         element.tags.forEach((tag) => {
-          if (tag) tags.add(tag);
+          if (tag) counts.set(tag, (counts.get(tag) || 0) + 1);
         });
       }
     });
-    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+    const tags = Array.from(counts.keys()).sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0));
+    return { allTags: tags, tagCounts: counts };
   }, [allElements]);
 
   const formatRange = (start, end, startLabel, endLabel) => {
@@ -576,6 +580,15 @@ export default function Sidebar({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [newMenuOpen]);
 
+  useEffect(() => {
+    if (!groupMenuOpenId) return;
+    const handleClick = (e) => {
+      if (groupMenuRef.current && !groupMenuRef.current.contains(e.target)) setGroupMenuOpenId(null);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [groupMenuOpenId]);
+
   useLayoutEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = lastScrollTopRef.current;
@@ -617,6 +630,19 @@ export default function Sidebar({
     setEditingGroupTitle(group.title || group.id || "");
   };
 
+  const handleAddGroupAndEdit = () => {
+    if (typeof onAddGroup !== "function") return;
+    const existingIds = new Set(groups.map((group) => group?.id).filter(Boolean));
+    let nextIndex = groups.length + 1;
+    let nextId = `g-${nextIndex}`;
+    while (existingIds.has(nextId)) {
+      nextIndex += 1;
+      nextId = `g-${nextIndex}`;
+    }
+    setPendingNewGroupEditId(nextId);
+    onAddGroup();
+  };
+
   const cancelGroupTitleEdit = () => {
     setEditingGroupId(null);
     setEditingGroupTitle("");
@@ -652,6 +678,15 @@ export default function Sidebar({
     }));
   };
 
+  useEffect(() => {
+    if (!pendingNewGroupEditId) return;
+    const newGroup = groups.find((group) => group.id === pendingNewGroupEditId);
+    if (!newGroup) return;
+    setEditingGroupId(newGroup.id);
+    setEditingGroupTitle(newGroup.title || newGroup.id || "");
+    setPendingNewGroupEditId(null);
+  }, [groups, pendingNewGroupEditId]);
+
   const eraRoots = useMemo(
     () => [...eras].sort((a, b) => a.start - b.start),
     [eras]
@@ -668,6 +703,11 @@ export default function Sidebar({
   const searchActive = searchQuery.trim().length > 0;
   const q = searchQuery.trim().toLowerCase();
   const matchesSearch = (value) => (value || "").toLowerCase().includes(q);
+  const searchPlaceholder = sidebarTab === "timeline"
+    ? "Search spans, events, eras..."
+    : sidebarTab === "tags"
+      ? "Search tags..."
+      : "Search groups...";
 
   const visibleEras = searchActive ? eraRoots.filter((e) => matchesSearch(e.title || e.id)) : eraRoots;
   const visibleSpans = searchActive ? spanRows.filter((s) => matchesSearch(s.title || s.id)) : spanRows;
@@ -707,6 +747,30 @@ export default function Sidebar({
   const visibleUngrouped = searchActive
     ? eraGroups.ungrouped.filter((el) => (el.title || el.id || "").toLowerCase().includes(q))
     : eraGroups.ungrouped;
+  const visibleTags = searchActive
+    ? allTags.filter((tag) => matchesSearch(tag))
+    : allTags;
+  const visibleDisplayGroups = searchActive
+    ? displayGroups
+        .map((group) => {
+          const groupMatches = matchesSearch(group.title || group.id);
+          const items = groupElements.get(group.id) || [];
+          const visibleItems = groupMatches
+            ? items
+            : items.filter((element) => matchesSearch(element.title || element.id));
+          if (!groupMatches && visibleItems.length === 0) return null;
+          return {
+            ...group,
+            visibleItems,
+            visibleCount: visibleItems.length,
+          };
+        })
+        .filter(Boolean)
+    : displayGroups.map((group) => ({
+        ...group,
+        visibleItems: groupElements.get(group.id) || [],
+        visibleCount: groupCounts.get(group.id) || 0,
+      }));
 
   return (
     <div className="sidebar-root">
@@ -903,20 +967,18 @@ export default function Sidebar({
           </div>
         </div>
 
-        {sidebarTab === "timeline" && (
-          <div className="sb-search-row">
-            <Search size={12} strokeWidth={2} className="sb-search-icon" />
-            <input
-              className="sb-search-input"
-              type="text"
-              placeholder="Search spans, events, eras..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        )}
+        <div className="sb-search-row">
+          <Search size={12} strokeWidth={2} className="sb-search-icon" />
+          <input
+            className="sb-search-input"
+            type="text"
+            placeholder={searchPlaceholder}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
-      <div className={`sidebar-content${sidebarTab === "tags" ? " is-tags-tab" : ""}`} ref={listRef}>
+      <div className={`sidebar-content${sidebarTab !== "timeline" ? " is-tags-tab" : ""}`} ref={listRef}>
         {sidebarTab === "timeline" ? (
         !file?.useEraGroupsInPanel ? (
           <>
@@ -1075,65 +1137,70 @@ export default function Sidebar({
         ) : sidebarTab === "tags" ? (
           <div className="sidebar-tags-panel">
             <div className="sidebar-tags-dropdown">
-              {allTags.length === 0 && (
-                <div className="filter-menu-empty">No tags found</div>
+              <div className="sb-tag-list-header">
+                <span className="sb-tag-list-title">All Tags</span>
+                <span className="sb-tag-list-separator">·</span>
+                <span className="sb-tag-list-count">{visibleTags.length}</span>
+              </div>
+              {visibleTags.length === 0 && (
+                <div className="filter-menu-empty">{searchActive ? "No matching tags" : "No tags found"}</div>
               )}
-              {allTags.map((tag) => {
+              {visibleTags.map((tag) => {
                 const isShown = activeTags.includes(tag);
                 const isHidden = hiddenTags.includes(tag);
                 const isPinned = pinnedTags.includes(tag);
                 const tagColor = tagColors[tag];
+                const count = tagCounts.get(tag) || 0;
                 return (
-                  <div key={tag} className="filter-menu-item filter-menu-item-with-pin">
-                    <span className="filter-menu-label">
-                      {tagColor && <span className="tag-sidebar-color-dot" style={{ background: tagColor }} />}
-                      {tag}
-                    </span>
-                    <div className="filter-menu-actions">
-                      <button
-                        type="button"
-                        className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
-                        onClick={() => onToggleTag?.(tag)}
-                        aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                        title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                      >
-                        <Eye size={12} />
-                      </button>
+                  <div
+                    key={tag}
+                    className={`sb-tag-row${isHidden ? " is-hidden" : ""}`}
+                    onClick={() => onToggleTag?.(tag)}
+                    title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
+                  >
+                    <button
+                      type="button"
+                      className="sb-tag-swatch"
+                      style={{ background: tagColor || "var(--active-bg)" }}
+                      onClick={(e) => { e.stopPropagation(); openTagColorPicker(tag); }}
+                      title="Set tag color"
+                    >
+                      <input
+                        ref={(node) => { tagColorInputRefs.current[tag] = node; }}
+                        className="sidebar-group-inline-color-input"
+                        type="color"
+                        value={tagColor || "#808080"}
+                        onChange={(e) => onUpdateTagColor?.(tag, e.target.value)}
+                        tabIndex={-1}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    <span className="sb-tag-name"><span className="sb-tag-hash">#</span>{tag}</span>
+                    <span className="sb-tag-count">{count}</span>
+                    <div className="sb-tag-actions">
                       <button
                         type="button"
                         className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
-                        onClick={() => onToggleHiddenTag?.(tag)}
-                        aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
-                        title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                        onClick={(e) => { e.stopPropagation(); onToggleHiddenTag?.(tag); }}
+                        title={isHidden ? "Show tag" : "Hide tag"}
                       >
-                        <EyeOff size={12} />
+                        {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); onToggleTag?.(tag); }}
+                        title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
+                      >
+                        <Target size={12} />
                       </button>
                       <button
                         type="button"
                         className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
-                        onClick={() => onTogglePinnedTag?.(tag)}
-                        aria-label={isPinned ? "Remove label" : "Use as label"}
+                        onClick={(e) => { e.stopPropagation(); onTogglePinnedTag?.(tag); }}
                         title={isPinned ? "Remove label" : "Use as label"}
                       >
                         <Tag size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className={`filter-menu-icon-btn${tagColor ? " is-active" : ""}`}
-                        onClick={() => openTagColorPicker(tag)}
-                        aria-label="Set tag color"
-                        title="Set tag color"
-                      >
-                        <Palette size={12} />
-                        <input
-                          ref={(node) => { tagColorInputRefs.current[tag] = node; }}
-                          className="sidebar-group-inline-color-input"
-                          type="color"
-                          value={tagColor || "#808080"}
-                          onChange={(e) => onUpdateTagColor?.(tag, e.target.value)}
-                          tabIndex={-1}
-                          aria-hidden="true"
-                        />
                       </button>
                     </div>
                   </div>
@@ -1143,28 +1210,35 @@ export default function Sidebar({
           </div>
         ) : (
           <div className="sidebar-groups-panel">
-            <div className="sidebar-groups-toolbar">
-              <button
-                className="sidebar-group-add-btn"
-                type="button"
-                onClick={() => onAddGroup?.()}
-              >
-                <Plus size={14} strokeWidth={2.5} />
-                <span>Add Group</span>
-              </button>
-            </div>
             <div className="sidebar-groups-list">
-              {displayGroups.map((group) => {
-                const count = groupCounts.get(group.id) || 0;
+              <div className="sb-group-list-header">
+                <div className="sb-group-list-meta">
+                  <span className="sb-group-list-title">All Groups</span>
+                  <span className="sb-group-list-separator">·</span>
+                  <span className="sb-group-list-count">{visibleDisplayGroups.length}</span>
+                </div>
+                <button
+                  className="sidebar-group-add-btn"
+                  type="button"
+                  onClick={handleAddGroupAndEdit}
+                >
+                  <Plus size={10} strokeWidth={2.5} />
+                  <span>Add Group</span>
+                </button>
+              </div>
+              {visibleDisplayGroups.length === 0 && (
+                <div className="filter-menu-empty">{searchActive ? "No matching groups" : "No groups found"}</div>
+              )}
+              {visibleDisplayGroups.map((group) => {
+                const count = group.visibleCount;
                 const canDelete = displayGroups.length > 1;
                 const groupTint = normalizeColorForInput(group.bgColor) || themeGroupColor;
-                const itemsInGroup = groupElements.get(group.id) || [];
-                const isGroupOpen = !!openGroupContents[group.id];
+                const itemsInGroup = group.visibleItems;
+                const isGroupOpen = searchActive || !!openGroupContents[group.id];
                 return (
                   <div
                     key={group.id}
-                    className={`sidebar-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
-                    style={{ "--group-tint": groupTint }}
+                    className={`sb-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
                     draggable={editingGroupId !== group.id}
                     onDragStart={(e) => {
                       setDraggedGroupId(group.id);
@@ -1216,80 +1290,84 @@ export default function Sidebar({
                       setDragOverPlacement(null);
                     }}
                   >
-                    <div className="sidebar-group-main">
-                      <div className="sidebar-group-title-row">
-                        <GripVertical size={13} className="sidebar-group-drag-handle" />
-                        {editingGroupId === group.id ? (
-                          <input
-                            className="sidebar-group-title-input"
-                            type="text"
-                            value={editingGroupTitle}
-                            onChange={(e) => setEditingGroupTitle(e.target.value)}
-                            onBlur={() => commitGroupTitleEdit(group.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitGroupTitleEdit(group.id);
-                              if (e.key === "Escape") cancelGroupTitleEdit();
-                            }}
-                            autoFocus
-                          />
-                        ) : (
-                          <div className="sidebar-group-title">{group.title || group.id}</div>
-                        )}
-                        <div className="sidebar-group-inline-actions">
-                          <button
-                            type="button"
-                            className="filter-menu-icon-btn"
-                            title="Rename group"
-                            aria-label="Rename group"
-                            onClick={() => startGroupTitleEdit(group)}
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            className="filter-menu-icon-btn"
-                            title="Group color"
-                            aria-label="Group color"
-                            onClick={() => openGroupColorPicker(group.id)}
-                          >
-                            <Palette size={12} />
-                            <input
-                              ref={(node) => { groupColorInputRefs.current[group.id] = node; }}
-                              className="sidebar-group-inline-color-input"
-                              type="color"
-                              value={normalizeColorForInput(group.bgColor) || themeGroupColor}
-                              onChange={(e) => updateGroupPatch(group.id, { bgColor: e.target.value })}
-                              tabIndex={-1}
-                              aria-hidden="true"
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            className="filter-menu-icon-btn"
-                            title={canDelete ? "Delete group" : "Cannot delete the last group"}
-                            aria-label={canDelete ? "Delete group" : "Cannot delete the last group"}
-                            disabled={!canDelete}
-                            onClick={() => onDeleteGroup?.(group.id)}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="sidebar-group-meta-row">
+                    <div
+                      className={`sb-group-header${isGroupOpen ? " is-open" : ""}`}
+                      onClick={() => itemsInGroup.length > 0 && toggleGroupContents(group.id)}
+                      style={{ cursor: itemsInGroup.length > 0 ? "pointer" : "default" }}
+                    >
+                      <button
+                        type="button"
+                        className="sb-group-swatch"
+                        style={{ background: groupTint }}
+                        onClick={(e) => { e.stopPropagation(); openGroupColorPicker(group.id); }}
+                        title="Group color"
+                      >
+                        <input
+                          ref={(node) => { groupColorInputRefs.current[group.id] = node; }}
+                          className="sidebar-group-inline-color-input"
+                          type="color"
+                          value={normalizeColorForInput(group.bgColor) || themeGroupColor}
+                          onChange={(e) => updateGroupPatch(group.id, { bgColor: e.target.value })}
+                          tabIndex={-1}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      {editingGroupId === group.id ? (
+                        <input
+                          className="sidebar-group-title-input"
+                          type="text"
+                          value={editingGroupTitle}
+                          onChange={(e) => setEditingGroupTitle(e.target.value)}
+                          onBlur={() => commitGroupTitleEdit(group.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitGroupTitleEdit(group.id);
+                            if (e.key === "Escape") cancelGroupTitleEdit();
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="sb-group-title">{group.title || group.id}</span>
+                      )}
+                      <span className="sb-group-count">{count}</span>
+                      <div className="sb-group-actions" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          className="sidebar-group-expand-btn"
-                          aria-label={isGroupOpen ? "Collapse group items" : "Expand group items"}
-                          title={isGroupOpen ? "Collapse" : "Expand"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleGroupContents(group.id);
-                          }}
-                          disabled={itemsInGroup.length === 0}
+                          className={`filter-menu-icon-btn${group.visible === false ? " filter-menu-hide-btn is-active" : ""}`}
+                          title={group.visible === false ? "Show group" : "Hide group"}
+                          onClick={() => updateGroupPatch(group.id, { visible: group.visible === false ? true : false })}
                         >
-                          {isGroupOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          {group.visible === false ? <EyeOff size={12} /> : <Eye size={12} />}
                         </button>
-                        <div className="sidebar-group-meta">{count} item{count === 1 ? "" : "s"}</div>
+                        <div className="sb-group-kebab-wrap" ref={groupMenuOpenId === group.id ? groupMenuRef : null}>
+                          <button
+                            type="button"
+                            className="filter-menu-icon-btn"
+                            title="More options"
+                            onClick={(e) => { e.stopPropagation(); setGroupMenuOpenId(groupMenuOpenId === group.id ? null : group.id); }}
+                          >
+                            <MoreVertical size={15} />
+                          </button>
+                          {groupMenuOpenId === group.id && (
+                            <div className="sb-group-kebab-menu">
+                              <button
+                                className="sb-group-kebab-item"
+                                onClick={(e) => { e.stopPropagation(); setGroupMenuOpenId(null); startGroupTitleEdit(group); }}
+                              >
+                                <Edit2 size={13} />
+                                <span>Rename</span>
+                              </button>
+                              <button
+                                className="sb-group-kebab-item sb-group-kebab-item-danger"
+                                disabled={!canDelete}
+                                onClick={(e) => { e.stopPropagation(); setGroupMenuOpenId(null); onDeleteGroup?.(group.id); }}
+                              >
+                                <Trash2 size={13} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {isGroupOpen && itemsInGroup.length > 0 && (
@@ -1301,19 +1379,13 @@ export default function Sidebar({
                             className={`sidebar-group-element-row${selectedId === element.id ? " is-selected" : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (listRef.current) {
-                                lastScrollTopRef.current = listRef.current.scrollTop;
-                              }
+                              if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop;
                               onSelect?.(element.id);
                             }}
                             onContextMenu={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setElementMenu({
-                                x: e.clientX,
-                                y: e.clientY,
-                                element,
-                              });
+                              setElementMenu({ x: e.clientX, y: e.clientY, element });
                             }}
                           >
                             <span className="sidebar-group-element-title">{element.title || element.id}</span>
