@@ -238,6 +238,18 @@ function WheelShortcutHandler({ onAltWheelPan, onCtrlWheelZoom }) {
   return null;
 }
 
+function MapAttribution({ attribution }) {
+  const map = useMap();
+  useEffect(() => {
+    const control = new L.Control.Attribution({ prefix: false, position: "bottomright" });
+    control.addTo(map);
+    map.attributionControl = control;
+    if (attribution) control.addAttribution(attribution);
+    return () => { control.remove(); };
+  }, [map, attribution]);
+  return null;
+}
+
 function FlyToSelected({ markers, selectedId }) {
   const map = useMap();
   const lastSnappedId = useRef(null);
@@ -266,6 +278,11 @@ function RepeatOverlay() {
 const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const DEFAULT_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
+function isOpenStreetMapTileUrl(url) {
+  if (!url) return true;
+  return /^https:\/\/(?:[a-z0-9-]+\.)*tile\.openstreetmap\.org\//i.test(url);
+}
+
 export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpenContextMenu, onAltWheelPan, onCtrlWheelZoom, viewportYear, selectedId, fileConfig }, ref) {
   const spanById = useMemo(() => {
     const map = new Map();
@@ -286,6 +303,8 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
     center: markers.length > 0 ? [Number(markers[0].lat), Number(markers[0].lng)] : [20, 0],
     zoom: markers.length > 0 ? 5 : 2,
   }));
+  const tileUrl = fileConfig?.mapTileUrl || DEFAULT_TILE_URL;
+  const tileAttribution = isOpenStreetMapTileUrl(tileUrl) ? DEFAULT_ATTRIBUTION : "";
 
   return (
     <div className="timeline-map-view">
@@ -294,6 +313,7 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         zoom={initialView.zoom}
         style={{ width: "100%", height: "100%" }}
         zoomControl={true}
+        attributionControl={false}
         maxBounds={[[-85.0511, -270], [85.0511, 270]]}
         maxBoundsViscosity={1.0}
       >
@@ -304,9 +324,10 @@ export default memo(forwardRef(function MapView({ elements = [], onSelect, onOpe
         <MinZoomEnforcer />
         <WheelShortcutHandler onAltWheelPan={onAltWheelPan} onCtrlWheelZoom={onCtrlWheelZoom} />
         <FlyToSelected markers={markers} selectedId={selectedId} />
+        <MapAttribution attribution={tileAttribution} />
         <TileLayer
-          url={fileConfig?.mapTileUrl || DEFAULT_TILE_URL}
-          attribution={fileConfig?.mapTileUrl ? "" : DEFAULT_ATTRIBUTION}
+          url={tileUrl}
+          attribution={tileAttribution}
           referrerPolicy="strict-origin-when-cross-origin"
         />
         <RepeatOverlay />
