@@ -179,6 +179,7 @@ export default function Sidebar({
   activeTags = [],
   hiddenTags = [],
   onToggleTag,
+  onClearTags,
   onToggleHiddenTag,
   pinnedTags = [],
   onTogglePinnedTag,
@@ -468,6 +469,12 @@ export default function Sidebar({
     const tags = Array.from(counts.keys()).sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0));
     return { allTags: tags, tagCounts: counts };
   }, [allElements]);
+
+  const stripTags = useMemo(() => {
+    const pinned = allTags.filter((t) => pinnedTags.includes(t));
+    const rest = allTags.filter((t) => !pinnedTags.includes(t));
+    return [...pinned, ...rest].slice(0, 4);
+  }, [allTags, pinnedTags]);
 
   const formatRange = (start, end, startLabel, endLabel) => {
     const left = startLabel ?? fmtYear(start);
@@ -977,6 +984,36 @@ export default function Sidebar({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+
+        {allTags.length > 0 && file?.showPopularTags !== false && (
+          <div className="sb-tag-strip">
+            <button
+              type="button"
+              className={`sb-tag-strip-pill sb-tag-strip-all${activeTags.length === 0 ? " is-active" : ""}`}
+              onClick={() => onClearTags?.()}
+              title="Show all"
+            >
+              <span className="sb-tag-strip-dot" style={{ background: "currentColor" }} />
+              All
+            </button>
+            {stripTags.map((tag) => {
+              const isActive = activeTags.includes(tag);
+              const color = tagColors[tag];
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`sb-tag-strip-pill${isActive ? " is-active" : ""}`}
+                  onClick={() => onToggleTag?.(tag)}
+                  title={tag}
+                >
+                  <span className="sb-tag-strip-dot" style={{ background: color || "var(--element-bg)" }} />
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
       <div className={`sidebar-content${sidebarTab !== "timeline" ? " is-tags-tab" : ""}`} ref={listRef}>
         {sidebarTab === "timeline" ? (

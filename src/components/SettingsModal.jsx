@@ -54,6 +54,7 @@ export default function SettingsModal({
   const [spanColorEvents, setSpanColorEvents] = useState(false);
   const [disableGroups, setDisableGroups] = useState(false);
   const [useEraGroupsInPanel, setUseEraGroupsInPanel] = useState(false);
+  const [showPopularTags, setShowPopularTags] = useState(true);
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
@@ -173,6 +174,7 @@ export default function SettingsModal({
         setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
         setDisableGroups(Boolean(timelineData.file.disableGroups));
         setUseEraGroupsInPanel(Boolean(timelineData.file.useEraGroupsInPanel));
+        setShowPopularTags(timelineData.file.showPopularTags !== false);
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
@@ -270,6 +272,7 @@ export default function SettingsModal({
           spanColorEvents,
           disableGroups,
           useEraGroupsInPanel,
+          showPopularTags,
           useWikipedia,
           useMaps,
           mapTileUrl,
@@ -309,6 +312,7 @@ export default function SettingsModal({
     spanColorEvents,
     disableGroups,
     useEraGroupsInPanel,
+    showPopularTags,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -953,6 +957,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={useEraGroupsInPanel}
                       onChange={(e) => setUseEraGroupsInPanel(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Show Popular Tags */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Show Popular Tags</div>
+                  <div className="settings-row-description">Show a row of the most-used tags at the top of the left panel for quick filtering.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showPopularTags}
+                      onChange={(e) => setShowPopularTags(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

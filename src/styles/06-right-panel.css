@@ -124,6 +124,10 @@
   flex: 1;
 }
 
+.right-panel.is-maximized .right-panel-header {
+  padding-top: 15px;
+}
+
 .right-panel.is-maximized .right-panel-footer {
   justify-content: flex-end;
   width: 100%;
