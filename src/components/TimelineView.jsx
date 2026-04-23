@@ -197,6 +197,16 @@ const TimelineView = forwardRef(function TimelineView({
   tagColors = {},
   keybinds = {},
 }, ref) {
+  const isMac = navigator.userAgent?.includes("Mac");
+  const fmtKey = (bind) => {
+    if (!bind?.keys?.length) return "";
+    return bind.keys.map((k) => k === "Ctrl" ? (isMac ? "Cmd" : "Ctrl") : k === "Alt" ? (isMac ? "Option" : "Alt") : k).join("+");
+  };
+  const btnTip = (label, bind) => {
+    const s = fmtKey(bind);
+    return s ? `${label} (${s})` : label;
+  };
+
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
   const gridLabelsRef = useRef(null);
@@ -658,6 +668,7 @@ const TimelineView = forwardRef(function TimelineView({
         order: group.order,
         stack: group.stack,
         bgColor: group.bgColor,
+        hideBand: Boolean(group.hideBand),
         visible: group.visible !== false,
         yOffset: 0,
         index,
@@ -2705,7 +2716,7 @@ const TimelineView = forwardRef(function TimelineView({
             .filter((group) => group.visible)
             .map((group) => {
               const box = groupBandBoxes.find((item) => item.groupId === group.id);
-              if (!box) return null;
+              if (!box || group.hideBand) return null;
               const bandBackground = withAlpha(group.bgColor || resolvedActiveBg, 0.34);
               const bandBorderColor = withAlpha(group.bgColor || resolvedActiveBg, 0.86);
               const bandBorder = `var(--timeline-line-thickness) solid ${bandBorderColor}`;
@@ -3358,7 +3369,7 @@ const TimelineView = forwardRef(function TimelineView({
           className="timeline-canvas-button"
           onClick={handleZoomIn}
           aria-label="Zoom in"
-          title="Zoom in"
+          data-tooltip="Zoom in (+)"
         >
           <Plus size={16} />
         </button>
@@ -3367,7 +3378,7 @@ const TimelineView = forwardRef(function TimelineView({
           className="timeline-canvas-button"
           onClick={handleZoomOut}
           aria-label="Zoom out"
-          title="Zoom out"
+          data-tooltip="Zoom out (-)"
         >
           <Minus size={16} />
         </button>
@@ -3377,7 +3388,7 @@ const TimelineView = forwardRef(function TimelineView({
             type="button"
             className="timeline-canvas-button"
             aria-label={showMap ? "Timeline View" : "Map View"}
-            title={showMap ? "Timeline View" : "Map View"}
+            data-tooltip={showMap ? "Timeline View" : "Map View"}
             onClick={() => setShowMap((v) => !v)}
           >
             {showMap ? <GanttChartSquare size={16} /> : <MapIcon size={16} />}
@@ -3388,7 +3399,7 @@ const TimelineView = forwardRef(function TimelineView({
           className={`timeline-canvas-button${(activeTags.length > 0 || hiddenTags.length > 0) ? ' timeline-canvas-button-active' : ''}`}
           onClick={handleToggleFilterMenu}
           aria-label="Filter"
-          title="Filter"
+          data-tooltip="Filter"
           ref={filterButtonRef}
         >
           <ListFilter size={16} />
@@ -3398,7 +3409,7 @@ const TimelineView = forwardRef(function TimelineView({
           className="timeline-canvas-button"
           onClick={onOpenSettings}
           aria-label="Timeline settings"
-          title="Timeline settings"
+          data-tooltip="Settings"
         >
           <Settings size={16} />
         </button>
@@ -3496,7 +3507,7 @@ const TimelineView = forwardRef(function TimelineView({
           className="slider-play-button"
           onClick={handlePlayPause}
           aria-label={isPlaying ? "Pause" : "Play"}
-          title={isPlaying ? "Pause" : "Play"}
+          data-tooltip={btnTip(isPlaying ? "Pause" : "Play", keybinds.play)}
         >
           {isPlaying ? (
             <Pause size={16} strokeWidth={2} />

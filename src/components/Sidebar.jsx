@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import "../styles/07-modals-menus.css";
 
@@ -203,7 +203,17 @@ export default function Sidebar({
   onDelete,
   onDuplicateElement,
   onEditElement,
+  keybinds = {},
 }) {
+  const isMac = navigator.userAgent?.includes("Mac");
+  const formatKeybind = (bind) => {
+    if (!bind?.keys?.length) return "";
+    return bind.keys.map((k) => {
+      if (k === "Ctrl") return isMac ? "Cmd" : "Ctrl";
+      if (k === "Alt") return isMac ? "Option" : "Alt";
+      return k;
+    }).join("+");
+  };
   const file = timelineData.file;
   const events = timelineData.elements.filter(e => e.type === "event");
   const spans = timelineData.elements.filter(e => e.type === "span");
@@ -959,17 +969,20 @@ export default function Sidebar({
             </button>
             {newMenuOpen && (
               <div className="sb-new-menu">
-                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddEra?.(); }}>
+                <button className="sb-new-menu-item" title={formatKeybind(keybinds.newEra) ? `New Era (${formatKeybind(keybinds.newEra)})` : "New Era"} onClick={() => { setNewMenuOpen(false); onAddEra?.(); }}>
                   <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 9, height: 9, border: "2px solid currentColor", borderRadius: 2 }} /></span>
                   Era
+                  {formatKeybind(keybinds.newEra) && <span className="sb-new-menu-shortcut">{formatKeybind(keybinds.newEra)}</span>}
                 </button>
-                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddSpan?.(); }}>
+                <button className="sb-new-menu-item" title={formatKeybind(keybinds.newSpan) ? `New Span (${formatKeybind(keybinds.newSpan)})` : "New Span"} onClick={() => { setNewMenuOpen(false); onAddSpan?.(); }}>
                   <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor" }} /></span>
                   Span
+                  {formatKeybind(keybinds.newSpan) && <span className="sb-new-menu-shortcut">{formatKeybind(keybinds.newSpan)}</span>}
                 </button>
-                <button className="sb-new-menu-item" onClick={() => { setNewMenuOpen(false); onAddEvent?.(); }}>
+                <button className="sb-new-menu-item" title={formatKeybind(keybinds.newEvent) ? `New Event (${formatKeybind(keybinds.newEvent)})` : "New Event"} onClick={() => { setNewMenuOpen(false); onAddEvent?.(); }}>
                   <span className="sb-new-menu-icon"><span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} /></span>
                   Event
+                  {formatKeybind(keybinds.newEvent) && <span className="sb-new-menu-shortcut">{formatKeybind(keybinds.newEvent)}</span>}
                 </button>
               </div>
             )}
@@ -1395,6 +1408,13 @@ export default function Sidebar({
                               >
                                 <Edit2 size={13} />
                                 <span>Rename</span>
+                              </button>
+                              <button
+                                className="sb-group-kebab-item"
+                                onClick={(e) => { e.stopPropagation(); onUpdateGroup?.(group.id, { hideBand: !group.hideBand }); }}
+                              >
+                                {group.hideBand ? <Square size={13} /> : <SquareDashed size={13} />}
+                                <span>{group.hideBand ? "Show Band" : "Hide Band"}</span>
                               </button>
                               <button
                                 className="sb-group-kebab-item sb-group-kebab-item-danger"

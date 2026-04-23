@@ -1901,6 +1901,7 @@ function App() {
           onDelete={handleRequestDelete}
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
+          keybinds={keybinds}
         />
         </ErrorBoundary>
       </aside>

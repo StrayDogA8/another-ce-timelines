@@ -584,6 +584,30 @@
   border-radius: 50%;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  position: relative;
+}
+
+.slider-play-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--dark-bg);
+  color: var(--secondary-bg);
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  z-index: 200;
+}
+
+.slider-play-button[data-tooltip]:hover::after {
+  opacity: 1;
 }
 
 .slider-play-button:hover {
@@ -693,6 +717,7 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
+  position: relative;
 }
 
 .timeline-canvas-button:hover {
@@ -707,6 +732,30 @@
 .timeline-canvas-button-active {
   background: var(--active-bg);
   border-color: var(--element-bg);
+}
+
+/* Custom tooltip for canvas bar buttons */
+.timeline-canvas-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--dark-bg);
+  color: var(--secondary-bg);
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  z-index: 200;
+}
+
+.timeline-canvas-button[data-tooltip]:hover::after {
+  opacity: 1;
 }
 
 .timeline-canvas-divider {

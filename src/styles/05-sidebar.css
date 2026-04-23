@@ -1221,6 +1221,15 @@
   cursor: pointer;
 }
 
+.sb-new-menu-shortcut {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: var(--text-xs);
+  opacity: 0.45;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .sb-new-menu-item:hover {
   background: var(--active-bg);
 }
