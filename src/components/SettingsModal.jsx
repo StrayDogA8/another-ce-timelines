@@ -55,6 +55,7 @@ export default function SettingsModal({
   const [disableGroups, setDisableGroups] = useState(false);
   const [useEraGroupsInPanel, setUseEraGroupsInPanel] = useState(false);
   const [showPopularTags, setShowPopularTags] = useState(true);
+  const [useSecondaryBg, setUseSecondaryBg] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
@@ -175,6 +176,7 @@ export default function SettingsModal({
         setDisableGroups(Boolean(timelineData.file.disableGroups));
         setUseEraGroupsInPanel(Boolean(timelineData.file.useEraGroupsInPanel));
         setShowPopularTags(timelineData.file.showPopularTags !== false);
+        setUseSecondaryBg(Boolean(timelineData.file.useSecondaryBg));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
@@ -273,6 +275,7 @@ export default function SettingsModal({
           disableGroups,
           useEraGroupsInPanel,
           showPopularTags,
+          useSecondaryBg,
           useWikipedia,
           useMaps,
           mapTileUrl,
@@ -313,6 +316,7 @@ export default function SettingsModal({
     disableGroups,
     useEraGroupsInPanel,
     showPopularTags,
+    useSecondaryBg,
     useWikipedia,
     useMaps,
     mapTileUrl,
@@ -792,6 +796,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={spanColorEvents}
                       onChange={(e) => setSpanColorEvents(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Secondary Background */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Use Secondary Color for Timeline Background</div>
+                  <div className="settings-row-description">Use the same background color as the side panels for the timeline area.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useSecondaryBg}
+                      onChange={(e) => setUseSecondaryBg(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

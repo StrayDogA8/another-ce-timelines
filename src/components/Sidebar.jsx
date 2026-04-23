@@ -305,11 +305,13 @@ export default function Sidebar({
     // Build era parent map: each era's smallest containing era
     const eraParentMap = new Map();
     sortedEras.forEach((era) => {
+      const eraR = era.end - era.start;
       let bestParent = null, bestRange = Infinity;
       sortedEras.forEach((candidate) => {
         if (candidate.id === era.id) return;
+        const r = candidate.end - candidate.start;
+        if (r <= eraR) return; // candidate must be larger to be a parent
         if (candidate.start <= era.start && era.end <= candidate.end) {
-          const r = candidate.end - candidate.start;
           if (r < bestRange) { bestRange = r; bestParent = candidate; }
         }
       });

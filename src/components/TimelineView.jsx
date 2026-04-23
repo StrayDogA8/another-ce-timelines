@@ -1109,7 +1109,7 @@ const TimelineView = forwardRef(function TimelineView({
       pendingSliderValueRef.current = null;
       if (typeof value === "number") {
         const delta = Math.abs(value - sliderValueRef.current);
-        if (delta >= 0.01) {
+        if (delta >= 0.001) {
           setSliderValue(value);
         }
       }
@@ -1521,6 +1521,24 @@ const TimelineView = forwardRef(function TimelineView({
 
     let rafId = requestAnimationFrame(animate);
     return () => { if (rafId) cancelAnimationFrame(rafId); };
+  }, [selectedId, showMap]);
+
+  // Scrollbar position to selected element's year in map view
+  useEffect(() => {
+    if (!showMap || !selectedId) return;
+    const el = timelineData?.elements?.find((e) => e.id === selectedId);
+    if (!el) return;
+    const targetYear = el.type === "event" ? el.date : el.start;
+    if (!Number.isFinite(targetYear)) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const { maxX, range } = getPanBounds(container);
+    if (range <= 0) return;
+    const yearPx = yearToPx(targetYear);
+    const viewportWidth = container.clientWidth;
+    const targetX = Math.min(maxX, Math.max(maxX - range, viewportWidth / 2 - yearPx * scaleRef.current));
+    const pct = Math.min(100, Math.max(0, (maxX - targetX) / range * 100));
+    queueSliderValue(pct);
   }, [selectedId, showMap]);
 
   // Close context menu on click outside or Escape
@@ -2257,6 +2275,7 @@ const TimelineView = forwardRef(function TimelineView({
     <div
       ref={containerRef}
       className="timeline-scroll"
+      style={file?.useSecondaryBg ? { backgroundColor: "var(--secondary-bg)" } : undefined}
       onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
