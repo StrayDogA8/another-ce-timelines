@@ -44,6 +44,11 @@ const DEFAULT_GROUP = {
   visible: true,
   locked: false,
 };
+const EMPTY_SELECTION_NAVIGATION = Object.freeze({
+  selectedElement: null,
+  prevElement: null,
+  nextElement: null,
+});
 const SELECTION_NAV_REPEAT_INTERVAL_MS = 140;
 
 function App() {
@@ -1722,26 +1727,87 @@ function App() {
     }
   }, [filteredElements, selectedId]);
 
+  const compareElementsByTimelineOrder = useCallback((a, b) => {
+    if (a.type === "event" && b.type === "event") {
+      if ((a.date ?? 0) !== (b.date ?? 0)) return (a.date ?? 0) - (b.date ?? 0);
+      return String(a.id).localeCompare(String(b.id));
+    }
+    if (a.type === "span" && b.type === "span") {
+      if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
+      if ((a.end ?? 0) !== (b.end ?? 0)) return (a.end ?? 0) - (b.end ?? 0);
+      return String(a.id).localeCompare(String(b.id));
+    }
+    if (a.type === "era" && b.type === "era") {
+      if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
+      if ((a.end ?? 0) !== (b.end ?? 0)) return (b.end ?? 0) - (a.end ?? 0);
+      return String(a.id).localeCompare(String(b.id));
+    }
+    return 0;
+  }, []);
+
+  const selectionNavigation = useMemo(() => {
+    if (!selectedId) return EMPTY_SELECTION_NAVIGATION;
+
+    const selectedElement = filteredElements.find((el) => el.id === selectedId);
+    if (!selectedElement) return EMPTY_SELECTION_NAVIGATION;
+
+    const sameTypeElements = filteredElements
+      .filter((el) => el.type === selectedElement.type)
+      .sort(compareElementsByTimelineOrder);
+    const currentIndex = sameTypeElements.findIndex((el) => el.id === selectedId);
+
+    return {
+      selectedElement,
+      prevElement: currentIndex > 0 ? sameTypeElements[currentIndex - 1] : null,
+      nextElement: currentIndex >= 0 && currentIndex < sameTypeElements.length - 1
+        ? sameTypeElements[currentIndex + 1]
+        : null,
+    };
+  }, [selectedId, filteredElements, compareElementsByTimelineOrder]);
+
+  const handleSelectPrevious = useCallback(() => {
+    if (!selectionNavigation.prevElement) return;
+    handleSelect(selectionNavigation.prevElement.id);
+  }, [selectionNavigation.prevElement, handleSelect]);
+
+  const handleSelectNext = useCallback(() => {
+    if (!selectionNavigation.nextElement) return;
+    handleSelect(selectionNavigation.nextElement.id);
+  }, [selectionNavigation.nextElement, handleSelect]);
+
+  const TYPE_ORDER = ["event", "span", "era"];
+
+  const elementRepDate = (el) => {
+    if (el.type === "event") return el.date ?? 0;
+    return el.start ?? 0;
+  };
+
+  const selectByTypeDelta = useCallback((delta) => {
+    const selectedElement = selectionNavigation.selectedElement;
+    if (!selectedElement) return;
+    const currentTypeIdx = TYPE_ORDER.indexOf(selectedElement.type);
+    const targetTypeIdx = currentTypeIdx + delta;
+    if (currentTypeIdx === -1 || targetTypeIdx < 0 || targetTypeIdx >= TYPE_ORDER.length) return;
+    const targetType = TYPE_ORDER[targetTypeIdx];
+    const candidates = filteredElements.filter((el) => el.type === targetType);
+    if (!candidates.length) return;
+    const refDate = elementRepDate(selectedElement);
+    const closest = candidates.reduce((best, el) =>
+      Math.abs(elementRepDate(el) - refDate) < Math.abs(elementRepDate(best) - refDate) ? el : best
+    );
+    handleSelect(closest.id);
+  }, [selectionNavigation.selectedElement, filteredElements, handleSelect]);
+
+  const handleSelectTypeDown = useCallback(() => {
+    selectByTypeDelta(1);
+  }, [selectByTypeDelta]);
+
+  const handleSelectTypeUp = useCallback(() => {
+    selectByTypeDelta(-1);
+  }, [selectByTypeDelta]);
+
   useEffect(() => {
     if (!selectedId || !timelineData) return;
-
-    const compareElementsByTimelineOrder = (a, b) => {
-      if (a.type === "event" && b.type === "event") {
-        if ((a.date ?? 0) !== (b.date ?? 0)) return (a.date ?? 0) - (b.date ?? 0);
-        return String(a.id).localeCompare(String(b.id));
-      }
-      if (a.type === "span" && b.type === "span") {
-        if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
-        if ((a.end ?? 0) !== (b.end ?? 0)) return (a.end ?? 0) - (b.end ?? 0);
-        return String(a.id).localeCompare(String(b.id));
-      }
-      if (a.type === "era" && b.type === "era") {
-        if ((a.start ?? 0) !== (b.start ?? 0)) return (a.start ?? 0) - (b.start ?? 0);
-        if ((a.end ?? 0) !== (b.end ?? 0)) return (b.end ?? 0) - (a.end ?? 0);
-        return String(a.id).localeCompare(String(b.id));
-      }
-      return 0;
-    };
 
     const handleSelectionNavigation = (e) => {
       const target = e.target;
@@ -1752,41 +1818,32 @@ function App() {
         target?.isContentEditable;
       if (isEditable) return;
 
-      const selectedElement = filteredElements.find((element) => element.id === selectedId);
-      if (!selectedElement) return;
-
-      const sameTypeElements = filteredElements
-        .filter((element) => element.type === selectedElement.type)
-        .sort(compareElementsByTimelineOrder);
-      const currentIndex = sameTypeElements.findIndex((element) => element.id === selectedId);
-      if (currentIndex === -1) return;
-
       if (matchesKeybind(e, keybinds.selectPrevious)) {
-        const previous = sameTypeElements[currentIndex - 1];
-        if (!previous) return;
+        if (!selectionNavigation.prevElement) return;
         const now = performance.now();
-        if (e.repeat && now - selectionNavRepeatRef.current.previous < SELECTION_NAV_REPEAT_INTERVAL_MS) {
-          return;
-        }
+        if (e.repeat && now - selectionNavRepeatRef.current.previous < SELECTION_NAV_REPEAT_INTERVAL_MS) return;
         selectionNavRepeatRef.current.previous = now;
         e.preventDefault();
-        handleSelect(previous.id);
+        handleSelectPrevious();
       } else if (matchesKeybind(e, keybinds.selectNext)) {
-        const next = sameTypeElements[currentIndex + 1];
-        if (!next) return;
+        if (!selectionNavigation.nextElement) return;
         const now = performance.now();
-        if (e.repeat && now - selectionNavRepeatRef.current.next < SELECTION_NAV_REPEAT_INTERVAL_MS) {
-          return;
-        }
+        if (e.repeat && now - selectionNavRepeatRef.current.next < SELECTION_NAV_REPEAT_INTERVAL_MS) return;
         selectionNavRepeatRef.current.next = now;
         e.preventDefault();
-        handleSelect(next.id);
+        handleSelectNext();
+      } else if (matchesKeybind(e, keybinds.selectTypeDown)) {
+        e.preventDefault();
+        handleSelectTypeDown();
+      } else if (matchesKeybind(e, keybinds.selectTypeUp)) {
+        e.preventDefault();
+        handleSelectTypeUp();
       }
     };
 
     window.addEventListener("keydown", handleSelectionNavigation);
     return () => window.removeEventListener("keydown", handleSelectionNavigation);
-  }, [selectedId, timelineData, filteredElements, keybinds]);
+  }, [selectedId, timelineData, keybinds, selectionNavigation.prevElement, selectionNavigation.nextElement, handleSelectPrevious, handleSelectNext, handleSelectTypeDown, handleSelectTypeUp]);
 
   // Show HomePage if no timeline is loaded
   if (!timelineData) {
@@ -2056,7 +2113,10 @@ function App() {
                 onUpdateGroups={handleUpdateGroups}
                 tagColors={timelineData.file?.tagColors || {}}
                 onRequestDelete={handleRequestDelete}
-                onDuplicateElement={handleDuplicateElement}
+                onSelectPrevious={handleSelectPrevious}
+                onSelectNext={handleSelectNext}
+                prevElement={selectionNavigation.prevElement}
+                nextElement={selectionNavigation.nextElement}
               />
               </ErrorBoundary>
             </aside>

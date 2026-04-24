@@ -1458,11 +1458,14 @@ const TimelineView = forwardRef(function TimelineView({
 
   // Pan to selected item with smooth animation
   useLayoutEffect(() => {
-    if (!selectedId) return;
+    if (showMap || !selectedId) return;
 
     const container = containerRef.current;
     const timelineEl = timelineRef.current;
     if (!container || !timelineEl) return;
+
+    // reapply transform when exiting map
+    applyTransform();
 
     const dom = timelineEl.querySelector(`[data-id="${selectedId}"]`);
     if (!dom) return;

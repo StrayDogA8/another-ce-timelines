@@ -8,6 +8,8 @@ export const DEFAULT_KEYBINDS = {
   delete: { label: "Delete", keys: ["Delete"] },
   selectPrevious: { label: "Select Previous", keys: ["ArrowLeft"] },
   selectNext: { label: "Select Next", keys: ["ArrowRight"] },
+  selectTypeDown: { label: "Select Type Down", keys: ["ArrowDown"] },
+  selectTypeUp: { label: "Select Type Up", keys: ["ArrowUp"] },
   newEvent: { label: "New Event", keys: ["Ctrl", "Shift", "E"] },
   newSpan: { label: "New Span", keys: ["Ctrl", "Shift", "S"] },
   newEra: { label: "New Era", keys: ["Ctrl", "Shift", "R"] },

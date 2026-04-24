@@ -53,3 +53,15 @@ body.dragging {
   cursor: col-resize;
 }
 
+button:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+

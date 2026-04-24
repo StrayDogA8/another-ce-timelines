@@ -1,7 +1,7 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, forwardRef, useImperativeHandle } from "react";
-import { Copy, Check, Edit2, Eye, Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown, MoreHorizontal, CopyPlus } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
+import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
-import { formatYear, getReadableTextColor } from "../utils/timelineUtils";
+import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
 import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
@@ -137,15 +137,13 @@ export default function RightPanel({
   onUpdateGroups,
   tagColors = {},
   onRequestDelete,
-  onDuplicateElement,
+  onSelectPrevious,
+  onSelectNext,
+  prevElement,
+  nextElement,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
-  const [copied, setCopied] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuAlignRight, setMenuAlignRight] = useState(false);
-  const menuRef = useRef(null);
-  const menuDropdownRef = useRef(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
@@ -215,11 +213,7 @@ export default function RightPanel({
   useEffect(() => {
     if (selectedElement) {
       const prevId = prevSelectedIdRef.current;
-      const shouldPreserveEditMode =
-        isEditMode &&
-        formData &&
-        formData.type === selectedElement.type &&
-        formData.title === selectedElement.title;
+      const shouldPreserveEditMode = isEditMode;
       setFormData({
         ...selectedElement,
         dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
@@ -522,7 +516,10 @@ export default function RightPanel({
       (span.title || "").toLowerCase().includes(needle)
     );
   }, [mergeParentCandidates, mergeParentQuery]);
-
+  const noteWordCount = useMemo(() => {
+    if (!noteInitialContent) return 0;
+    return noteInitialContent.trim().split(/\s+/).filter(Boolean).length;
+  }, [noteInitialContent]);
 
   const tagCandidates = useMemo(() => {
     if (!timelineData) return [];
@@ -687,31 +684,52 @@ export default function RightPanel({
     return true;
   };
 
+  const formatDisplayYear = useCallback((value) => (
+    formatYear(
+      value,
+      timelineData?.file?.negID,
+      timelineData?.file?.posID,
+      timelineData?.file?.useMonths === true,
+      timelineData?.file?.hideDecimals
+    )
+  ), [
+    timelineData?.file?.negID,
+    timelineData?.file?.posID,
+    timelineData?.file?.useMonths,
+    timelineData?.file?.hideDecimals,
+  ]);
+
+  const enterEditMode = useCallback(() => {
+    setIsEditMode(true);
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    if (isEditMode && formData?.noteFile) {
+      noteEditorRef.current?.save();
+    }
+    setIsEditMode(false);
+  }, [isEditMode, formData?.noteFile]);
+
+  const toggleEditMode = useCallback(() => {
+    setIsEditMode((prev) => {
+      if (prev && formData?.noteFile) noteEditorRef.current?.save();
+      return !prev;
+    });
+  }, [formData?.noteFile]);
+
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!selectedElement) return;
     const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (e.key !== "e" && e.key !== "E") return;
+      const target = e.target;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      e.preventDefault();
+      toggleEditMode();
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
-  useLayoutEffect(() => {
-    if (!menuOpen || !menuDropdownRef.current) return;
-    const rect = menuDropdownRef.current.getBoundingClientRect();
-    setMenuAlignRight(rect.right > window.innerWidth);
-  }, [menuOpen]);
-
-  const handleCopyId = async () => {
-    try {
-      await navigator.clipboard.writeText(formData.id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy ID:', err);
-    }
-  };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedElement, toggleEditMode]);
 
   const handleAddNote = async () => {
     const timelineId = timelineData?.file?.id?.replace('-timeline', '');
@@ -1226,71 +1244,32 @@ export default function RightPanel({
       className={`right-panel ${isMaximized ? "is-maximized" : ""}`}
     >
       <div className="right-panel-header">
-        <div>
-          <h2>{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</h2>
-          <div className="element-id-container">
-            <p className="element-id">{formData.id}</p>
+        <span className="rp-type-label">{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</span>
+        <div className="right-panel-actions">
+          <div className="rp-header-tabs">
             <button
-              className="copy-id-button"
-              onClick={handleCopyId}
-              title="Copy ID to clipboard"
+              className={`rp-tab-btn${!isEditMode ? " active" : ""}`}
+              onClick={exitEditMode}
               type="button"
             >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
+              Overview
             </button>
             <button
-              className="copy-id-button"
-              onClick={() => {
-                if (isEditMode && formData?.noteFile) {
-                  noteEditorRef.current?.save();
-                }
-                setIsEditMode((prev) => !prev);
-              }}
-              title={isEditMode ? "View details" : "Edit details"}
+              className={`rp-tab-btn${isEditMode ? " active" : ""}`}
+              onClick={enterEditMode}
               type="button"
             >
-              {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
+              Edit
             </button>
-            <div ref={menuRef} style={{ position: "relative" }}>
-              <button
-                className="copy-id-button"
-                onClick={() => { setMenuAlignRight(false); setMenuOpen((v) => !v); }}
-                title="More actions"
-                type="button"
-              >
-                <MoreHorizontal size={14} />
-              </button>
-              {menuOpen && (
-                <div ref={menuDropdownRef} className="timeline-context-menu" style={{ position: "absolute", top: "100%", marginTop: 4, ...(menuAlignRight ? { right: 0 } : { left: 0 }) }}>
-                  <button
-                    className="context-menu-item"
-                    onClick={() => { setMenuOpen(false); onDuplicateElement?.(formData.id); }}
-                    type="button"
-                  >
-                    <CopyPlus size={14} />
-                    Duplicate
-                  </button>
-                  <div className="context-menu-separator" />
-                  <button
-                    className="context-menu-item context-menu-item-danger"
-                    onClick={() => { setMenuOpen(false); onRequestDelete?.(formData.id); }}
-                    type="button"
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
+          <button
+            className="close-button"
+            onClick={onToggleMaximize}
+            title={isMaximized ? "Restore panel" : "Maximize panel"}
+          >
+            {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
         </div>
-        <button
-          className="close-button"
-          onClick={onToggleMaximize}
-          title={isMaximized ? "Restore panel" : "Maximize panel"}
-        >
-          {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-        </button>
       </div>
 
       <div className="right-panel-content">
@@ -1298,7 +1277,7 @@ export default function RightPanel({
           /* View Mode */
           <div className="view-mode">
             {/* Title */}
-            <div className="view-group">
+            <div className="view-group view-group-title">
               <label>Name</label>
               <div className="view-separator" />
               <p>{formData.title}</p>
@@ -1311,46 +1290,19 @@ export default function RightPanel({
                   <div className="view-separator" />
                   <p>
                     {formData.dateLabel ??
-                      formatYear(
-                        formData.date,
-                        timelineData?.file?.negID,
-                        timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true,
-                        timelineData?.file?.hideDecimals
-                      )}
+                      formatDisplayYear(formData.date)}
                   </p>
                 </div>
             ) : (
-              <>
-                <div className="view-group">
-                  <label>Start Year</label>
-                  <div className="view-separator" />
-                  <p>
-                    {formData.startLabel ??
-                      formatYear(
-                        formData.start,
-                        timelineData?.file?.negID,
-                        timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true,
-                        timelineData?.file?.hideDecimals
-                      )}
-                  </p>
-                </div>
-                <div className="view-group">
-                  <label>End Year</label>
-                  <div className="view-separator" />
-                  <p>
-                    {formData.endLabel ??
-                      formatYear(
-                        formData.end,
-                        timelineData?.file?.negID,
-                        timelineData?.file?.posID,
-                        timelineData?.file?.useMonths === true,
-                        timelineData?.file?.hideDecimals
-                      )}
-                  </p>
-                </div>
-              </>
+              <div className="view-group">
+                <label>Date</label>
+                <div className="view-separator" />
+                <p>
+                  {(formData.startLabel ?? formatDisplayYear(formData.start))}
+                  {" – "}
+                  {(formData.endLabel ?? formatDisplayYear(formData.end))}
+                </p>
+              </div>
             )}
 
             {/* Color (spans and eras only) */}
@@ -1429,7 +1381,6 @@ export default function RightPanel({
                         key={tag}
                         type="button"
                         className={`tag-chip tag-chip-link${isSelected ? " is-selected" : ""}`}
-                        style={tagColor ? { background: tagColor, color: getReadableTextColor(tagColor) } : undefined}
                         onClick={() => {
                           if (onToggleTag) {
                             onToggleTag(tag);
@@ -1438,6 +1389,7 @@ export default function RightPanel({
                           }
                         }}
                       >
+                        <span className="tag-chip-dot" style={{ background: tagColor || "var(--element-bg)" }} />
                         {tag}
                       </button>
                     );
@@ -1462,6 +1414,12 @@ export default function RightPanel({
             {formData.noteFile && (
               <>
                 <div className="note-divider" />
+                <div className="rp-note-header">
+                  <span className="rp-note-label rp-note-label-note">Note</span>
+                  {noteWordCount > 0 && (
+                    <span className="rp-note-meta">markdown · {noteWordCount} words</span>
+                  )}
+                </div>
                 <div
                   className="note-render"
                   dangerouslySetInnerHTML={{
@@ -1482,10 +1440,10 @@ export default function RightPanel({
             {timelineData?.file?.useWikipedia && formData.wikiUrl && (
               <>
                 <div className="note-divider" />
-                <div className="wiki-header">
-                  <span className="wiki-header-label">Wiki</span>
+                <div className="rp-note-header">
+                  <span className="rp-note-label rp-note-label-wiki">Wiki</span>
                   <a
-                    className="wiki-header-link"
+                    className="rp-note-meta wiki-header-link"
                     href={formData.wikiUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -2667,8 +2625,47 @@ export default function RightPanel({
           </form>
         )}
       </div>
+
+      <div className="rp-action-bar">
+          <div className="rp-action-group">
+            <button
+              className="rp-action-nav"
+              type="button"
+              disabled={!prevElement}
+              onClick={onSelectPrevious}
+              title={prevElement ? `Previous: ${prevElement.title}` : "No previous element"}
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <button
+              className="rp-action-nav"
+              type="button"
+              disabled={!nextElement}
+              onClick={onSelectNext}
+              title={nextElement ? `Next: ${nextElement.title}` : "No next element"}
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
+          <div className="rp-action-group">
+            <button
+              className="rp-action-edit"
+              type="button"
+              onClick={toggleEditMode}
+            >
+              <span>{isEditMode ? "Exit" : "Edit"}</span>
+              <span className="rp-action-key">E</span>
+            </button>
+            <button
+              className="rp-action-delete"
+              type="button"
+              onClick={() => onRequestDelete?.(formData.id)}
+              title="Delete"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        </div>
     </div>
   );
 }
-
-
