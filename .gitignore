@@ -28,4 +28,5 @@ release
 docs/private
 
 # Local environment overrides
+.env
 .env.local
