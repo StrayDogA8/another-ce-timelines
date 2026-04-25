@@ -2492,14 +2492,12 @@ export default function RightPanel({
                 </div>
               )}
               {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (() => {
-                let articleTitle = formData.wikiUrl;
+                const parsedWiki = parseMediaWikiUrl(formData.wikiUrl);
+                if (!parsedWiki) return null;
+                const safeUrl = `${parsedWiki.host}/wiki/${encodeURIComponent(parsedWiki.title)}`;
+                const articleTitle = parsedWiki.title.replace(/_/g, " ");
                 let articleHost = "";
-                try {
-                  const parsed = new URL(formData.wikiUrl);
-                  const match = parsed.pathname.match(/^\/wiki\/(.+)$/);
-                  if (match) articleTitle = decodeURIComponent(match[1]).replace(/_/g, " ");
-                  articleHost = parsed.hostname;
-                } catch {}
+                try { articleHost = new URL(parsedWiki.host).hostname; } catch {}
                 const avatarLetter = articleTitle.charAt(0).toUpperCase();
                 return (
                   <div className="wiki-url-card">
@@ -2526,7 +2524,7 @@ export default function RightPanel({
                         <Trash2 size={13} />
                       </button>
                       <a
-                        href={formData.wikiUrl}
+                        href={safeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="wiki-url-card-btn"
