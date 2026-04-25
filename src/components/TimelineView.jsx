@@ -212,6 +212,7 @@ const TimelineView = forwardRef(function TimelineView({
   const gridLabelsRef = useRef(null);
   const scaleRef = useRef(1);
   const translateRef = useRef({ x: 0, y: 0 });
+  const prevCalculatedHeightRef = useRef(null);
   const isPanningRef = useRef(false);
   const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
@@ -1087,6 +1088,18 @@ const TimelineView = forwardRef(function TimelineView({
     file,
     publishViewportYear,
   ]);
+
+  // Keep the timeline anchored when height changes
+  useLayoutEffect(() => {
+    const prev = prevCalculatedHeightRef.current;
+    if (prev !== null && prev !== calculatedHeight) {
+      const scale = scaleRef.current;
+      translateRef.current.y += (prev - calculatedHeight) * scale;
+      applyTransform();
+    }
+    prevCalculatedHeightRef.current = calculatedHeight;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculatedHeight]);
 
   const applyTransform = ({ skipLabels = false } = {}) => {
     const timelineEl = timelineRef.current;
