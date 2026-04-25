@@ -6,6 +6,9 @@ const fsSync = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DEFAULT_THEME_KEY = 'parchment';
 
+// Force sRGB color profile to prevent washed-out appearance in screenshots/screenshare on HDR displays
+app.commandLine.appendSwitch('force-color-profile', 'srgb');
+
 // Must run before app.ready
 try {
   const settingsPath = path.join(app.getPath('userData'), 'app-settings.json');

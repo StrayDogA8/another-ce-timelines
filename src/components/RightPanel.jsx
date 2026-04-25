@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
@@ -122,6 +122,13 @@ const NoteEditor = forwardRef(function NoteEditor(
   );
 });
 
+const EVENT_STROKE_STYLE_OPTIONS = [
+  { value: "solid", label: "Solid" },
+  { value: "dashed", label: "Dashed" },
+  { value: "dotted", label: "Dotted" },
+  { value: "none", label: "None" },
+];
+
 export default function RightPanel({
   onSelect,
   selectedElement,
@@ -155,9 +162,8 @@ export default function RightPanel({
   const [spanParentQuery, setSpanParentQuery] = useState("");
   const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
   const spanParentMenuTimeoutRef = useRef(null);
-  const [extendFromQuery, setExtendFromQuery] = useState("");
-  const [isExtendFromMenuOpen, setIsExtendFromMenuOpen] = useState(false);
-  const extendFromMenuTimeoutRef = useRef(null);
+  const [spanRelationType, setSpanRelationType] = useState("branch");
+  const [isSpanRelationOpen, setIsSpanRelationOpen] = useState(false);
   const [mergeParentQuery, setMergeParentQuery] = useState("");
   const [isMergeParentMenuOpen, setIsMergeParentMenuOpen] = useState(false);
   const mergeParentMenuTimeoutRef = useRef(null);
@@ -176,14 +182,6 @@ export default function RightPanel({
   const wikiCacheRef = useRef(new Map());
   const wikiRenderRef = useRef(null);
   const WIKI_SANITIZE_VERSION = "collapsible-1";
-  const [editSectionsOpen, setEditSectionsOpen] = useState({
-    details: true,
-    relations: true,
-    style: true,
-    breaks: true,
-    custom: true,
-    maps: true,
-  });
   const panelRef = useRef(null);
   const TAG_MAX_LENGTH = 32;
   const ID_MAX_LENGTH = 60;
@@ -194,21 +192,21 @@ export default function RightPanel({
   };
 
   useEffect(() => {
-    const anyOpen = isSpanParentMenuOpen || isExtendFromMenuOpen || isMergeParentMenuOpen ||
-      isParentMenuOpen || isTagMenuOpen || isGroupMenuOpen;
+    const anyOpen = isSpanParentMenuOpen || isMergeParentMenuOpen ||
+      isParentMenuOpen || isTagMenuOpen || isGroupMenuOpen || isSpanRelationOpen;
     if (!anyOpen) return;
     const handleKeyDown = (e) => {
       if (e.key !== "Escape") return;
       setIsSpanParentMenuOpen(false);
-      setIsExtendFromMenuOpen(false);
       setIsMergeParentMenuOpen(false);
       setIsParentMenuOpen(false);
       setIsTagMenuOpen(false);
       setIsGroupMenuOpen(false);
+      setIsSpanRelationOpen(false);
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isSpanParentMenuOpen, isExtendFromMenuOpen, isMergeParentMenuOpen, isParentMenuOpen, isTagMenuOpen, isGroupMenuOpen]);
+  }, [isSpanParentMenuOpen, isMergeParentMenuOpen, isParentMenuOpen, isTagMenuOpen, isGroupMenuOpen, isSpanRelationOpen]);
 
   useEffect(() => {
     if (selectedElement) {
@@ -220,16 +218,19 @@ export default function RightPanel({
         startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
         endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
       });
-      setParentQuery(selectedElement.parents?.[0] || "");
+      const parentId = selectedElement.parents?.[0];
+      const parentTitle = parentId
+        ? timelineData?.elements?.find((el) => el.id === parentId)?.title || parentId
+        : "";
+      setParentQuery(parentTitle);
       setTagQuery("");
       setValidationErrors([]);
       if (prevId !== selectedElement.id) {
+        setSpanRelationType(selectedElement.extendFrom ? "extend" : "branch");
         if (!shouldPreserveEditMode) {
           setIsEditMode(false);
           setSpanParentQuery("");
           setIsSpanParentMenuOpen(false);
-          setExtendFromQuery("");
-          setIsExtendFromMenuOpen(false);
           setMergeParentQuery("");
           setIsMergeParentMenuOpen(false);
           setIsParentMenuOpen(false);
@@ -244,8 +245,6 @@ export default function RightPanel({
     if (!isEditMode) {
       setSpanParentQuery("");
       setIsSpanParentMenuOpen(false);
-      setExtendFromQuery("");
-      setIsExtendFromMenuOpen(false);
       setMergeParentQuery("");
       setIsMergeParentMenuOpen(false);
       setIsParentMenuOpen(false);
@@ -253,16 +252,6 @@ export default function RightPanel({
     }
   }, [isEditMode]);
 
-  useEffect(() => {
-    setEditSectionsOpen({
-      details: true,
-      relations: true,
-      style: true,
-      breaks: true,
-      custom: true,
-      maps: true,
-    });
-  }, [selectedElement?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -383,7 +372,6 @@ export default function RightPanel({
   useEffect(() => {
     return () => {
       if (spanParentMenuTimeoutRef.current) clearTimeout(spanParentMenuTimeoutRef.current);
-      if (extendFromMenuTimeoutRef.current) clearTimeout(extendFromMenuTimeoutRef.current);
       if (mergeParentMenuTimeoutRef.current) clearTimeout(mergeParentMenuTimeoutRef.current);
       if (parentMenuTimeoutRef.current) clearTimeout(parentMenuTimeoutRef.current);
       if (tagMenuTimeoutRef.current) clearTimeout(tagMenuTimeoutRef.current);
@@ -488,13 +476,19 @@ export default function RightPanel({
   }, [timelineData, formData, parentRange]);
 
   const extendFromSuggestions = useMemo(() => {
-    if (!extendFromQuery.trim()) return extendFromCandidates;
-    const needle = extendFromQuery.trim().toLowerCase();
+    if (!spanParentQuery.trim()) return extendFromCandidates;
+    const needle = spanParentQuery.trim().toLowerCase();
     return extendFromCandidates.filter((span) =>
       span.id.toLowerCase().includes(needle) ||
       (span.title || "").toLowerCase().includes(needle)
     );
-  }, [extendFromCandidates, extendFromQuery]);
+  }, [extendFromCandidates, spanParentQuery]);
+
+  const extendEnabled = useMemo(() => {
+    const selectedId = formData?.parent || formData?.extendFrom;
+    if (!selectedId) return extendFromCandidates.length > 0;
+    return extendFromCandidates.some((c) => c.id === selectedId);
+  }, [formData?.parent, formData?.extendFrom, extendFromCandidates]);
 
   const mergeParentCandidates = useMemo(() => {
     if (!timelineData || !formData || formData.type !== "span" || !parentRange) return [];
@@ -521,6 +515,34 @@ export default function RightPanel({
     return noteInitialContent.trim().split(/\s+/).filter(Boolean).length;
   }, [noteInitialContent]);
 
+  const renderEventStrokeStyleControl = (field, currentValue, ariaLabel, variant) => (
+    <div className="event-style-toggle" role="group" aria-label={ariaLabel}>
+      {EVENT_STROKE_STYLE_OPTIONS.map((option) => {
+        const isActive = (currentValue || "solid") === option.value;
+        return (
+          <button
+            key={`${field}-${option.value}`}
+            type="button"
+            className={`event-style-option${isActive ? " is-active" : ""}`}
+            aria-pressed={isActive ? "true" : "false"}
+            aria-label={option.label}
+            title={option.label}
+            onClick={() => {
+              const next = { ...formData, [field]: option.value };
+              setFormData(next);
+              commitDraft(next);
+            }}
+          >
+            <span
+              className={`event-style-preview event-style-preview-${variant} event-style-preview-${option.value}`}
+              aria-hidden="true"
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const tagCandidates = useMemo(() => {
     if (!timelineData) return [];
     const tags = new Set();
@@ -542,36 +564,33 @@ export default function RightPanel({
 
   const setSpanParent = (spanId) => {
     if (!spanId) return;
-    setFormData((prev) => ({ ...prev, parent: spanId }));
-    commitDraft({ ...formData, parent: spanId });
+    const { extendFrom: _e, ...base } = formData;
+    const next = { ...base, parent: spanId };
+    setFormData(next);
+    commitDraft(next);
     setSpanParentQuery("");
     setIsSpanParentMenuOpen(false);
   };
 
   const setExtendFrom = (spanId) => {
     if (!spanId) return;
-    setFormData((prev) => ({ ...prev, extendFrom: spanId }));
-    commitDraft({ ...formData, extendFrom: spanId });
-    setExtendFromQuery("");
-    setIsExtendFromMenuOpen(false);
+    const { parent: _p, ...base } = formData;
+    const next = { ...base, extendFrom: spanId };
+    setFormData(next);
+    commitDraft(next);
+    setSpanParentQuery("");
+    setIsSpanParentMenuOpen(false);
   };
 
   const clearExtendFrom = () => {
+    if (!formData.extendFrom) return;
     const { extendFrom: _e, ...rest } = formData;
     setFormData(rest);
     commitDraft(rest);
   };
 
-  const handleExtendFromBlur = () => {
-    if (extendFromMenuTimeoutRef.current) {
-      clearTimeout(extendFromMenuTimeoutRef.current);
-    }
-    extendFromMenuTimeoutRef.current = setTimeout(() => {
-      setIsExtendFromMenuOpen(false);
-    }, 120);
-  };
-
   const clearSpanParent = () => {
+    if (!formData.parent) return;
     const { parent: _p, ...rest } = formData;
     setFormData(rest);
     commitDraft(rest);
@@ -698,17 +717,6 @@ export default function RightPanel({
     timelineData?.file?.useMonths,
     timelineData?.file?.hideDecimals,
   ]);
-
-  const enterEditMode = useCallback(() => {
-    setIsEditMode(true);
-  }, []);
-
-  const exitEditMode = useCallback(() => {
-    if (isEditMode && formData?.noteFile) {
-      noteEditorRef.current?.save();
-    }
-    setIsEditMode(false);
-  }, [isEditMode, formData?.noteFile]);
 
   const toggleEditMode = useCallback(() => {
     setIsEditMode((prev) => {
@@ -1224,9 +1232,6 @@ export default function RightPanel({
 
 
   const showLegacyBreaks = timelineData?.file?.allowLegacyBreaks === true;
-  const toggleEditSection = (key) => {
-    setEditSectionsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   if (!selectedElement || !formData) {
     return (
@@ -1246,22 +1251,14 @@ export default function RightPanel({
       <div className="right-panel-header">
         <span className="rp-type-label">{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</span>
         <div className="right-panel-actions">
-          <div className="rp-header-tabs">
-            <button
-              className={`rp-tab-btn${!isEditMode ? " active" : ""}`}
-              onClick={exitEditMode}
-              type="button"
-            >
-              Overview
-            </button>
-            <button
-              className={`rp-tab-btn${isEditMode ? " active" : ""}`}
-              onClick={enterEditMode}
-              type="button"
-            >
-              Edit
-            </button>
-          </div>
+          <button
+            className="close-button"
+            type="button"
+            onClick={toggleEditMode}
+            title={isEditMode ? "Switch to overview" : "Edit"}
+          >
+            {isEditMode ? <BookOpen size={18} /> : <Pencil size={18} />}
+          </button>
           <button
             className="close-button"
             onClick={onToggleMaximize}
@@ -1484,18 +1481,7 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Details Section */}
-            <div className="rp-edit-section">
-              <button
-                type="button"
-                className="rp-edit-section-head"
-                onClick={() => toggleEditSection("details")}
-                aria-expanded={editSectionsOpen.details ? "true" : "false"}
-              >
-                <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.details ? " open" : ""}`} />
-                <span className="rp-edit-section-label">Details</span>
-              </button>
-              {editSectionsOpen.details && <div className="rp-edit-section-body">
+            {/* Details */}
 
             {/* Title */}
             <div className="form-group">
@@ -1577,10 +1563,21 @@ export default function RightPanel({
 
             {/* Tags */}
             <div className="form-group">
-              <div className="edit-row">
+              <div className="edit-row edit-row-tags">
                 <label htmlFor="tags">Tags</label>
-                <div className="edit-separator" />
-                <div className="branch-picker tag-picker">
+                <div className="tag-edit-flow">
+                  {Array.isArray(formData.tags) && formData.tags.map((tag) => (
+                    <div key={tag} className="tag-edit-chip">
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        className="tag-edit-remove"
+                        onClick={() => removeTag(tag)}
+                        aria-label={`Remove ${tag}`}
+                      >×</button>
+                    </div>
+                  ))}
+                  <div className="branch-picker tag-picker tag-edit-picker">
                     <input
                       id="tags"
                       type="text"
@@ -1592,58 +1589,37 @@ export default function RightPanel({
                       }}
                       onFocus={() => setIsTagMenuOpen(true)}
                       onBlur={handleTagBlur}
-                      placeholder="Add a tag..."
-                      className="edit-input branch-input"
+                      placeholder="add tag..."
+                      className="tag-edit-input"
                       maxLength={TAG_MAX_LENGTH}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           const trimmed = tagQuery.trim();
                           if (trimmed) addTag(trimmed);
-                      }
-                    }}
-                  />
-                  {isTagMenuOpen && tagSuggestions.length > 0 && (
-                    <div className="branch-suggestions">
-                      {tagSuggestions.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className="branch-suggestion-item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            addTag(tag);
-                          }}
-                        >
-                          <span className="branch-suggestion-title">{tag}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        }
+                      }}
+                    />
+                    {isTagMenuOpen && tagSuggestions.length > 0 && (
+                      <div className="branch-suggestions">
+                        {tagSuggestions.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className="branch-suggestion-item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              addTag(tag);
+                            }}
+                          >
+                            <span className="branch-suggestion-title">{tag}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              {Array.isArray(formData.tags) && formData.tags.length > 0 && (
-                <div className="chip-selected-list">
-                  {formData.tags.map((tag) => {
-                    return (
-                    <div
-                      key={tag}
-                      className="chip-selected-item"
-                    >
-                      <span className="chip-selected-text">{tag}</span>
-                        <button
-                          type="button"
-                          className="chip-selected-remove"
-                          onClick={() => removeTag(tag)}
-                          aria-label={`Remove ${tag}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {/* Group (events and spans only) */}
@@ -1738,80 +1714,92 @@ export default function RightPanel({
               );
             })()}
 
-              </div>}
-            </div>
-
+            {/* Relations */}
             {(formData.type === "event" || formData.type === "span") && (
-              <div className="rp-edit-section">
-                <button
-                  type="button"
-                  className="rp-edit-section-head"
-                  onClick={() => toggleEditSection("relations")}
-                  aria-expanded={editSectionsOpen.relations ? "true" : "false"}
-                >
-                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.relations ? " open" : ""}`} />
-                  <span className="rp-edit-section-label">Relations</span>
-                </button>
-                {editSectionsOpen.relations && <div className="rp-edit-section-body">
+              <>
             {/* Parent (events only) */}
             {formData.type === "event" && (
               <div className="form-group">
                 <div className="edit-row">
                   <label htmlFor="parents">Parent</label>
                   <div className="edit-separator" />
-                  <div className="branch-picker parent-picker">
-                    <input
-                      id="parents"
-                      type="text"
-                      value={parentQuery}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setParentQuery(value);
-                        setIsParentMenuOpen(true);
-                        const trimmed = value.trim();
-                        if (validationErrors.length) setValidationErrors([]);
-                        handleChange("parents", trimmed ? [trimmed] : []);
-                      }}
-                      onFocus={() => setIsParentMenuOpen(true)}
-                      onBlur={handleParentBlur}
-                      placeholder="Search span ID or title..."
-                      className="edit-input branch-input"
-                      maxLength={ID_MAX_LENGTH}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const choice = parentSuggestions[0];
-                          if (choice) {
-                            setParentQuery(choice.id);
-                            handleChange("parents", [choice.id]);
-                            commitDraft({ ...formData, parents: [choice.id] });
-                            setIsParentMenuOpen(false);
-                          }
-                        }
-                      }}
-                    />
-                    {isParentMenuOpen && (
-                      <div className="branch-suggestions">
-                        {parentSuggestions.length > 0 ? (
-                          parentSuggestions.map((span) => (
-                            <button
-                              key={span.id}
-                              type="button"
-                              className="branch-suggestion-item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setParentQuery(span.id);
-                                handleChange("parents", [span.id]);
-                                commitDraft({ ...formData, parents: [span.id] });
+                  <div className="span-relation-wrap">
+                    {formData.parents?.[0] ? (
+                      <div className="relation-selected-list">
+                        <div className="relation-selected-item">
+                          <button
+                            type="button"
+                            className="relation-selected-link"
+                            onClick={() => onSelect(formData.parents[0])}
+                          >
+                            {timelineData.elements.find((el) => el.id === formData.parents[0])?.title || formData.parents[0]}
+                          </button>
+                          <button
+                            type="button"
+                            className="relation-selected-remove"
+                            onClick={() => {
+                              const next = { ...formData, parents: [] };
+                              setFormData(next);
+                              commitDraft(next);
+                              setParentQuery("");
+                            }}
+                            aria-label="Remove parent"
+                          >×</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="branch-picker">
+                        <input
+                          id="parents"
+                          type="text"
+                          value={parentQuery}
+                          onChange={(e) => {
+                            setParentQuery(e.target.value);
+                            setIsParentMenuOpen(true);
+                          }}
+                          onFocus={() => setIsParentMenuOpen(true)}
+                          onBlur={handleParentBlur}
+                          placeholder="Search span ID or title..."
+                          className="edit-input branch-input"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const choice = parentSuggestions[0];
+                              if (choice) {
+                                const next = { ...formData, parents: [choice.id] };
+                                setFormData(next);
+                                commitDraft(next);
+                                setParentQuery("");
                                 setIsParentMenuOpen(false);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">{span.title || span.id}</span>
-                              <span className="branch-suggestion-id">{span.id}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="branch-suggestion-empty">No matching spans</div>
+                              }
+                            }
+                          }}
+                        />
+                        {isParentMenuOpen && (
+                          <div className="branch-suggestions">
+                            {parentSuggestions.length > 0 ? (
+                              parentSuggestions.map((span) => (
+                                <button
+                                  key={span.id}
+                                  type="button"
+                                  className="branch-suggestion-item"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    const next = { ...formData, parents: [span.id] };
+                                    setFormData(next);
+                                    commitDraft(next);
+                                    setParentQuery("");
+                                    setIsParentMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                  <span className="branch-suggestion-id">{span.id}</span>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="branch-suggestion-empty">No matching spans</div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1826,74 +1814,125 @@ export default function RightPanel({
                 <div className="edit-row">
                   <label htmlFor="spanParent">Parent</label>
                   <div className="edit-separator" />
-                  {formData.parent ? (
-                    <div className="relation-selected-list">
-                      <div className="relation-selected-item">
-                        <button
-                          type="button"
-                          className="relation-selected-link"
-                          onClick={() => onSelect(formData.parent)}
-                        >
-                          {timelineData.elements.find((el) => el.id === formData.parent)?.title || formData.parent}
-                        </button>
-                        <button
-                          type="button"
-                          className="relation-selected-remove"
-                          onClick={clearSpanParent}
-                          aria-label="Remove parent"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="branch-picker">
-                      <input
-                        id="spanParent"
-                        type="text"
-                        value={spanParentQuery}
-                        onChange={(e) => {
-                          setSpanParentQuery(e.target.value);
-                          setIsSpanParentMenuOpen(true);
-                        }}
-                        onFocus={() => setIsSpanParentMenuOpen(true)}
-                        onBlur={handleSpanParentBlur}
-                        placeholder="Search span ID or title..."
-                        className="edit-input branch-input"
-                        maxLength={ID_MAX_LENGTH}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (spanParentSuggestions.length > 0) {
-                              setSpanParent(spanParentSuggestions[0].id);
-                            }
-                          }
-                        }}
-                      />
-                      {isSpanParentMenuOpen && spanParentQuery.trim().length > 0 && (
-                        <div className="branch-suggestions">
-                          {spanParentSuggestions.length > 0 ? (
-                            spanParentSuggestions.map((span) => (
-                              <button
-                                key={span.id}
-                                type="button"
-                                className="branch-suggestion-item"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setSpanParent(span.id);
-                                }}
-                              >
-                                <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                <span className="branch-suggestion-id">{span.id}</span>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="branch-suggestion-empty">No matching spans</div>
-                          )}
+                  <div className="span-relation-wrap">
+                    <div className="span-relation-dropdown">
+                      <button
+                        type="button"
+                        className="span-relation-dropdown-btn"
+                        onClick={() => setIsSpanRelationOpen((v) => !v)}
+                      >
+                        {spanRelationType === "branch" ? "Branch from" : "Extend from"}
+                        <ChevronDown size={10} />
+                      </button>
+                      {isSpanRelationOpen && (
+                        <div className="span-relation-dropdown-menu">
+                          <button
+                            type="button"
+                            className={`span-relation-dropdown-item${spanRelationType === "branch" ? " active" : ""}`}
+                            onMouseDown={() => {
+                              if (spanRelationType === "extend" && formData.extendFrom) {
+                                const { extendFrom: _e, ...base } = formData;
+                                const next = { ...base, parent: formData.extendFrom };
+                                setFormData(next);
+                                commitDraft(next);
+                              }
+                              setSpanRelationType("branch");
+                              setIsSpanRelationOpen(false);
+                              setSpanParentQuery("");
+                            }}
+                          >Branch from</button>
+                          <button
+                            type="button"
+                            className={`span-relation-dropdown-item${spanRelationType === "extend" ? " active" : ""}${!extendEnabled ? " disabled" : ""}`}
+                            disabled={!extendEnabled}
+                            onMouseDown={() => {
+                              if (!extendEnabled) return;
+                              if (spanRelationType === "branch" && formData.parent) {
+                                const { parent: _p, ...base } = formData;
+                                const next = { ...base, extendFrom: formData.parent };
+                                setFormData(next);
+                                commitDraft(next);
+                              }
+                              setSpanRelationType("extend");
+                              setIsSpanRelationOpen(false);
+                              setSpanParentQuery("");
+                            }}
+                          >Extend from</button>
                         </div>
                       )}
                     </div>
-                  )}
+                    {(formData.parent || formData.extendFrom) ? (
+                      <div className="relation-selected-list">
+                        <div className="relation-selected-item">
+                          <button
+                            type="button"
+                            className="relation-selected-link"
+                            onClick={() => onSelect(formData.parent || formData.extendFrom)}
+                          >
+                            {(() => { const id = formData.parent || formData.extendFrom; return timelineData.elements.find((el) => el.id === id)?.title || id; })()}
+                          </button>
+                          <button
+                            type="button"
+                            className="relation-selected-remove"
+                            onClick={() => { clearSpanParent(); clearExtendFrom(); }}
+                            aria-label="Remove parent"
+                          >×</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="branch-picker">
+                        <input
+                          id="spanParent"
+                          type="text"
+                          value={spanParentQuery}
+                          onChange={(e) => {
+                            setSpanParentQuery(e.target.value);
+                            setIsSpanParentMenuOpen(true);
+                          }}
+                          onFocus={() => setIsSpanParentMenuOpen(true)}
+                          onBlur={handleSpanParentBlur}
+                          placeholder="Search span..."
+                          className="edit-input branch-input"
+                          maxLength={ID_MAX_LENGTH}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const suggestions = spanRelationType === "branch" ? spanParentSuggestions : extendFromSuggestions;
+                              if (suggestions.length > 0) {
+                                if (spanRelationType === "branch") setSpanParent(suggestions[0].id);
+                                else setExtendFrom(suggestions[0].id);
+                              }
+                            }
+                          }}
+                        />
+                        {isSpanParentMenuOpen && spanParentQuery.trim().length > 0 && (() => {
+                          const suggestions = spanRelationType === "branch" ? spanParentSuggestions : extendFromSuggestions;
+                          const emptyMsg = spanRelationType === "branch" ? "No matching spans" : "No contiguous spans";
+                          return (
+                            <div className="branch-suggestions">
+                              {suggestions.length > 0 ? suggestions.map((span) => (
+                                <button
+                                  key={span.id}
+                                  type="button"
+                                  className="branch-suggestion-item"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    if (spanRelationType === "branch") setSpanParent(span.id);
+                                    else setExtendFrom(span.id);
+                                  }}
+                                >
+                                  <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                  <span className="branch-suggestion-id">{span.id}</span>
+                                </button>
+                              )) : (
+                                <div className="branch-suggestion-empty">{emptyMsg}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1975,97 +2014,9 @@ export default function RightPanel({
               </div>
             )}
 
-            {formData.type === "span" && (
-              <div className="form-group">
-                <div className="edit-row">
-                  <label htmlFor="extendFrom">Extend From</label>
-                  <div className="edit-separator" />
-                  {formData.extendFrom ? (
-                    <div className="relation-selected-list">
-                      <div className="relation-selected-item">
-                        <button
-                          type="button"
-                          className="relation-selected-link"
-                          onClick={() => onSelect(formData.extendFrom)}
-                        >
-                          {timelineData.elements.find((el) => el.id === formData.extendFrom)?.title || formData.extendFrom}
-                        </button>
-                        <button
-                          type="button"
-                          className="relation-selected-remove"
-                          onClick={clearExtendFrom}
-                          aria-label="Remove extend-from link"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="branch-picker">
-                      <input
-                        id="extendFrom"
-                        type="text"
-                        value={extendFromQuery}
-                        onChange={(e) => {
-                          setExtendFromQuery(e.target.value);
-                          setIsExtendFromMenuOpen(true);
-                        }}
-                        onFocus={() => setIsExtendFromMenuOpen(true)}
-                        onBlur={handleExtendFromBlur}
-                        placeholder="Ends where this span starts..."
-                        className="edit-input branch-input"
-                        maxLength={ID_MAX_LENGTH}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (extendFromSuggestions.length > 0) {
-                              setExtendFrom(extendFromSuggestions[0].id);
-                            }
-                          }
-                        }}
-                      />
-                      {isExtendFromMenuOpen && extendFromQuery.trim().length > 0 && (
-                        <div className="branch-suggestions">
-                          {extendFromSuggestions.length > 0 ? (
-                            extendFromSuggestions.map((span) => (
-                              <button
-                                key={span.id}
-                                type="button"
-                                className="branch-suggestion-item"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setExtendFrom(span.id);
-                                }}
-                              >
-                                <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                <span className="branch-suggestion-id">{span.id}</span>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="branch-suggestion-empty">No matching contiguous spans</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-                </div>}
-              </div>
-            )}
+            </>)}
 
-            <div className="rp-edit-section">
-              <button
-                type="button"
-                className="rp-edit-section-head"
-                onClick={() => toggleEditSection("style")}
-                aria-expanded={editSectionsOpen.style ? "true" : "false"}
-              >
-                <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.style ? " open" : ""}`} />
-                <span className="rp-edit-section-label">Style</span>
-              </button>
-              {editSectionsOpen.style && <div className="rp-edit-section-body">
+            {/* Style */}
 
             {/* Color (spans and eras only) */}
             {formData.type !== "event" && (
@@ -2267,62 +2218,23 @@ export default function RightPanel({
                 </div>
                 <div className="form-group">
                   <div className="edit-row">
-                    <label htmlFor="eventLineStyle">Line Style</label>
+                    <label>Line Style</label>
                     <div className="edit-separator" />
-                    <div className="edit-select-wrap">
-                      <select
-                        id="eventLineStyle"
-                        className="edit-select"
-                        value={formData.eventLineStyle || "solid"}
-                        onChange={(e) => handleChange("eventLineStyle", e.target.value)}
-                        onBlur={(e) => commitDraft({ ...formData, eventLineStyle: e.target.value })}
-                      >
-                        <option value="solid">Solid</option>
-                        <option value="dashed">Dashed</option>
-                        <option value="dotted">Dotted</option>
-                        <option value="none">None</option>
-                      </select>
-                    </div>
+                    {renderEventStrokeStyleControl("eventLineStyle", formData.eventLineStyle, "Event line style", "line")}
                   </div>
                 </div>
                 <div className="form-group">
                   <div className="edit-row">
-                    <label htmlFor="eventBorderStyle">Border Style</label>
+                    <label>Border Style</label>
                     <div className="edit-separator" />
-                    <div className="edit-select-wrap">
-                      <select
-                        id="eventBorderStyle"
-                        className="edit-select"
-                        value={formData.eventBorderStyle || "solid"}
-                        onChange={(e) => handleChange("eventBorderStyle", e.target.value)}
-                        onBlur={(e) => commitDraft({ ...formData, eventBorderStyle: e.target.value })}
-                      >
-                        <option value="solid">Solid</option>
-                        <option value="dashed">Dashed</option>
-                        <option value="dotted">Dotted</option>
-                        <option value="none">None</option>
-                      </select>
-                    </div>
+                    {renderEventStrokeStyleControl("eventBorderStyle", formData.eventBorderStyle, "Event border style", "border")}
                   </div>
                 </div>
               </>
             )}
-              </div>}
-            </div>
 
-            {/* Legacy Breaks */}
+            {/* Breaks */}
             {showLegacyBreaks && formData.type === "span" && (
-              <div className="rp-edit-section">
-                <button
-                  type="button"
-                  className="rp-edit-section-head"
-                  onClick={() => toggleEditSection("breaks")}
-                  aria-expanded={editSectionsOpen.breaks ? "true" : "false"}
-                >
-                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.breaks ? " open" : ""}`} />
-                  <span className="rp-edit-section-label">Breaks</span>
-                </button>
-                {editSectionsOpen.breaks && <div className="rp-edit-section-body">
                 <div className="breaks-list">
                   {Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
                     formData.breaks
@@ -2479,58 +2391,41 @@ export default function RightPanel({
                     + Add Break
                   </button>
                 </div>
-                </div>}
-              </div>
             )}
 
+            {/* Map */}
             {timelineData?.file?.useMaps && (
-              <div className="rp-edit-section">
-                <button
-                  type="button"
-                  className="rp-edit-section-head"
-                  onClick={() => toggleEditSection("maps")}
-                  aria-expanded={editSectionsOpen.maps ? "true" : "false"}
-                >
-                  <ChevronDown size={14} className={`rp-edit-caret${editSectionsOpen.maps ? " open" : ""}`} />
-                  <span className="rp-edit-section-label">Map</span>
-                </button>
-                {editSectionsOpen.maps && (
-                  <div className="rp-edit-section-body">
-                    <div className="form-group">
-                      <div className="edit-row">
-                        <label htmlFor="lat">Latitude</label>
-                        <div className="edit-separator" />
-                        <input
-                          id="lat"
-                          type="number"
-                          className="edit-input"
-                          value={formData.lat ?? ""}
-                          onChange={(e) => handleChange("lat", e.target.value === "" ? null : Number(e.target.value))}
-                          onBlur={(e) => commitDraft({ ...formData, lat: e.target.value === "" ? null : Number(e.target.value) })}
-                          placeholder="e.g. 48.8566"
-                          step="any"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <div className="edit-row">
-                        <label htmlFor="lng">Longitude</label>
-                        <div className="edit-separator" />
-                        <input
-                          id="lng"
-                          type="number"
-                          className="edit-input"
-                          value={formData.lng ?? ""}
-                          onChange={(e) => handleChange("lng", e.target.value === "" ? null : Number(e.target.value))}
-                          onBlur={(e) => commitDraft({ ...formData, lng: e.target.value === "" ? null : Number(e.target.value) })}
-                          placeholder="e.g. 2.3522"
-                          step="any"
-                        />
-                      </div>
+              <>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label>Coordinates</label>
+                    <div className="edit-separator" />
+                    <div className="coord-inputs">
+                      <input
+                        id="lat"
+                        type="number"
+                        className="edit-input"
+                        value={formData.lat ?? ""}
+                        onChange={(e) => handleChange("lat", e.target.value === "" ? null : Number(e.target.value))}
+                        onBlur={(e) => commitDraft({ ...formData, lat: e.target.value === "" ? null : Number(e.target.value) })}
+                        placeholder="lat"
+                        step="any"
+                      />
+                      <span className="coord-sep">,</span>
+                      <input
+                        id="lng"
+                        type="number"
+                        className="edit-input"
+                        value={formData.lng ?? ""}
+                        onChange={(e) => handleChange("lng", e.target.value === "" ? null : Number(e.target.value))}
+                        onBlur={(e) => commitDraft({ ...formData, lng: e.target.value === "" ? null : Number(e.target.value) })}
+                        placeholder="lng"
+                        step="any"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
 
             <div className="form-group note-form-group">
@@ -2565,21 +2460,11 @@ export default function RightPanel({
                 />
               )}
               {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
-                <div className="wiki-url-display">
-                  <div className="wiki-url-row">
-                    <span className="wiki-url-label">Wiki</span>
-                    <button
-                      type="button"
-                      className="wiki-url-remove"
-                      onClick={() => { setIsWikiUrlInputOpen(false); setWikiUrlInputError(""); }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                <div className="wiki-url-input-card">
                   <input
                     ref={wikiUrlInputRef}
                     type="text"
-                    className={`edit-input wiki-url-input${wikiUrlInputError ? " settings-input-error" : ""}`}
+                    className={`wiki-url-input-field${wikiUrlInputError ? " settings-input-error" : ""}`}
                     value={wikiUrlInput}
                     onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
                     onKeyDown={handleWikiUrlKeyDown}
@@ -2588,38 +2473,71 @@ export default function RightPanel({
                   {wikiUrlInputError && (
                     <div className="wiki-url-error">{wikiUrlInputError}</div>
                   )}
-                  <button
-                    type="button"
-                    className="btn-secondary btn-note"
-                    onClick={handleWikiUrlSubmit}
-                    style={{ marginTop: 4 }}
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-              {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (
-                <div className="wiki-url-display">
-                  <div className="wiki-url-row">
-                    <span className="wiki-url-label">Wiki</span>
+                  <div className="wiki-url-input-actions">
                     <button
                       type="button"
-                      className="wiki-url-change"
-                      onClick={handleOpenWikiInput}
+                      className="wiki-url-input-btn"
+                      onClick={() => { setIsWikiUrlInputOpen(false); setWikiUrlInputError(""); }}
                     >
-                      Change
+                      Cancel
                     </button>
                     <button
                       type="button"
-                      className="wiki-url-remove"
-                      onClick={handleRemoveWikiUrl}
+                      className="wiki-url-input-btn wiki-url-input-btn-save"
+                      onClick={handleWikiUrlSubmit}
                     >
-                      Remove
+                      Save
                     </button>
                   </div>
-                  <div className="wiki-url-value">{formData.wikiUrl}</div>
                 </div>
               )}
+              {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (() => {
+                let articleTitle = formData.wikiUrl;
+                let articleHost = "";
+                try {
+                  const parsed = new URL(formData.wikiUrl);
+                  const match = parsed.pathname.match(/^\/wiki\/(.+)$/);
+                  if (match) articleTitle = decodeURIComponent(match[1]).replace(/_/g, " ");
+                  articleHost = parsed.hostname;
+                } catch {}
+                const avatarLetter = articleTitle.charAt(0).toUpperCase();
+                return (
+                  <div className="wiki-url-card">
+                    <div className="wiki-url-card-avatar">{avatarLetter}</div>
+                    <div className="wiki-url-card-info">
+                      <div className="wiki-url-card-title">{articleTitle}</div>
+                      <div className="wiki-url-card-host">{articleHost}</div>
+                    </div>
+                    <div className="wiki-url-card-actions">
+                      <button
+                        type="button"
+                        className="wiki-url-card-btn wiki-url-card-btn-hover"
+                        onClick={handleOpenWikiInput}
+                        title="Change"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="wiki-url-card-btn wiki-url-card-btn-hover wiki-url-card-btn-remove"
+                        onClick={handleRemoveWikiUrl}
+                        title="Remove"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      <a
+                        href={formData.wikiUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="wiki-url-card-btn"
+                        title="Open article"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
           </form>

@@ -54,7 +54,7 @@
   bottom: 0;
   background: var(--secondary-bg);
   z-index: 30;
-  overflow: auto;
+  overflow: visible;
 }
 
 .overlay-sidebar {
