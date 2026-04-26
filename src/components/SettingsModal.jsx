@@ -54,6 +54,7 @@ export default function SettingsModal({
   const [spanColorEvents, setSpanColorEvents] = useState(false);
   const [disableGroups, setDisableGroups] = useState(false);
   const [panelGroupMode, setPanelGroupMode] = useState("default");
+  const [nestEraSubGroups, setNestEraSubGroups] = useState(false);
   const [showPopularTags, setShowPopularTags] = useState(true);
   const [useSecondaryBg, setUseSecondaryBg] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
@@ -175,6 +176,7 @@ export default function SettingsModal({
         setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
         setDisableGroups(Boolean(timelineData.file.disableGroups));
         setPanelGroupMode(timelineData.file.panelGroupMode || (timelineData.file.useEraGroupsInPanel ? "eras" : "default"));
+        setNestEraSubGroups(Boolean(timelineData.file.nestEraSubGroups));
         setShowPopularTags(timelineData.file.showPopularTags !== false);
         setUseSecondaryBg(Boolean(timelineData.file.useSecondaryBg));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
@@ -274,6 +276,7 @@ export default function SettingsModal({
           spanColorEvents,
           disableGroups,
           panelGroupMode,
+          nestEraSubGroups,
           showPopularTags,
           useSecondaryBg,
           useWikipedia,
@@ -315,6 +318,7 @@ export default function SettingsModal({
     spanColorEvents,
     disableGroups,
     panelGroupMode,
+    nestEraSubGroups,
     showPopularTags,
     useSecondaryBg,
     useWikipedia,
@@ -985,6 +989,26 @@ export default function SettingsModal({
                   </select>
                 </div>
               </div>
+
+              {/* Nest Sub-Eras (only relevant for group by eras) */}
+              {panelGroupMode === "eras" && (
+                <div className="settings-row">
+                  <div className="settings-row-left">
+                    <div className="settings-row-label">Nest Sub-Eras <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
+                    <div className="settings-row-description">Indent sub-eras under their parent era, with deeper nesting for sub-eras within sub-eras.</div>
+                  </div>
+                  <div className="settings-row-right">
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={nestEraSubGroups}
+                        onChange={(e) => setNestEraSubGroups(e.target.checked)}
+                      />
+                      <span className="settings-toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {/* Show Popular Tags */}
               <div className="settings-row">

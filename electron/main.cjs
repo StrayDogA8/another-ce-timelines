@@ -1237,3 +1237,11 @@ ipcMain.handle('list-fonts', async () => {
     return [];
   }
 });
+
+ipcMain.handle('capture-screenshot', async () => {
+  const image = await mainWindow.webContents.capturePage();
+  const filename = `screenshot-${Date.now()}.png`;
+  const dest = path.join(app.getPath('downloads'), filename);
+  await fs.writeFile(dest, image.toPNG());
+  return dest;
+});

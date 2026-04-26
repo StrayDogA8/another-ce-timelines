@@ -147,6 +147,7 @@ function App() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [screenshotToast, setScreenshotToast] = useState(false);
   const [deleteElementDialog, setDeleteElementDialog] = useState(null);
   const [deleteElementWithNotes, setDeleteElementWithNotes] = useState(false);
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
@@ -490,6 +491,11 @@ function App() {
       } else if (matchesKeybind(e, keybinds.redo)) {
         e.preventDefault();
         redoTimeline();
+      } else if (e.shiftKey && e.key === "S") {
+        e.preventDefault();
+        window.electron?.captureScreenshot()
+          .then(() => { setScreenshotToast(true); setTimeout(() => setScreenshotToast(false), 2000); })
+          .catch((err) => console.error("[screenshot] error:", err));
       }
     };
 
@@ -1015,6 +1021,7 @@ function App() {
     spanColorEvents,
     disableGroups,
     panelGroupMode,
+    nestEraSubGroups,
     showPopularTags,
     useSecondaryBg,
     useWikipedia,
@@ -1067,6 +1074,7 @@ function App() {
         spanColorEvents,
         disableGroups,
         panelGroupMode,
+        nestEraSubGroups,
         showPopularTags,
         useSecondaryBg,
         useWikipedia,
@@ -1095,6 +1103,7 @@ function App() {
       if (!spanColorEvents) delete nextFile.spanColorEvents;
       if (!disableGroups) delete nextFile.disableGroups;
       if (!panelGroupMode || panelGroupMode === "default") delete nextFile.panelGroupMode;
+      if (!nestEraSubGroups) delete nextFile.nestEraSubGroups;
       delete nextFile.useEraGroupsInPanel;
       delete nextFile.useSpanGroupsInPanel;
       if (!useWikipedia) delete nextFile.useWikipedia;
@@ -2209,6 +2218,11 @@ function App() {
         fileSettings={timelineData?.file}
       />
       </div>
+      {screenshotToast && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#1a7a4a', borderRadius: '8px', padding: '8px 14px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', pointerEvents: 'none' }}>
+          Screenshot saved
+        </div>
+      )}
       {sessionExpired && (
         <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
           <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>

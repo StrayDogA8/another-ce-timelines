@@ -374,8 +374,19 @@ export default function Sidebar({
       };
     });
 
+    const buildEraNode = (era) => ({
+      era,
+      items: sortItems(allItems.filter((el) => elementToAnyEraId.get(el.id) === era.id)),
+      children: sortedEras
+        .filter((se) => eraParentMap.get(se.id) === era.id)
+        .sort((a, b) => a.start - b.start)
+        .map(buildEraNode),
+      barLeft: ((compressYear(era.start) - cMin) / range) * 100,
+      barWidth: Math.max(1, ((compressYear(era.end) - compressYear(era.start)) / range) * 100),
+    });
+    const tree = rootEras.map(buildEraNode);
     const ungrouped = sortItems(allItems.filter((el) => !elementToAnyEraId.has(el.id)));
-    return { groups, ungrouped };
+    return { groups, tree, ungrouped };
   }, [eras, events, spans]);
 
   const spanGroups = useMemo(() => {
@@ -816,6 +827,18 @@ export default function Sidebar({
   const visibleUngrouped = searchActive
     ? eraGroups.ungrouped.filter((el) => (el.title || el.id || "").toLowerCase().includes(q))
     : eraGroups.ungrouped;
+  const visibleEraTree = searchActive
+    ? (() => {
+        const filterNode = (node) => {
+          const eraMatches = matchesSearch(node.era.title || node.era.id);
+          const filteredItems = eraMatches ? node.items : node.items.filter((el) => matchesSearch(el.title || el.id));
+          const filteredChildren = node.children.map(filterNode).filter(Boolean);
+          if (!eraMatches && filteredItems.length === 0 && filteredChildren.length === 0) return null;
+          return { ...node, items: filteredItems, children: filteredChildren };
+        };
+        return eraGroups.tree.map(filterNode).filter(Boolean);
+      })()
+    : eraGroups.tree;
   const visibleSpanGroups = searchActive
     ? spanGroups.groups
         .map((group) => {
@@ -859,6 +882,83 @@ export default function Sidebar({
         visibleItems: groupElements.get(group.id) || [],
         visibleCount: groupCounts.get(group.id) || 0,
       }));
+
+  const countEraTreeItems = (node) => node.items.length + node.children.reduce((s, c) => s + countEraTreeItems(c), 0);
+  const renderEraTreeNode = (node, depth) => {
+    const { era, items, children, barLeft, barWidth } = node;
+    const isOpen = searchActive || openEraGroups[era.id] !== false;
+    const eraColor = era.color || "var(--element-bg)";
+    const totalCount = countEraTreeItems(node);
+    if (depth === 0) {
+      return (
+        <div key={era.id} className="sb-era-group">
+          <div className="sb-era-header">
+            <button className="sb-era-toggle" onClick={() => setOpenEraGroups((prev) => ({ ...prev, [era.id]: !isOpen }))}>
+              <ChevronDown className={`sb-caret ${isOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
+            </button>
+            <button
+              className="sb-era-title-btn"
+              onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(era.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: era }); }}
+            >
+              <span className={`sb-era-name${selectedId === era.id ? " is-selected" : ""}`} style={selectedId === era.id ? undefined : { color: getEraLabelColor(era.color, sidebarBgHex) || undefined }}>
+                {(era.title || era.id).toUpperCase()}
+              </span>
+            </button>
+            <span className="sb-era-count">{totalCount}</span>
+          </div>
+          {eraGroups.tree.length > 1 && (
+            <div className="sb-era-bar-track">
+              <div className="sb-era-bar" style={{ left: `${barLeft}%`, width: `${barWidth}%`, background: getEraLabelColor(era.color, sidebarBgHex) || eraColor }} />
+            </div>
+          )}
+          {isOpen && (
+            <div className="sb-era-items">
+              {items.map((el) => (
+                <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+              ))}
+              {children.length > 0 && (
+                <div className="sb-era-nested-children">
+                  {children.map((child) => renderEraTreeNode(child, depth + 1))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div key={era.id} className="sb-sub-era-group">
+        <div className="sb-sub-era-header">
+          <button className="sb-era-toggle" onClick={() => setOpenEraGroups((prev) => ({ ...prev, [era.id]: !isOpen }))}>
+            <ChevronDown className={`sb-caret ${isOpen ? "open" : ""}`} size={10} strokeWidth={2.5} />
+          </button>
+          <button
+            className="sb-era-title-btn"
+            onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(era.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: era }); }}
+          >
+            <span className={`sb-sub-era-name${selectedId === era.id ? " is-selected" : ""}`} style={selectedId === era.id ? undefined : { color: getEraLabelColor(era.color, sidebarBgHex) || undefined }}>
+              {(era.title || era.id).toUpperCase()}
+            </span>
+          </button>
+          <span className="sb-sub-era-range">{formatRange(era.start, era.end, era.startLabel, era.endLabel)}</span>
+        </div>
+        {isOpen && (items.length > 0 || children.length > 0) && (
+          <div className="sb-sub-era-items">
+            {items.map((el) => (
+              <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+            ))}
+            {children.length > 0 && (
+              <div className="sb-era-nested-children">
+                {children.map((child) => renderEraTreeNode(child, depth + 1))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="sidebar-root">
@@ -1105,26 +1205,31 @@ export default function Sidebar({
         <div className="sb-era-groups">
           {visibleSpanGroups.map(({ span, items, subGroups }) => {
             const isOpen = searchActive || openSpanGroups[span.id] !== false;
-            const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
-            return (
-              <div key={span.id} className="sb-era-group">
-                <div className="sb-era-header">
-                  <button className="sb-era-toggle" onClick={() => setOpenSpanGroups((prev) => ({ ...prev, [span.id]: !isOpen }))}>
-                    <ChevronDown className={`sb-caret ${isOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
-                  </button>
-                  <button
-                    className="sb-era-title-btn"
-                    onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(span.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: span }); }}
+            const renderSpanHeader = (s, isRoot, isOpenState, onToggle) => (
+              <div className={`sb-sub-era-header${isRoot ? " is-root-span" : ""}`}>
+                <button className="sb-era-toggle" onClick={onToggle}>
+                  <ChevronDown className={`sb-caret ${isOpenState ? "open" : ""}`} size={isRoot ? 11 : 10} strokeWidth={2.5} />
+                </button>
+                <button
+                  className="sb-era-title-btn"
+                  onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(s.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
+                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: s }); }}
+                >
+                  <span
+                    className={`sb-sub-era-name${selectedId === s.id ? " is-selected" : ""}`}
+                    style={selectedId === s.id ? undefined : { color: getEraLabelColor(s.color, sidebarBgHex) || undefined }}
                   >
-                    <span className={`sb-era-name${selectedId === span.id ? " is-selected" : ""}`}>
-                      {(span.title || span.id).toUpperCase()}
-                    </span>
-                  </button>
-                  <span className="sb-era-count">{totalCount}</span>
-                </div>
+                    {(s.title || s.id).toUpperCase()}
+                  </span>
+                </button>
+                <span className="sb-sub-era-range">{formatRange(s.start, s.end, s.startLabel, s.endLabel)}</span>
+              </div>
+            );
+            return (
+              <div key={span.id} className="sb-sub-era-group">
+                {renderSpanHeader(span, true, isOpen, () => setOpenSpanGroups((prev) => ({ ...prev, [span.id]: !isOpen })))}
                 {isOpen && (
-                  <div className="sb-era-items">
+                  <div className="sb-sub-era-items">
                     {items.map((el) => (
                       <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                     ))}
@@ -1132,21 +1237,7 @@ export default function Sidebar({
                       const isChildOpen = searchActive || openSpanGroups[childSpan.id] !== false;
                       return (
                         <div key={childSpan.id} className="sb-sub-era-group">
-                          <div className="sb-sub-era-header">
-                            <button className="sb-era-toggle" onClick={() => setOpenSpanGroups((prev) => ({ ...prev, [childSpan.id]: !isChildOpen }))}>
-                              <ChevronDown className={`sb-caret ${isChildOpen ? "open" : ""}`} size={10} strokeWidth={2.5} />
-                            </button>
-                            <button
-                              className="sb-era-title-btn"
-                              onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(childSpan.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
-                              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: childSpan }); }}
-                            >
-                              <span className={`sb-sub-era-name${selectedId === childSpan.id ? " is-selected" : ""}`}>
-                                {(childSpan.title || childSpan.id).toUpperCase()}
-                              </span>
-                            </button>
-                            <span className="sb-sub-era-range">{formatRange(childSpan.start, childSpan.end, childSpan.startLabel, childSpan.endLabel)}</span>
-                          </div>
+                          {renderSpanHeader(childSpan, false, isChildOpen, () => setOpenSpanGroups((prev) => ({ ...prev, [childSpan.id]: !isChildOpen })))}
                           {isChildOpen && childItems.length > 0 && (
                             <div className="sb-sub-era-items">
                               {childItems.map((el) => (
@@ -1163,18 +1254,34 @@ export default function Sidebar({
             );
           })}
           {visibleSpanUngrouped.length > 0 && (
-            <div className="sb-era-group">
-              {spanGroups.groups.length > 0 && (
-                <div className="sb-era-header">
-                  <span className="sb-era-name">OTHER</span>
-                  <span className="sb-era-count">{visibleSpanUngrouped.length}</span>
+            <div className="sb-sub-era-group">
+              {spanGroups.groups.length > 0 && (() => {
+                const isOtherOpen = searchActive || openSpanGroups["__other__"] !== false;
+                return (
+                  <>
+                    <div className="sb-sub-era-header is-root-span">
+                      <button className="sb-era-toggle" onClick={() => setOpenSpanGroups((prev) => ({ ...prev, "__other__": !isOtherOpen }))}>
+                        <ChevronDown className={`sb-caret ${isOtherOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
+                      </button>
+                      <span className="sb-sub-era-name">OTHER</span>
+                    </div>
+                    {isOtherOpen && (
+                      <div className="sb-sub-era-items">
+                        {visibleSpanUngrouped.map((el) => (
+                          <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              {spanGroups.groups.length === 0 && (
+                <div className="sb-sub-era-items">
+                  {visibleSpanUngrouped.map((el) => (
+                    <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                  ))}
                 </div>
               )}
-              <div className="sb-era-items">
-                {visibleSpanUngrouped.map((el) => (
-                  <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -1228,7 +1335,10 @@ export default function Sidebar({
           </>
         ) : (
         <div className="sb-era-groups">
-          {visibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
+          {file?.nestEraSubGroups
+            ? visibleEraTree.map((node) => renderEraTreeNode(node, 0))
+            : null}
+          {!file?.nestEraSubGroups && visibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
             const isOpen = searchActive || openEraGroups[era.id] !== false;
             const eraColor = era.color || "var(--element-bg)";
             const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
@@ -1317,17 +1427,34 @@ export default function Sidebar({
           })}
           {visibleUngrouped.length > 0 && (
             <div className="sb-era-group">
-              {eraGroups.groups.length > 0 && (
-                <div className="sb-era-header">
-                  <span className="sb-era-name">OTHER</span>
-                  <span className="sb-era-count">{visibleUngrouped.length}</span>
+              {eraGroups.groups.length > 0 && (() => {
+                const isOtherOpen = searchActive || openEraGroups["__other__"] !== false;
+                return (
+                  <>
+                    <div className="sb-era-header">
+                      <button className="sb-era-toggle" onClick={() => setOpenEraGroups((prev) => ({ ...prev, "__other__": !isOtherOpen }))}>
+                        <ChevronDown className={`sb-caret ${isOtherOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
+                      </button>
+                      <span className="sb-era-name">OTHER</span>
+                      <span className="sb-era-count">{visibleUngrouped.length}</span>
+                    </div>
+                    {isOtherOpen && (
+                      <div className="sb-era-items">
+                        {visibleUngrouped.map((el) => (
+                          <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              {eraGroups.groups.length === 0 && (
+                <div className="sb-era-items">
+                  {visibleUngrouped.map((el) => (
+                    <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                  ))}
                 </div>
               )}
-              <div className="sb-era-items">
-                {visibleUngrouped.map((el) => (
-                  <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
-                ))}
-              </div>
             </div>
           )}
         </div>

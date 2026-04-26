@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('electron', {
   updateCloudMeta: (payload) => ipcRenderer.invoke('update-cloud-meta', payload),
   deleteCloudCache: (backendId) => ipcRenderer.invoke('delete-cloud-cache', backendId),
   listCloudMetas: () => ipcRenderer.invoke('list-cloud-metas'),
+  captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
   // Window controls
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
