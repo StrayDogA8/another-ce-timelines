@@ -1014,7 +1014,7 @@ function App() {
     showGrid,
     spanColorEvents,
     disableGroups,
-    useEraGroupsInPanel,
+    panelGroupMode,
     showPopularTags,
     useSecondaryBg,
     useWikipedia,
@@ -1066,7 +1066,7 @@ function App() {
         showGrid,
         spanColorEvents,
         disableGroups,
-        useEraGroupsInPanel,
+        panelGroupMode,
         showPopularTags,
         useSecondaryBg,
         useWikipedia,
@@ -1094,7 +1094,9 @@ function App() {
       if (!showGrid) delete nextFile.showGrid;
       if (!spanColorEvents) delete nextFile.spanColorEvents;
       if (!disableGroups) delete nextFile.disableGroups;
-      if (!useEraGroupsInPanel) delete nextFile.useEraGroupsInPanel;
+      if (!panelGroupMode || panelGroupMode === "default") delete nextFile.panelGroupMode;
+      delete nextFile.useEraGroupsInPanel;
+      delete nextFile.useSpanGroupsInPanel;
       if (!useWikipedia) delete nextFile.useWikipedia;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;

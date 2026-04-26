@@ -1486,7 +1486,7 @@ export default function RightPanel({
             {/* Title */}
             <div className="form-group">
               <div className="edit-row">
-                <label htmlFor="title">Title</label>
+                <label htmlFor="title">Name</label>
                 <div className="edit-separator" />
                 <input
                   id="title"

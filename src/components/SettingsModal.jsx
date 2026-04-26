@@ -53,7 +53,7 @@ export default function SettingsModal({
   const [showGrid, setShowGrid] = useState(false);
   const [spanColorEvents, setSpanColorEvents] = useState(false);
   const [disableGroups, setDisableGroups] = useState(false);
-  const [useEraGroupsInPanel, setUseEraGroupsInPanel] = useState(false);
+  const [panelGroupMode, setPanelGroupMode] = useState("default");
   const [showPopularTags, setShowPopularTags] = useState(true);
   const [useSecondaryBg, setUseSecondaryBg] = useState(false);
   const [useWikipedia, setUseWikipedia] = useState(false);
@@ -174,7 +174,7 @@ export default function SettingsModal({
         setShowGrid(Boolean(timelineData.file.showGrid));
         setSpanColorEvents(Boolean(timelineData.file.spanColorEvents));
         setDisableGroups(Boolean(timelineData.file.disableGroups));
-        setUseEraGroupsInPanel(Boolean(timelineData.file.useEraGroupsInPanel));
+        setPanelGroupMode(timelineData.file.panelGroupMode || (timelineData.file.useEraGroupsInPanel ? "eras" : "default"));
         setShowPopularTags(timelineData.file.showPopularTags !== false);
         setUseSecondaryBg(Boolean(timelineData.file.useSecondaryBg));
         setUseWikipedia(Boolean(timelineData.file.useWikipedia));
@@ -273,7 +273,7 @@ export default function SettingsModal({
           showGrid,
           spanColorEvents,
           disableGroups,
-          useEraGroupsInPanel,
+          panelGroupMode,
           showPopularTags,
           useSecondaryBg,
           useWikipedia,
@@ -314,7 +314,7 @@ export default function SettingsModal({
     showGrid,
     spanColorEvents,
     disableGroups,
-    useEraGroupsInPanel,
+    panelGroupMode,
     showPopularTags,
     useSecondaryBg,
     useWikipedia,
@@ -967,21 +967,22 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Era Groups in Panel */}
+              {/* Panel Group Mode */}
               <div className="settings-row">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Use Eras for Groups <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
-                  <div className="settings-row-description">Group elements by era in the left panel instead of collapsible sections.</div>
+                  <div className="settings-row-label">Group By <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
+                  <div className="settings-row-description">Group elements in the left panel by era or by parent span.</div>
                 </div>
                 <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={useEraGroupsInPanel}
-                      onChange={(e) => setUseEraGroupsInPanel(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
+                  <select
+                    className="settings-select"
+                    value={panelGroupMode}
+                    onChange={(e) => setPanelGroupMode(e.target.value)}
+                  >
+                    <option value="default">Default</option>
+                    <option value="eras">Eras</option>
+                    <option value="spans">Spans</option>
+                  </select>
                 </div>
               </div>
 

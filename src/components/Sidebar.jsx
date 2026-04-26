@@ -223,6 +223,7 @@ export default function Sidebar({
   const [openSpans, setOpenSpans] = useState(true);
   const [openEvents, setOpenEvents] = useState(true);
   const [openEraGroups, setOpenEraGroups] = useState({});
+  const [openSpanGroups, setOpenSpanGroups] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef(null);
@@ -376,6 +377,55 @@ export default function Sidebar({
     const ungrouped = sortItems(allItems.filter((el) => !elementToAnyEraId.has(el.id)));
     return { groups, ungrouped };
   }, [eras, events, spans]);
+
+  const spanGroups = useMemo(() => {
+    const sortByDate = (items) => [...items].sort((a, b) => (a.date ?? a.start) - (b.date ?? b.start));
+    const rootSpans = spans.filter((s) => !s.parent);
+    const childSpans = spans.filter((s) => !!s.parent);
+
+    // Map each span to its root ancestor
+    const spanParentMap = new Map(childSpans.map((s) => [s.id, s.parent]));
+    const getRootSpanId = (spanId) => {
+      let current = spanId;
+      while (spanParentMap.has(current)) current = spanParentMap.get(current);
+      return current;
+    };
+
+    // Assign each event to its most specific (shortest) parent span
+    const eventToSpanId = new Map();
+    events.forEach((ev) => {
+      if (!ev.parents?.length) return;
+      let bestSpan = null, bestDuration = Infinity;
+      ev.parents.forEach((pid) => {
+        const sp = spans.find((s) => s.id === pid);
+        if (!sp) return;
+        const dur = sp.end - sp.start;
+        if (dur < bestDuration) { bestDuration = dur; bestSpan = sp; }
+      });
+      if (bestSpan) eventToSpanId.set(ev.id, bestSpan.id);
+    });
+
+    const groups = rootSpans.sort((a, b) => a.start - b.start).map((span) => {
+      const directEvents = sortByDate(events.filter((ev) => eventToSpanId.get(ev.id) === span.id));
+      const children = childSpans
+        .filter((cs) => getRootSpanId(cs.id) === span.id)
+        .sort((a, b) => a.start - b.start)
+        .map((cs) => ({
+          span: cs,
+          items: sortByDate(events.filter((ev) => eventToSpanId.get(ev.id) === cs.id)),
+        }));
+      return { span, items: directEvents, subGroups: children };
+    });
+
+    const assignedEventIds = new Set(eventToSpanId.keys());
+    const assignedChildSpanIds = new Set(childSpans.map((s) => s.id));
+    const ungrouped = sortByDate([
+      ...eras,
+      ...events.filter((ev) => !assignedEventIds.has(ev.id)),
+      ...childSpans.filter((s) => !assignedChildSpanIds.has(s.id)),
+    ]);
+    return { groups, ungrouped };
+  }, [spans, events, eras]);
 
   const groups = useMemo(() => {
     const fallback = [{ id: "g-main", title: "Main", order: 0, stack: 0, visible: true, locked: false }];
@@ -766,6 +816,25 @@ export default function Sidebar({
   const visibleUngrouped = searchActive
     ? eraGroups.ungrouped.filter((el) => (el.title || el.id || "").toLowerCase().includes(q))
     : eraGroups.ungrouped;
+  const visibleSpanGroups = searchActive
+    ? spanGroups.groups
+        .map((group) => {
+          const spanMatches = matchesSearch(group.span.title || group.span.id);
+          const filteredItems = spanMatches ? group.items : group.items.filter((el) => matchesSearch(el.title || el.id));
+          const filteredSubGroups = (group.subGroups || [])
+            .map((sg) => {
+              const sgMatches = matchesSearch(sg.span.title || sg.span.id);
+              return { ...sg, items: sgMatches ? sg.items : sg.items.filter((el) => matchesSearch(el.title || el.id)) };
+            })
+            .filter((sg) => sg.items.length > 0 || matchesSearch(sg.span.title || sg.span.id));
+          if (!spanMatches && filteredItems.length === 0 && filteredSubGroups.length === 0) return null;
+          return { ...group, items: filteredItems, subGroups: filteredSubGroups };
+        })
+        .filter(Boolean)
+    : spanGroups.groups;
+  const visibleSpanUngrouped = searchActive
+    ? spanGroups.ungrouped.filter((el) => matchesSearch(el.title || el.id))
+    : spanGroups.ungrouped;
   const visibleTags = searchActive
     ? allTags.filter((tag) => matchesSearch(tag))
     : allTags;
@@ -1032,7 +1101,84 @@ export default function Sidebar({
 
       <div className={`sidebar-content${sidebarTab !== "timeline" ? " is-tags-tab" : ""}`} ref={listRef}>
         {sidebarTab === "timeline" ? (
-        !file?.useEraGroupsInPanel ? (
+        file?.panelGroupMode === "spans" ? (
+        <div className="sb-era-groups">
+          {visibleSpanGroups.map(({ span, items, subGroups }) => {
+            const isOpen = searchActive || openSpanGroups[span.id] !== false;
+            const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
+            return (
+              <div key={span.id} className="sb-era-group">
+                <div className="sb-era-header">
+                  <button className="sb-era-toggle" onClick={() => setOpenSpanGroups((prev) => ({ ...prev, [span.id]: !isOpen }))}>
+                    <ChevronDown className={`sb-caret ${isOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
+                  </button>
+                  <button
+                    className="sb-era-title-btn"
+                    onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(span.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: span }); }}
+                  >
+                    <span className={`sb-era-name${selectedId === span.id ? " is-selected" : ""}`}>
+                      {(span.title || span.id).toUpperCase()}
+                    </span>
+                  </button>
+                  <span className="sb-era-count">{totalCount}</span>
+                </div>
+                {isOpen && (
+                  <div className="sb-era-items">
+                    {items.map((el) => (
+                      <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                    ))}
+                    {subGroups?.map(({ span: childSpan, items: childItems }) => {
+                      const isChildOpen = searchActive || openSpanGroups[childSpan.id] !== false;
+                      return (
+                        <div key={childSpan.id} className="sb-sub-era-group">
+                          <div className="sb-sub-era-header">
+                            <button className="sb-era-toggle" onClick={() => setOpenSpanGroups((prev) => ({ ...prev, [childSpan.id]: !isChildOpen }))}>
+                              <ChevronDown className={`sb-caret ${isChildOpen ? "open" : ""}`} size={10} strokeWidth={2.5} />
+                            </button>
+                            <button
+                              className="sb-era-title-btn"
+                              onClick={() => { if (listRef.current) lastScrollTopRef.current = listRef.current.scrollTop; onSelect?.(childSpan.id); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = lastScrollTopRef.current; }); }}
+                              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setElementMenu({ x: e.clientX, y: e.clientY, element: childSpan }); }}
+                            >
+                              <span className={`sb-sub-era-name${selectedId === childSpan.id ? " is-selected" : ""}`}>
+                                {(childSpan.title || childSpan.id).toUpperCase()}
+                              </span>
+                            </button>
+                            <span className="sb-sub-era-range">{formatRange(childSpan.start, childSpan.end, childSpan.startLabel, childSpan.endLabel)}</span>
+                          </div>
+                          {isChildOpen && childItems.length > 0 && (
+                            <div className="sb-sub-era-items">
+                              {childItems.map((el) => (
+                                <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {visibleSpanUngrouped.length > 0 && (
+            <div className="sb-era-group">
+              {spanGroups.groups.length > 0 && (
+                <div className="sb-era-header">
+                  <span className="sb-era-name">OTHER</span>
+                  <span className="sb-era-count">{visibleSpanUngrouped.length}</span>
+                </div>
+              )}
+              <div className="sb-era-items">
+                {visibleSpanUngrouped.map((el) => (
+                  <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        ) : file?.panelGroupMode !== "eras" && !(file?.useEraGroupsInPanel) ? (
           <>
             <div className="sb-section">
               <div className="sb-section-head">
