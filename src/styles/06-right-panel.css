@@ -252,6 +252,15 @@
   box-sizing: border-box;
 }
 
+.right-panel.is-maximized .right-panel-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.right-panel.is-maximized .right-panel-content::-webkit-scrollbar-thumb {
+  border-right: 4px solid transparent;
+  background-clip: padding-box;
+}
+
 .right-panel.is-maximized .right-panel-content > .view-mode,
 .right-panel.is-maximized .right-panel-content > .edit-form {
   max-width: 700px;
@@ -322,6 +331,62 @@
   display: none;
 }
 
+.edit-input-shell {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+}
+
+.edit-input-shell.has-left-icon .edit-input {
+  padding-left: 28px;
+}
+
+.edit-input-icon-button {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-2);
+  cursor: pointer;
+  padding: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.edit-input-shell.has-left-icon:focus-within .edit-input-icon-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.edit-input-icon-button:hover {
+  background: var(--active-bg);
+  color: var(--dark-bg);
+}
+
+.edit-input-native-date {
+  position: absolute;
+  inset: auto;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.edit-input-icon {
+  pointer-events: none;
+}
+
 .edit-input {
   margin: 0;
   font-family: inherit;
@@ -334,7 +399,6 @@
   border-bottom: 1px solid transparent;
   border-radius: 4px;
   text-align: right;
-  grid-column: 2;
   outline: none;
   min-width: 0;
   width: 100%;

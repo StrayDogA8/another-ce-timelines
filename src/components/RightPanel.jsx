@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen } from "lucide-react";
-import { parseTimelineInput } from "../utils/dateUtils";
+import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar } from "lucide-react";
+import { parseTimelineInput, fractionalYearToDate } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
 import { normalizeColor } from "../utils/colorUtils";
@@ -183,30 +183,115 @@ export default function RightPanel({
   const wikiRenderRef = useRef(null);
   const WIKI_SANITIZE_VERSION = "collapsible-1";
   const panelRef = useRef(null);
+  const datePickerRefs = useRef({});
   const TAG_MAX_LENGTH = 32;
   const ID_MAX_LENGTH = 60;
+  const showCalendarInputIcon = timelineData?.file?.useCalendar === true;
 
   const pushValidationError = (message) => {
     if (!message) return;
     setValidationErrors([message]);
   };
 
+  const stripEditableEraSuffix = useCallback((input) => {
+    const raw = String(input ?? "").trim();
+    if (!raw) return "";
+    const negSuffix = typeof timelineData?.file?.negID === "string" ? timelineData.file.negID.trim() : "";
+    const posSuffix = typeof timelineData?.file?.posID === "string" ? timelineData.file.posID.trim() : "";
+    let next = raw;
+
+    if (negSuffix) {
+      const spacedNegSuffix = ` ${negSuffix}`;
+      if (next.endsWith(spacedNegSuffix)) {
+        const base = next.slice(0, -spacedNegSuffix.length).trim();
+        if (base && !base.startsWith("-")) {
+          next = `-${base}`;
+        } else {
+          next = base;
+        }
+      }
+    }
+
+    if (posSuffix) {
+      const spacedPosSuffix = ` ${posSuffix}`;
+      if (next.endsWith(spacedPosSuffix)) {
+        next = next.slice(0, -spacedPosSuffix.length).trim();
+      }
+    }
+
+    return next;
+  }, [
+    timelineData?.file?.negID,
+    timelineData?.file?.posID,
+  ]);
+
   const formatEditableDateInput = useCallback((value, label) => {
-    if (label != null && label !== "") return label;
+    if (label != null && label !== "") return stripEditableEraSuffix(label);
     if (!Number.isFinite(value)) return value ?? "";
-    return formatYear(
+    return stripEditableEraSuffix(formatYear(
       value,
       timelineData?.file?.negID,
       timelineData?.file?.posID,
       timelineData?.file?.useCalendar === true,
       timelineData?.file?.hideDecimals
-    );
+    ));
   }, [
+    stripEditableEraSuffix,
     timelineData?.file?.negID,
     timelineData?.file?.posID,
     timelineData?.file?.useCalendar,
     timelineData?.file?.hideDecimals,
   ]);
+
+  const getPickerIsoValue = useCallback((inputValue, fallbackValue) => {
+    const parsed = parseTimelineInput(inputValue);
+    const resolvedValue = Number.isFinite(parsed.value) ? parsed.value : fallbackValue;
+    if (!Number.isFinite(resolvedValue)) return "";
+    const { year, month, day } = fractionalYearToDate(resolvedValue);
+    if (!Number.isFinite(year) || year < 0 || year > 9999) return "";
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }, []);
+
+  const getTimelineLimitIsoValue = useCallback((value) => {
+    if (!Number.isFinite(value)) return "";
+    const { year, month, day } = fractionalYearToDate(value);
+    if (!Number.isFinite(year) || year < 0 || year > 9999) return "";
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }, []);
+
+  const calendarMinIso = showCalendarInputIcon
+    ? getTimelineLimitIsoValue(timelineData?.file?.start)
+    : "";
+  const calendarMaxIso = showCalendarInputIcon
+    ? getTimelineLimitIsoValue(timelineData?.file?.end)
+    : "";
+
+  const formatIsoAsEditableDate = useCallback((isoValue) => {
+    const raw = String(isoValue ?? "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+    const [, year, month, day] = match;
+    return `${month}/${day}/${year}`;
+  }, []);
+
+  const handleCalendarPick = useCallback((field, isoValue) => {
+    const formatted = formatIsoAsEditableDate(isoValue);
+    if (!formatted) return;
+    const nextDraft = { ...formData, [field]: formatted };
+    setFormData(nextDraft);
+    commitDraft(nextDraft);
+  }, [formData, formatIsoAsEditableDate]);
+
+  const openCalendarPicker = useCallback((pickerKey) => {
+    const input = datePickerRefs.current[pickerKey];
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  }, []);
 
   useEffect(() => {
     const anyOpen = isSpanParentMenuOpen || isMergeParentMenuOpen ||
@@ -1523,18 +1608,46 @@ export default function RightPanel({
                 <div className="edit-row">
                   <label htmlFor="date">Date</label>
                   <div className="edit-separator" />
-                  <input
-                    id="date"
-                    type="text"
-                    inputMode="numeric"
-                    value={formData.dateInput ?? ""}
-                    onChange={(e) => {
-                      handleChange("dateInput", e.target.value);
-                    }}
-                    onBlur={(e) => commitDraft({ ...formData, dateInput: e.target.value })}
-                    className="edit-input"
-                    maxLength={20}
-                  />
+                  <div className={`edit-input-shell${showCalendarInputIcon ? " has-left-icon" : ""}`}>
+                    {showCalendarInputIcon && (
+                      <>
+                        <button
+                          type="button"
+                          className="edit-input-icon-button"
+                          aria-label="Open calendar"
+                          onClick={() => openCalendarPicker("date")}
+                        >
+                          <Calendar size={14} className="edit-input-icon" aria-hidden="true" />
+                        </button>
+                        <input
+                          ref={(node) => {
+                            if (node) datePickerRefs.current.date = node;
+                            else delete datePickerRefs.current.date;
+                          }}
+                          type="date"
+                          tabIndex={-1}
+                          aria-hidden="true"
+                          className="edit-input-native-date"
+                          value={getPickerIsoValue(formData.dateInput, selectedElement?.date)}
+                          min={calendarMinIso || undefined}
+                          max={calendarMaxIso || undefined}
+                          onChange={(e) => handleCalendarPick("dateInput", e.target.value)}
+                        />
+                      </>
+                    )}
+                    <input
+                      id="date"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.dateInput ?? ""}
+                      onChange={(e) => {
+                        handleChange("dateInput", e.target.value);
+                      }}
+                      onBlur={(e) => commitDraft({ ...formData, dateInput: e.target.value })}
+                      className="edit-input"
+                      maxLength={20}
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1543,36 +1656,92 @@ export default function RightPanel({
                   <div className="edit-row">
                     <label htmlFor="start">Start Year</label>
                     <div className="edit-separator" />
-                  <input
-                    id="start"
-                    type="text"
-                    inputMode="numeric"
-                    value={formData.startInput ?? ""}
-                    onChange={(e) => {
-                      handleChange("startInput", e.target.value);
-                    }}
-                    onBlur={(e) => commitDraft({ ...formData, startInput: e.target.value })}
-                    className="edit-input"
-                    maxLength={20}
-                  />
+                  <div className={`edit-input-shell${showCalendarInputIcon ? " has-left-icon" : ""}`}>
+                    {showCalendarInputIcon && (
+                      <>
+                        <button
+                          type="button"
+                          className="edit-input-icon-button"
+                          aria-label="Open calendar"
+                          onClick={() => openCalendarPicker("start")}
+                        >
+                          <Calendar size={14} className="edit-input-icon" aria-hidden="true" />
+                        </button>
+                        <input
+                          ref={(node) => {
+                            if (node) datePickerRefs.current.start = node;
+                            else delete datePickerRefs.current.start;
+                          }}
+                          type="date"
+                          tabIndex={-1}
+                          aria-hidden="true"
+                          className="edit-input-native-date"
+                          value={getPickerIsoValue(formData.startInput, selectedElement?.start)}
+                          min={calendarMinIso || undefined}
+                          max={calendarMaxIso || undefined}
+                          onChange={(e) => handleCalendarPick("startInput", e.target.value)}
+                        />
+                      </>
+                    )}
+                    <input
+                      id="start"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.startInput ?? ""}
+                      onChange={(e) => {
+                        handleChange("startInput", e.target.value);
+                      }}
+                      onBlur={(e) => commitDraft({ ...formData, startInput: e.target.value })}
+                      className="edit-input"
+                      maxLength={20}
+                    />
+                  </div>
                   </div>
                 </div>
                 <div className="form-group">
                   <div className="edit-row">
                     <label htmlFor="end">End Year</label>
                     <div className="edit-separator" />
-                  <input
-                    id="end"
-                    type="text"
-                    inputMode="numeric"
-                    value={formData.endInput ?? ""}
-                    onChange={(e) => {
-                      handleChange("endInput", e.target.value);
-                    }}
-                    onBlur={(e) => commitDraft({ ...formData, endInput: e.target.value })}
-                    className="edit-input"
-                    maxLength={20}
-                  />
+                  <div className={`edit-input-shell${showCalendarInputIcon ? " has-left-icon" : ""}`}>
+                    {showCalendarInputIcon && (
+                      <>
+                        <button
+                          type="button"
+                          className="edit-input-icon-button"
+                          aria-label="Open calendar"
+                          onClick={() => openCalendarPicker("end")}
+                        >
+                          <Calendar size={14} className="edit-input-icon" aria-hidden="true" />
+                        </button>
+                        <input
+                          ref={(node) => {
+                            if (node) datePickerRefs.current.end = node;
+                            else delete datePickerRefs.current.end;
+                          }}
+                          type="date"
+                          tabIndex={-1}
+                          aria-hidden="true"
+                          className="edit-input-native-date"
+                          value={getPickerIsoValue(formData.endInput, selectedElement?.end)}
+                          min={calendarMinIso || undefined}
+                          max={calendarMaxIso || undefined}
+                          onChange={(e) => handleCalendarPick("endInput", e.target.value)}
+                        />
+                      </>
+                    )}
+                    <input
+                      id="end"
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.endInput ?? ""}
+                      onChange={(e) => {
+                        handleChange("endInput", e.target.value);
+                      }}
+                      onBlur={(e) => commitDraft({ ...formData, endInput: e.target.value })}
+                      className="edit-input"
+                      maxLength={20}
+                    />
+                  </div>
                   </div>
                 </div>
               </>
