@@ -65,6 +65,7 @@ export const loadScaleSections = (stored = [], legacyBreaks = []) => {
     start: String(item?.start ?? ""),
     end: String(item?.end ?? ""),
     scale: String(item?.scale ?? "0"),
+    showBreak: item?.showBreak !== false,
   }));
 };
 
@@ -131,7 +132,7 @@ export const buildValidatedUpdate = (draft, timelineData) => {
   const parsedDate = parseTimelineInput(draft.dateInput);
   const parsedStart = parseTimelineInput(draft.startInput);
   const parsedEnd = parseTimelineInput(draft.endInput);
-  const useMonths = timelineData?.file?.useMonths === true;
+  const useMonths = timelineData?.file?.useCalendar === true;
   const timelineStart = timelineData?.file?.start;
   const timelineEnd = timelineData?.file?.end;
 

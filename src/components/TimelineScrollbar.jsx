@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause } from "lucide-react";
-import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid, snapToDayGrid } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 
 /**
@@ -33,7 +33,7 @@ export default function TimelineScrollbar({
   const { compressedMin, compressedMax, decompressYear, file } = useMemo(() => {
     const file = timelineData?.file || {};
     const elements = timelineData?.elements || [];
-    const useMonths = file.useMonths === true;
+    const useCalendar = file.useCalendar === true;
 
     const hasDayPrecision = (label) => {
       if (!label || typeof label !== "string") return false;
@@ -42,7 +42,7 @@ export default function TimelineScrollbar({
     };
 
     const adjustDate = (value, label) => {
-      if (!useMonths) return value;
+      if (!useCalendar) return value;
       if (!Number.isFinite(value)) return value;
       if (hasDayPrecision(label)) return value;
       const scaled = value * 12;
@@ -184,10 +184,9 @@ export default function TimelineScrollbar({
     const compressedYear = compressedMin + (sliderValue / 100) * range;
     const clamped = Math.min(Math.max(compressedYear, compressedMin), compressedMax);
     const rawYear = decompressYear(clamped);
-    const showMonths = file.useMonths === true;
-    const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
-    const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths, file.hideDecimals);
+    const showCalendar = file.useCalendar === true;
+    const snappedYear = showCalendar ? snapToDayGrid(rawYear) : Math.round(rawYear);
+    const nextLabel = formatYear(snappedYear, file.negID, file.posID, showCalendar, file.hideDecimals);
 
     if (nextLabel !== lastSliderLabelRef.current) {
       lastSliderLabelRef.current = nextLabel;
@@ -243,10 +242,9 @@ export default function TimelineScrollbar({
       const compressedYear = capturedMin + (nextValue / 100) * range;
       const clamped = Math.min(Math.max(compressedYear, capturedMin), capturedMax);
       const rawYear = capturedDecompress(clamped);
-      const showMonths = capturedFile.useMonths === true;
-      const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
-      const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths, capturedFile.hideDecimals);
+      const showCalendar = capturedFile.useCalendar === true;
+      const snappedYear = showCalendar ? snapToDayGrid(rawYear) : Math.round(rawYear);
+      const nextLabel = formatYear(snappedYear, capturedFile.negID, capturedFile.posID, showCalendar, capturedFile.hideDecimals);
 
       if (yearLabelRef.current && nextLabel !== lastSliderLabelRef.current) {
         lastSliderLabelRef.current = nextLabel;

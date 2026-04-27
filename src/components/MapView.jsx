@@ -113,13 +113,13 @@ function isMarkerVisibleAtViewportYear(el, viewportYear, fileConfig) {
 }
 
 function formatElementDate(el, fileConfig) {
-  const { negID, posID, useMonths, hideDecimals } = fileConfig ?? {};
+  const { negID, posID, useCalendar, hideDecimals } = fileConfig ?? {};
   if (el.type === "event") {
-    const year = el.dateLabel ?? (el.date != null ? formatYear(el.date, negID, posID, useMonths, hideDecimals) : null);
+    const year = el.dateLabel ?? (el.date != null ? formatYear(el.date, negID, posID, useCalendar === true, hideDecimals) : null);
     return year ?? "";
   }
-  const start = el.startLabel ?? (el.start != null ? formatYear(el.start, negID, posID, useMonths, hideDecimals) : null);
-  const end = el.endLabel ?? (el.end != null ? formatYear(el.end, negID, posID, useMonths, hideDecimals) : null);
+  const start = el.startLabel ?? (el.start != null ? formatYear(el.start, negID, posID, useCalendar === true, hideDecimals) : null);
+  const end = el.endLabel ?? (el.end != null ? formatYear(el.end, negID, posID, useCalendar === true, hideDecimals) : null);
   if (start && end) return `${start} - ${end}`;
   return start ?? end ?? "";
 }

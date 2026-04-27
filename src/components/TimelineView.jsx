@@ -9,8 +9,9 @@ import {
   formatYear,
   calculateDetailLevel,
   getReadableTextColor,
+  MONTH_LABELS,
 } from "../utils/timelineUtils";
-import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
 import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
 const MapView = lazy(() => import("./MapView"));
@@ -275,7 +276,6 @@ const TimelineView = forwardRef(function TimelineView({
     yearToPx,
     calculatedHeight,
     BASE_LINE_Y,
-    ticks,
     normalizedScaleSections,
     compressedMin,
     compressedMax,
@@ -286,14 +286,14 @@ const TimelineView = forwardRef(function TimelineView({
     const events = timelineData.elements.filter(e => e.type === "event");
     const spans = timelineData.elements.filter(e => e.type === "span");
     const eras = timelineData.elements.filter(e => e.type === "era");
-    const useMonths = file?.useMonths === true;
+    const useCalendar = file?.useCalendar === true;
     const hasDayPrecision = (label) => {
       if (!label || typeof label !== "string") return false;
       const parts = label.split("/").map((part) => part.trim()).filter(Boolean);
       return parts.length === 3;
     };
     const adjustDate = (value, label) => {
-      if (!useMonths) return value;
+      if (!useCalendar) return value;
       if (!Number.isFinite(value)) return value;
       if (hasDayPrecision(label)) return value;
       const scaled = value * 12;
@@ -399,7 +399,7 @@ const TimelineView = forwardRef(function TimelineView({
           const clippedEnd = Math.min(max, end);
           if (clippedEnd <= clippedStart) return null;
           const scale = Math.max(0, Math.min(2, Number(item?.scale) || 0));
-          return { start: clippedStart, end: clippedEnd, scale };
+          return { start: clippedStart, end: clippedEnd, scale, showBreak: item?.showBreak !== false };
         })
         .filter(Boolean)
         .sort((a, b) => a.start - b.start);
@@ -438,17 +438,11 @@ const TimelineView = forwardRef(function TimelineView({
       return year - adjustment;
     };
 
-    const isYearInZeroScale = (year) =>
-      normalizedScaleSections.some((s) => s.scale === 0 && year > s.start && year < s.end);
 
-    const isZeroScaleBoundary = (year) =>
-      normalizedScaleSections.some(
-        (s) => s.scale === 0 && (Math.abs(year - s.start) < 0.0001 || Math.abs(year - s.end) < 0.0001)
-      );
 
     const compressedMin = compressYear(minYear);
     const compressedMax = compressYear(maxYear);
-    const range = Math.max(1, compressedMax - compressedMin);
+    const range = Math.max(1e-9, compressedMax - compressedMin);
     const decompressYear = (compressedYear) => {
       let adjustment = 0;
       for (const section of normalizedScaleSections) {
@@ -473,63 +467,11 @@ const TimelineView = forwardRef(function TimelineView({
     const baseDetailLevel = calculateDetailLevel(range);
     const detailMultiplier = file?.detailLevel ?? 1;
     const PX_PER_YEAR = baseDetailLevel * detailMultiplier;
-
-    const baseStep = pickStep(range / (detailMultiplier * 2));
-    const step = baseStep / 5;
     const TIMELINE_PADDING = 200; // px padding on each end
     const timelineWidth = range * PX_PER_YEAR + (TIMELINE_PADDING * 2);
 
     const yearToPx = (year) =>
       (compressYear(year) - compressedMin) * PX_PER_YEAR + TIMELINE_PADDING;
-
-    const buildTicks = () => {
-      const nextTicks = [];
-      const monthMode = useMonths && minYear >= 0 && maxYear <= 9999 && step < 1;
-      const monthLabels = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-      ];
-
-      if (monthMode) {
-        const startYear = Math.floor(minYear);
-        const endYear = Math.floor(maxYear);
-        const startMonthIndex = Math.max(
-          0,
-          Math.min(11, Math.floor((minYear - startYear) * 12))
-        );
-        const endMonthIndex = Math.max(
-          0,
-          Math.min(11, Math.floor((maxYear - endYear) * 12))
-        );
-        const startAbsMonth = startYear * 12 + startMonthIndex;
-        const endAbsMonth = endYear * 12 + endMonthIndex;
-
-        for (let m = startAbsMonth; m <= endAbsMonth; m += 1) {
-          const y = Math.floor(m / 12);
-          const monthIndex = m % 12;
-          const value = Number((y + monthIndex / 12).toFixed(6));
-          if (isYearInZeroScale(value) || isZeroScaleBoundary(value)) {
-            continue;
-          }
-          nextTicks.push({
-            value,
-            label: `${monthLabels[monthIndex]} ${y}`,
-          });
-        }
-      } else {
-        const startTick = Math.ceil(minYear / step) * step;
-        for (let y = startTick; y <= maxYear; y += step) {
-          if (isYearInZeroScale(y) || isZeroScaleBoundary(y)) {
-            continue;
-          }
-          nextTicks.push({
-            value: Number(y.toFixed(6)),
-          });
-        }
-      }
-
-      return nextTicks;
-    };
 
     if (showMap) {
       return {
@@ -545,7 +487,6 @@ const TimelineView = forwardRef(function TimelineView({
         yearToPx,
         calculatedHeight: 1000,
         BASE_LINE_Y: 500,
-        ticks: buildTicks(),
         normalizedScaleSections,
         compressedMin,
         compressedMax,
@@ -649,7 +590,7 @@ const TimelineView = forwardRef(function TimelineView({
         pinnedTags,
         negID: file.negID,
         posID: file.posID,
-        useMonths: file.useMonths === true,
+        useCalendar: useCalendar,
         hideDecimals: file.hideDecimals,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
@@ -751,7 +692,7 @@ const TimelineView = forwardRef(function TimelineView({
         pinnedTags,
         negID: file.negID,
         posID: file.posID,
-        useMonths: file.useMonths === true,
+        useCalendar: useCalendar,
         hideDecimals: file.hideDecimals,
       });
 
@@ -876,9 +817,6 @@ const TimelineView = forwardRef(function TimelineView({
       };
     }).filter((era) => era.width > 0);
 
-    // ticks
-    const ticks = buildTicks();
-
     return {
       file,
       groupLayouts,
@@ -892,7 +830,6 @@ const TimelineView = forwardRef(function TimelineView({
       yearToPx,
       calculatedHeight,
       BASE_LINE_Y,
-      ticks,
       normalizedScaleSections,
       compressedMin,
       compressedMax,
@@ -900,6 +837,109 @@ const TimelineView = forwardRef(function TimelineView({
       decompressYear,
     };
   }, [timelineData, pinnedTags, showMap]);
+
+  const ticks = useMemo(() => {
+    const minYear = file?.start;
+    const maxYear = file?.end;
+    if (!Number.isFinite(minYear) || !Number.isFinite(maxYear) || maxYear < minYear) {
+      return [];
+    }
+
+    const nextTicks = [];
+    const safeScale = Math.max(currentScale, 0.01);
+    const screenPxPerYear = PX_PER_YEAR * safeScale;
+    const screenPxPerMonth = screenPxPerYear / 12;
+    const screenPxPerDay = screenPxPerYear / 365.2425;
+    const useCalendar = file?.useCalendar === true && minYear >= 0 && maxYear <= 9999;
+    const tickDensityMult = Math.max(0.01, file?.tickDensity ?? 1);
+    const targetTickPx = 24 / tickDensityMult;
+    const targetDayTickPx = 72 / tickDensityMult;
+    const targetMonthTickPx = 96 / tickDensityMult;
+    const targetYearTickPx = useCalendar ? targetTickPx : 96 / tickDensityMult;
+    const maxDayInterval = 7;
+    const epsilon = 1e-6;
+    const visibleSegments = [];
+    let cursor = minYear;
+    normalizedScaleSections.forEach((section) => {
+      const start = Math.max(minYear, section.start);
+      const end = Math.min(maxYear, section.end);
+      if (end <= start + epsilon) return;
+      if (cursor < start - epsilon) {
+        visibleSegments.push({ start: cursor, end: start, scale: 1 });
+      }
+      visibleSegments.push({ start, end, scale: section.scale });
+      cursor = Math.max(cursor, end);
+    });
+    if (cursor < maxYear - epsilon) {
+      visibleSegments.push({ start: cursor, end: maxYear, scale: 1 });
+    }
+    if (visibleSegments.length === 0) {
+      visibleSegments.push({ start: minYear, end: maxYear, scale: 1 });
+    }
+
+    const pushTick = (tick) => {
+      const value = Number(tick.value);
+      if (!Number.isFinite(value) || value < minYear - epsilon || value > maxYear + epsilon) return;
+      const normalizedValue = Number(value.toFixed(9));
+      const last = nextTicks[nextTicks.length - 1];
+      if (last && Math.abs(last.value - normalizedValue) < 1e-6) return;
+      nextTicks.push({ ...tick, value: normalizedValue });
+    };
+
+    for (const segment of visibleSegments) {
+      if (segment.scale <= 0) continue;
+      const localScreenPxPerYear = screenPxPerYear * segment.scale;
+      const localScreenPxPerMonth = screenPxPerMonth * segment.scale;
+      const localScreenPxPerDay = screenPxPerDay * segment.scale;
+
+      if (useCalendar) {
+        const dayInterval = Math.max(1, Math.ceil(targetDayTickPx / Math.max(localScreenPxPerDay, 0.000001)));
+        if (dayInterval <= maxDayInterval) {
+          const start = fractionalYearToDate(segment.start);
+          const dateCursor = new Date(Date.UTC(start.year, start.month - 1, start.day));
+          for (let i = 0; i < 5000; i += 1) {
+            const y = dateCursor.getUTCFullYear();
+            const m = dateCursor.getUTCMonth() + 1;
+            const d = dateCursor.getUTCDate();
+            const value = y + (m - 1) / 12 + (d - 1) / (daysInMonth(y, m) * 12);
+            if (value > segment.end + epsilon) break;
+            if (value >= segment.start - epsilon) {
+              pushTick({ value, label: `${MONTH_LABELS[m - 1]} ${d}` });
+            }
+            dateCursor.setUTCDate(dateCursor.getUTCDate() + dayInterval);
+          }
+          continue;
+        }
+
+        const monthInterval = Math.max(1, Math.ceil(targetMonthTickPx / Math.max(localScreenPxPerMonth, 0.000001)));
+        if (monthInterval <= 12) {
+          const start = fractionalYearToDate(segment.start);
+          const end = fractionalYearToDate(segment.end);
+          const startAbsMonth = start.year * 12 + (start.month - 1);
+          const endAbsMonth = end.year * 12 + (end.month - 1);
+          for (let absMonth = startAbsMonth; absMonth <= endAbsMonth; absMonth += monthInterval) {
+            const y = Math.floor(absMonth / 12);
+            const monthIndex = absMonth % 12;
+            const value = y + monthIndex / 12;
+            if (value < segment.start - epsilon || value > segment.end + epsilon) continue;
+            pushTick({ value, label: `${MONTH_LABELS[monthIndex]} ${y}` });
+          }
+          continue;
+        }
+      }
+
+      let step = pickStep(targetYearTickPx / Math.max(localScreenPxPerYear, 0.000001));
+      if (Math.max(Math.abs(minYear), Math.abs(maxYear)) >= 100) step = Math.max(1, step);
+      const startTick = Math.ceil(segment.start / step) * step;
+      for (let y = startTick; y <= segment.end + epsilon; y += step) {
+        if (y < segment.start - epsilon || y > segment.end + epsilon) continue;
+        pushTick({ value: y });
+      }
+    }
+
+    nextTicks.sort((a, b) => a.value - b.value);
+    return nextTicks;
+  }, [file, PX_PER_YEAR, currentScale, normalizedScaleSections]);
 
   const finalSpanById = useMemo(
     () => new Map(finalSpans.map((span) => [span.id, span])),
@@ -1031,7 +1071,7 @@ const TimelineView = forwardRef(function TimelineView({
     groupLayouts,
     renderLegacyLayers,
     selectedId,
-    file?.useMonths,
+    file?.useCalendar,
     file?.hideDecimals,
     file?.negID,
     file?.posID,
@@ -1063,14 +1103,13 @@ const TimelineView = forwardRef(function TimelineView({
       compressedMax
     );
     const rawYear = decompressYear(clampedCompressed);
-    const showMonths = file.useMonths === true;
-    const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
+    const showCalendar = file?.useCalendar === true;
+    const snappedYear = showCalendar ? snapToDayGrid(rawYear) : Math.round(rawYear);
     if (snappedYear !== lastViewportYearRef.current) {
       lastViewportYearRef.current = snappedYear;
       publishViewportYear(snappedYear);
     }
-    const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-    const nextLabel = formatYear(displayYear, file.negID, file.posID, showMonths, file.hideDecimals);
+    const nextLabel = formatYear(snappedYear, file.negID, file.posID, showCalendar, file.hideDecimals);
     if (nextLabel !== lastSliderLabelRef.current) {
       lastSliderLabelRef.current = nextLabel;
       setSliderYearLabel(nextLabel);
@@ -1613,7 +1652,8 @@ const TimelineView = forwardRef(function TimelineView({
       const clickXInTimeline = (e.clientX - timelineRect.left) / scale;
       const compressed = (clickXInTimeline - TIMELINE_PADDING) / PX_PER_YEAR + compressedMin;
       const clamped = Math.min(Math.max(compressed, compressedMin), compressedMax);
-      clickYear = Math.round(decompressYear(clamped));
+      const rawClickYear = decompressYear(clamped);
+      clickYear = file?.useCalendar === true ? snapToDayGrid(rawClickYear) : Math.round(rawClickYear);
     }
 
     e.preventDefault();
@@ -2060,10 +2100,9 @@ const TimelineView = forwardRef(function TimelineView({
       const compressedYear = (timelineX - capturedPadding) / capturedPxPerYear + capturedMin;
       const clampedCompressed = Math.min(Math.max(compressedYear, capturedMin), capturedMax);
       const rawYear = capturedDecompress(clampedCompressed);
-      const showMonths = capturedFile.useMonths === true;
-      const snappedYear = showMonths ? snapToMonthGrid(rawYear) : Math.round(rawYear);
-      const displayYear = showMonths ? snappedYear : Math.round(snappedYear);
-      const nextLabel = formatYear(displayYear, capturedFile.negID, capturedFile.posID, showMonths, capturedFile.hideDecimals);
+      const showCalendar = capturedFile?.useCalendar === true;
+      const snappedYear = showCalendar ? snapToDayGrid(rawYear) : Math.round(rawYear);
+      const nextLabel = formatYear(snappedYear, capturedFile.negID, capturedFile.posID, showCalendar, capturedFile.hideDecimals);
 
       if (yearLabelRef.current && nextLabel !== lastSliderLabelRef.current) {
         lastSliderLabelRef.current = nextLabel;
@@ -2291,6 +2330,52 @@ const TimelineView = forwardRef(function TimelineView({
     };
   }, []);
 
+  const tickDensityMult = Math.max(0.01, file?.tickDensity ?? 1);
+  const MIN_TICK_GAP = (file?.useCalendar === true ? 6 : 24) / tickDensityMult;
+  const getLocalYearScale = (year) => {
+    const section = normalizedScaleSections.find((s) => year >= s.start && year <= s.end);
+    return section ? Math.max(section.scale, 0.0001) : 1;
+  };
+  const tickGapForYear = (year) => {
+    const ls = getLocalYearScale(year);
+    return ls < 1 ? MIN_TICK_GAP / ls : MIN_TICK_GAP;
+  };
+  const breakRendering = useMemo(() => {
+    const GAP_WIDTH = 24;
+    const GAP_OVERLAP = 2;
+    const EPSILON = 0.5;
+    const zeroScaleBreaks = [];
+    const axisBreakMarkers = [];
+
+    const pushAxisBreak = (px, key) => {
+      if (!Number.isFinite(px)) return;
+      if (axisBreakMarkers.some((item) => Math.abs(item.px - px) < EPSILON)) return;
+      axisBreakMarkers.push({ px, key });
+    };
+
+    normalizedScaleSections.forEach((section, index) => {
+      if (section.scale === 0) {
+        const px = yearToPx(section.start);
+        if (!Number.isFinite(px)) return;
+        zeroScaleBreaks.push({
+          key: `scale-gap-${index}`,
+          px,
+          width: GAP_WIDTH,
+          overlap: GAP_OVERLAP,
+          startLabel: formatYear(section.start, file.negID, file.posID, false, file.hideDecimals),
+          endLabel: formatYear(section.end, file.negID, file.posID, false, file.hideDecimals),
+        });
+        return;
+      }
+      if (section.showBreak === false) return;
+      pushAxisBreak(yearToPx(section.start), `scale-break-${index}-start`);
+      pushAxisBreak(yearToPx(section.end), `scale-break-${index}-end`);
+    });
+
+    return { zeroScaleBreaks, axisBreakMarkers };
+  }, [normalizedScaleSections, yearToPx, file.negID, file.posID, file.hideDecimals]);
+  const timelineBreakMaskBg = file?.useSecondaryBg ? "var(--secondary-bg)" : "var(--primary-bg)";
+
   // Resolve CSS variables to hex for inline styles (avoids color-mix / color() which html2canvas can't parse)
   const rootStyles = getComputedStyle(document.documentElement);
   const resolvedActiveBg = rootStyles.getPropertyValue('--active-bg').trim();
@@ -2311,24 +2396,15 @@ const TimelineView = forwardRef(function TimelineView({
           {file.showGrid && (
             <div ref={gridLabelsRef} className="grid-year-labels-overlay">
               {(() => {
-                const MIN_TICK_GAP = 6;
-                const getLocalYearScale = (year) => {
-                  const section = normalizedScaleSections.find(
-                    (s) => year >= s.start && year <= s.end
-                  );
-                  return section ? Math.max(section.scale, 0.0001) : 1;
-                };
                 const tx = translateRef.current.x;
                 const scale = scaleRef.current;
                 const SCREEN_LABEL_WIDTH = 14;
-                const MIN_SCREEN_GAP = 20;
+                const MIN_SCREEN_GAP = Math.max(6, 20 / tickDensityMult);
                 let lastScreenX = -Infinity;
                 let lastTickPx = -Infinity;
                 return ticks.map((tick) => {
                   const px = yearToPx(tick.value);
-                  const localScale = getLocalYearScale(tick.value);
-                  const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
-                  if (px < lastTickPx + dynamicTickGap) return null;
+                  if (px < lastTickPx + tickGapForYear(tick.value)) return null;
                   lastTickPx = px;
                   const screenX = tx + px * scale;
                   if (screenX < lastScreenX + SCREEN_LABEL_WIDTH + MIN_SCREEN_GAP) return null;
@@ -2363,58 +2439,52 @@ const TimelineView = forwardRef(function TimelineView({
             style={{ width: `${timelineWidth}px`, height: `${calculatedHeight * 2}px` }}
           >
         {/* Timeline line with scale section gaps */}
-        {normalizedScaleSections.filter((s) => s.scale === 0).length === 0 ? (
+        {breakRendering.zeroScaleBreaks.length === 0 ? (
           <div className="timeline-line" style={{ top: `${BASE_LINE_Y}px` }} />
         ) : (
           <div className="timeline-line-segments" style={{ top: `${BASE_LINE_Y}px` }}>
             {(() => {
               const segments = [];
-              const GAP_WIDTH = 24;
-              const GAP_OVERLAP = 2;
               let lastEnd = -100;
 
-              normalizedScaleSections
-                .filter((s) => s.scale === 0)
-                .forEach((section, index) => {
-                  const sectionPx = yearToPx(section.start);
+              breakRendering.zeroScaleBreaks.forEach((gapBreak) => {
 
                   segments.push(
                     <div
-                      key={`segment-${index}`}
+                      key={`${gapBreak.key}-segment-before`}
                       className="timeline-line-segment"
                       style={{
                         left: `${lastEnd}px`,
-                        width: `${sectionPx - lastEnd - GAP_WIDTH / 2 + GAP_OVERLAP}px`,
+                        width: `${gapBreak.px - lastEnd - gapBreak.width / 2 + gapBreak.overlap}px`,
                       }}
                     />
                   );
 
-                  const startLabel = formatYear(section.start, file.negID, file.posID, false, file.hideDecimals);
-                  const endLabel = formatYear(section.end, file.negID, file.posID, false, file.hideDecimals);
                   segments.push(
                     <div
-                      key={`break-${index}`}
+                      key={gapBreak.key}
                       className="timeline-scale-break-indicator"
                       style={{
-                        left: `${sectionPx - GAP_WIDTH / 2}px`,
-                        width: `${GAP_WIDTH}px`,
+                        left: `${gapBreak.px - gapBreak.width / 2}px`,
+                        width: `${gapBreak.width}px`,
+                        backgroundColor: timelineBreakMaskBg,
                       }}
                     >
                       <svg viewBox="0 0 20 10" preserveAspectRatio="none">
                         <path
                           d="M0,5 L4,5 L7,1 L10,9 L13,1 L16,5 L20,5"
                           stroke="var(--dark-bg)"
-                          strokeWidth="3"
+                          strokeWidth="2.5"
                           strokeLinecap="square"
                           strokeLinejoin="miter"
                           fill="none"
                         />
                       </svg>
-                      <div className="timeline-scale-break-label">{startLabel} – {endLabel}</div>
+                      <div className="timeline-scale-break-label">{gapBreak.startLabel} – {gapBreak.endLabel}</div>
                     </div>
                   );
 
-                  lastEnd = sectionPx + GAP_WIDTH / 2 - GAP_OVERLAP;
+                  lastEnd = gapBreak.px + gapBreak.width / 2 - gapBreak.overlap;
                 });
 
               segments.push(
@@ -2432,6 +2502,30 @@ const TimelineView = forwardRef(function TimelineView({
             })()}
           </div>
         )}
+        {breakRendering.axisBreakMarkers.map((marker) => (
+          <div
+            key={marker.key}
+            className="axis-break"
+            style={{
+              left: `${marker.px}px`,
+              top: `${BASE_LINE_Y - 6}px`,
+            }}
+          >
+            <svg
+              viewBox="0 0 16 12"
+              preserveAspectRatio="none"
+            >
+              <path
+                d="M3,10 L7,2 M9,10 L13,2"
+                stroke="var(--dark-bg)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="miter"
+                fill="none"
+              />
+            </svg>
+          </div>
+        ))}
 
         <div className="eras-layer">
           {finalEras.map((era) => {
@@ -2820,7 +2914,7 @@ const TimelineView = forwardRef(function TimelineView({
                           )}
                           {!hideSpanYears && (
                             <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                              {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                              {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}
                             </span>
                           )}
                         </>
@@ -2886,7 +2980,7 @@ const TimelineView = forwardRef(function TimelineView({
                       >
                         <div className="event-title">{event.title}</div>
                         {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
-                          {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}</span>}
+                          {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}</span>}
                           {(() => {
                             const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                               .filter((tag) => pinnedTags.includes(tag));
@@ -2979,7 +3073,7 @@ const TimelineView = forwardRef(function TimelineView({
                   )}
                   {!hideSpanYears && (
                     <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
-                      {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file.useMonths === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}
+                      {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}
                     </span>
                   )}
                 </>
@@ -3134,7 +3228,7 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 <div className="event-title">{event.title}</div>
                 {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
-                  {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file.useMonths === true, file.hideDecimals)}</span>}
+                  {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}</span>}
                   {(() => {
                     const visiblePinnedTags = (Array.isArray(event.tags) ? event.tags : [])
                       .filter((tag) => pinnedTags.includes(tag));
@@ -3166,60 +3260,18 @@ const TimelineView = forwardRef(function TimelineView({
         </div>}
 
         {(() => {
-          const safeScale = Math.max(currentScale, 0.01);
-          const MIN_LABEL_GAP = 8;
+          const MIN_LABEL_GAP = Math.max(4, 8 / tickDensityMult);
           const CHAR_WIDTH = 7.5;
-          const MIN_TICK_GAP = 6;
-          const getLocalYearScale = (year) => {
-            const section = normalizedScaleSections.find(
-              (s) => year >= s.start && year <= s.end
-            );
-            return section ? Math.max(section.scale, 0.0001) : 1;
-          };
-          const preferredLabelBases = [1, 2, 5, 10, 50, 100];
-          const pickDynamicPreferredStep = (targetStep) => {
-            if (!Number.isFinite(targetStep) || targetStep <= 0) return 1;
-            const exponent = Math.floor(Math.log10(targetStep));
-            let best = null;
-            for (let e = exponent - 2; e <= exponent + 2; e += 1) {
-              const scale = Math.pow(10, e);
-              for (const base of preferredLabelBases) {
-                const candidate = base * scale;
-                if (candidate < targetStep) continue;
-                if (best === null || candidate < best) {
-                  best = candidate;
-                }
-              }
-            }
-            if (best !== null) return best;
-            return preferredLabelBases[preferredLabelBases.length - 1] * Math.pow(10, exponent + 1);
-          };
-          const targetLabelSpacingPx = 85;
-          const yearsPerPxAtZoom = 1 / Math.max(PX_PER_YEAR * safeScale, 0.000001);
           let lastLabelRight = -Infinity;
           let lastTickPx = -Infinity;
           return ticks.map((tick) => {
             const px = yearToPx(tick.value);
-            const localScale = getLocalYearScale(tick.value);
-            const dynamicTickGap = localScale < 1 ? MIN_TICK_GAP / localScale : MIN_TICK_GAP;
-            const showTick = px >= lastTickPx + dynamicTickGap;
-            if (!showTick) return null;
+            if (px < lastTickPx + tickGapForYear(tick.value)) return null;
             lastTickPx = px;
-            const dynamicPreferredYearLabelStep = pickDynamicPreferredStep(
-              yearsPerPxAtZoom * targetLabelSpacingPx
-            );
-            const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, false, file.hideDecimals);
+            const label = tick.label ?? formatYear(tick.value, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals);
             const halfWidth = (label.length * CHAR_WIDTH) / 2;
             const labelLeft = px - halfWidth;
-            const roundedYear = Math.round(tick.value);
-            const isWholeYear = Math.abs(tick.value - roundedYear) < 1e-6;
-            const nearestMultiple = Math.round(roundedYear / dynamicPreferredYearLabelStep);
-            const isStepMultiple =
-              Math.abs(roundedYear - nearestMultiple * dynamicPreferredYearLabelStep) < 1e-6;
-            const isPreferredYearLabel = file.useMonths
-              ? true
-              : isWholeYear && isStepMultiple;
-            const showLabel = isPreferredYearLabel && labelLeft >= lastLabelRight + MIN_LABEL_GAP;
+            const showLabel = labelLeft >= lastLabelRight + MIN_LABEL_GAP;
             if (showLabel) {
               lastLabelRight = px + halfWidth;
             }

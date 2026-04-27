@@ -191,6 +191,23 @@ export default function RightPanel({
     setValidationErrors([message]);
   };
 
+  const formatEditableDateInput = useCallback((value, label) => {
+    if (label != null && label !== "") return label;
+    if (!Number.isFinite(value)) return value ?? "";
+    return formatYear(
+      value,
+      timelineData?.file?.negID,
+      timelineData?.file?.posID,
+      timelineData?.file?.useCalendar === true,
+      timelineData?.file?.hideDecimals
+    );
+  }, [
+    timelineData?.file?.negID,
+    timelineData?.file?.posID,
+    timelineData?.file?.useCalendar,
+    timelineData?.file?.hideDecimals,
+  ]);
+
   useEffect(() => {
     const anyOpen = isSpanParentMenuOpen || isMergeParentMenuOpen ||
       isParentMenuOpen || isTagMenuOpen || isGroupMenuOpen || isSpanRelationOpen;
@@ -214,9 +231,9 @@ export default function RightPanel({
       const shouldPreserveEditMode = isEditMode;
       setFormData({
         ...selectedElement,
-        dateInput: selectedElement.dateLabel ?? selectedElement.date ?? "",
-        startInput: selectedElement.startLabel ?? selectedElement.start ?? "",
-        endInput: selectedElement.endLabel ?? selectedElement.end ?? "",
+        dateInput: formatEditableDateInput(selectedElement.date, selectedElement.dateLabel),
+        startInput: formatEditableDateInput(selectedElement.start, selectedElement.startLabel),
+        endInput: formatEditableDateInput(selectedElement.end, selectedElement.endLabel),
       });
       const parentId = selectedElement.parents?.[0];
       const parentTitle = parentId
@@ -239,7 +256,7 @@ export default function RightPanel({
       }
       prevSelectedIdRef.current = selectedElement.id;
     }
-  }, [selectedElement]);
+  }, [selectedElement, isEditMode, timelineData?.elements, formatEditableDateInput]);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -708,13 +725,13 @@ export default function RightPanel({
       value,
       timelineData?.file?.negID,
       timelineData?.file?.posID,
-      timelineData?.file?.useMonths === true,
+      timelineData?.file?.useCalendar === true,
       timelineData?.file?.hideDecimals
     )
   ), [
     timelineData?.file?.negID,
     timelineData?.file?.posID,
-    timelineData?.file?.useMonths,
+    timelineData?.file?.useCalendar,
     timelineData?.file?.hideDecimals,
   ]);
 
@@ -2429,6 +2446,11 @@ export default function RightPanel({
             )}
 
             <div className="form-group note-form-group">
+              {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
+                <button type="button" className="btn-secondary btn-note" onClick={handleOpenWikiInput}>
+                  Add Wiki
+                </button>
+              )}
               {!formData.noteFile ? (
                 <div className="note-add-actions">
                   <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
@@ -2441,23 +2463,27 @@ export default function RightPanel({
                   >
                     Add Existing Note
                   </button>
-                  {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
-                    <button type="button" className="btn-secondary btn-note" onClick={handleOpenWikiInput}>
-                      Add Wiki
-                    </button>
-                  )}
                 </div>
               ) : (
-                <NoteEditor
-                  ref={noteEditorRef}
-                  key={`${selectedElement?.id}-${formData?.noteFile}`}
-                  initialContent={noteInitialContent}
-                  isNoteLoading={isNoteLoading}
-                  noteExists={noteExists}
-                  onSave={handleNoteSave}
-                  onUnlink={handleUnlinkNote}
-                  onDelete={handleDeleteNote}
-                />
+                <>
+                  <div className="note-divider" />
+                  <div className="rp-note-header">
+                    <span className="rp-note-label rp-note-label-note">Note</span>
+                    {noteWordCount > 0 && (
+                      <span className="rp-note-meta">markdown · {noteWordCount} words</span>
+                    )}
+                  </div>
+                  <NoteEditor
+                    ref={noteEditorRef}
+                    key={`${selectedElement?.id}-${formData?.noteFile}`}
+                    initialContent={noteInitialContent}
+                    isNoteLoading={isNoteLoading}
+                    noteExists={noteExists}
+                    onSave={handleNoteSave}
+                    onUnlink={handleUnlinkNote}
+                    onDelete={handleDeleteNote}
+                  />
+                </>
               )}
               {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
                 <div className="wiki-url-input-card">

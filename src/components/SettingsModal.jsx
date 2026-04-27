@@ -1,7 +1,7 @@
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { parseTimelineInput, snapToMonthGrid } from "../utils/dateUtils";
-import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, clamp, detailToSlider, sliderToDetail } from "../utils/sliderUtils";
+import { DETAIL_MIN, DETAIL_MID, DETAIL_MAX, TICK_DENSITY_MIN, TICK_DENSITY_MID, TICK_DENSITY_MAX, clamp, detailToSlider, sliderToDetail, tickDensityToSlider, sliderToTickDensity } from "../utils/sliderUtils";
 import { sanitizeTitle, loadScaleSections, validateScaleSection } from "../utils/validation";
 import "../styles/07-modals-menus.css";
 
@@ -37,10 +37,14 @@ export default function SettingsModal({
   const [detailSlider, setDetailSlider] = useState(50);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
+  const [tickDensity, setTickDensity] = useState(1);
+  const [tickDensitySlider, setTickDensitySlider] = useState(50);
+  const [showTickDensityTooltip, setShowTickDensityTooltip] = useState(false);
+  const [tickDensityTooltipLeft, setTickDensityTooltipLeft] = useState(0);
   const [layout, setLayout] = useState("Horizontal");
   const [theme, setTheme] = useState(defaultThemeKey || "");
   const [fontFamily, setFontFamily] = useState("default");
-  const [useMonths, setUseMonths] = useState(false);
+  const [useCalendar, setUseCalendar] = useState(false);
   const [scaleSections, setScaleSections] = useState([]);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
@@ -70,6 +74,7 @@ export default function SettingsModal({
   const [scaleSectionErrors, setScaleSectionErrors] = useState([]);
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
+  const tickDensitySliderRef = useRef(null);
   const lastFilePathRef = useRef(null);
   const backdropPointerDownRef = useRef(false);
 
@@ -96,14 +101,14 @@ export default function SettingsModal({
       const ordered = startVal < endVal
         ? { start: startVal, end: endVal, scale }
         : { start: endVal, end: startVal, scale };
-      out.push(ordered);
+      out.push({ ...ordered, showBreak: item?.showBreak !== false });
     });
     setScaleSectionErrors(errors);
     return out;
   };
 
   const addScaleSection = () => {
-    setScaleSections([...scaleSections, { start: "", end: "", scale: "0" }]);
+    setScaleSections([...scaleSections, { start: "", end: "", scale: "0", showBreak: true }]);
     setScaleSectionErrors((prev) => [...prev, null]);
   };
 
@@ -130,6 +135,15 @@ export default function SettingsModal({
     const left = (detailSlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
     setDetailTooltipLeft(left);
   }, [detailSlider]);
+
+  const updateTickDensityTooltipPosition = useCallback(() => {
+    const sliderEl = tickDensitySliderRef.current;
+    if (!sliderEl) return;
+    const sliderWidth = sliderEl.getBoundingClientRect().width;
+    const thumbSize = 20;
+    const left = (tickDensitySlider / 100) * (sliderWidth - thumbSize) + thumbSize / 2;
+    setTickDensityTooltipLeft(left);
+  }, [tickDensitySlider]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -159,10 +173,15 @@ export default function SettingsModal({
         const clampedDetail = clamp(nextDetailLevel, DETAIL_MIN, DETAIL_MAX);
         setDetailLevel(clampedDetail);
         setDetailSlider(detailToSlider(clampedDetail));
+        const rawDensity = Number(timelineData.file.tickDensity);
+        const nextDensity = Number.isFinite(rawDensity) && rawDensity > 0 ? rawDensity : 1;
+        const clampedDensity = clamp(nextDensity, TICK_DENSITY_MIN, TICK_DENSITY_MAX);
+        setTickDensity(clampedDensity);
+        setTickDensitySlider(tickDensityToSlider(clampedDensity));
         setTheme(timelineData.file.theme || defaultThemeKey || "");
         setFontFamily(timelineData.file.font || "default");
         setLayout(timelineData.file.layout || "Horizontal");
-        setUseMonths(Boolean(timelineData.file.useMonths));
+        setUseCalendar(Boolean(timelineData.file.useCalendar ?? timelineData.file.useDays ?? timelineData.file.useMonths));
         setScaleSections(loadScaleSections(timelineData.file.scaleSections, timelineData.file.breaks));
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
@@ -243,11 +262,11 @@ export default function SettingsModal({
       setValidationErrors([]);
 
       const startValue =
-        useMonths && parsedStart.precision !== "day"
+        useCalendar && parsedStart.precision !== "day"
           ? snapToMonthGrid(parsedStart.value)
           : parsedStart.value;
       const endValue =
-        useMonths && parsedEnd.precision !== "day"
+        useCalendar && parsedEnd.precision !== "day"
           ? snapToMonthGrid(parsedEnd.value)
           : parsedEnd.value;
       const parsedScaleSections = saveScaleSections(scaleSections);
@@ -257,13 +276,14 @@ export default function SettingsModal({
           start: startValue,
           end: endValue,
           detailLevel: Number(detailLevel),
+          tickDensity: Number(tickDensity) !== 1 ? Number(tickDensity) : undefined,
           negID,
           posID,
           theme,
           font: fontFamily,
           startLabel: parsedStart.label,
           endLabel: parsedEnd.label,
-          useMonths,
+          useCalendar: useCalendar || undefined,
           scaleSections: parsedScaleSections,
           layout,
           branchOrdering,
@@ -301,11 +321,12 @@ export default function SettingsModal({
     start,
     end,
     detailLevel,
+    tickDensity,
     negID,
     posID,
     theme,
     fontFamily,
-    useMonths,
+    useCalendar,
     layout,
     scaleSections,
     branchOrdering,
@@ -566,6 +587,61 @@ export default function SettingsModal({
             </div>
           </div>
 
+          {/* Tick Density */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Tick Density</div>
+              <div className="settings-row-description">Control how many tick marks appear on the timeline axis.</div>
+            </div>
+            <div className="settings-row-right">
+              <div className="settings-slider-wrap">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="settings-slider"
+                  value={tickDensitySlider}
+                  ref={tickDensitySliderRef}
+                  onChange={(e) => {
+                    const nextPosition = Number(e.target.value);
+                    const rawDensity = sliderToTickDensity(nextPosition);
+                    const snappedDensity = Number((Math.round(rawDensity * 10) / 10).toFixed(1));
+                    setTickDensity(snappedDensity);
+                    setTickDensitySlider(tickDensityToSlider(snappedDensity));
+                  }}
+                  onMouseEnter={() => {
+                    updateTickDensityTooltipPosition();
+                    setShowTickDensityTooltip(true);
+                  }}
+                  onMouseLeave={() => setShowTickDensityTooltip(false)}
+                  onMouseDown={() => {
+                    updateTickDensityTooltipPosition();
+                    setShowTickDensityTooltip(true);
+                  }}
+                  onMouseUp={() => setShowTickDensityTooltip(false)}
+                  onFocus={() => {
+                    updateTickDensityTooltipPosition();
+                    setShowTickDensityTooltip(true);
+                  }}
+                />
+                {showTickDensityTooltip && (
+                  <div
+                    className="settings-slider-tooltip"
+                    style={{ left: tickDensityTooltipLeft }}
+                  >
+                    {tickDensity}x
+                  </div>
+                )}
+                <div className="settings-slider-labels">
+                  <span className="settings-slider-label settings-slider-label-min">{TICK_DENSITY_MIN}</span>
+                  <span className="settings-slider-label settings-slider-label-mid">{TICK_DENSITY_MID}</span>
+                  <span className="settings-slider-label settings-slider-label-max">{TICK_DENSITY_MAX}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Scale Sections */}
           <div className="settings-row settings-row-scale-sections">
             <div className="settings-row-left">
@@ -605,6 +681,18 @@ export default function SettingsModal({
                       max={2}
                       step={0.1}
                     />
+                    <button
+                      type="button"
+                      className={`settings-scale-section-break-toggle${section.showBreak !== false ? " active" : ""}`}
+                      onClick={() => updateScaleSection(index, "showBreak", section.showBreak === false ? true : false)}
+                      aria-label="Toggle axis break marker"
+                      title="Show axis break marker"
+                    >
+                      <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                        <line x1="1" y1="13" x2="6" y2="1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <line x1="6" y1="13" x2="11" y2="1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                    </button>
                     <button
                       type="button"
                       className="settings-scale-section-remove"
@@ -892,18 +980,18 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Show Months on Ticks */}
+              {/* Use Calendar */}
               <div className="settings-row">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Show Months on Ticks</div>
-                  <div className="settings-row-description">Display month labels when tick spacing is less than one year.</div>
+                  <div className="settings-row-label">Use Calendar</div>
+                  <div className="settings-row-description">Show month and day labels on ticks and element dates. Day-level ticks appear automatically on short timelines.</div>
                 </div>
                 <div className="settings-row-right">
                   <label className="settings-toggle">
                     <input
                       type="checkbox"
-                      checked={useMonths}
-                      onChange={(e) => setUseMonths(e.target.checked)}
+                      checked={useCalendar}
+                      onChange={(e) => setUseCalendar(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

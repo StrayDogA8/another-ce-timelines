@@ -1,7 +1,14 @@
-export function formatYear(year, negID, posID, useMonths = false, hideDecimals = false) {
+import { daysInMonth } from "./dateUtils";
+
+export const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+export function formatYear(year, negID, posID, useCalendar = false, hideDecimals = false) {
   if (year < 0) {
-    const display = hideDecimals ? Math.round(Math.abs(year)) : Math.abs(year);
-    return negID ? `${display} ${negID}` : `${hideDecimals ? -Math.round(Math.abs(year)) : year}`;
+    const abs = hideDecimals ? Math.round(Math.abs(year)) : Math.abs(year);
+    return negID ? `${abs} ${negID}` : `${-abs}`;
   }
   if (year > 0) {
     const yearInt = Math.floor(year);
@@ -9,15 +16,20 @@ export function formatYear(year, negID, posID, useMonths = false, hideDecimals =
     const hasFraction = Math.abs(fraction) > 1e-9;
     const hasShortYear = yearInt <= 9999;
 
-    if (useMonths && hasShortYear && !hideDecimals) {
-      const months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-      ];
-      const monthIndex = hasFraction
-        ? Math.min(11, Math.max(0, Math.floor((fraction + 1e-9) * 12)))
-        : 0;
-      const label = `${months[monthIndex]} ${yearInt}`;
+    if (useCalendar && hasShortYear && hasFraction) {
+      const monthIndex = Math.min(11, Math.max(0, Math.floor((fraction + 1e-9) * 12)));
+      const month = monthIndex + 1;
+      const monthFraction = Math.max(0, fraction * 12 - monthIndex);
+      const isMonthPrecision = Math.abs(monthFraction) < 1e-9;
+      if (isMonthPrecision) {
+        const label = `${MONTH_LABELS[monthIndex]} ${yearInt}`;
+        return posID ? `${label} ${posID}` : label;
+      }
+      const days = daysInMonth(yearInt, month);
+      const day = Math.min(days, Math.max(1, Math.floor(monthFraction * days + 1e-9) + 1));
+      const m = String(month).padStart(2, "0");
+      const d = String(day).padStart(2, "0");
+      const label = `${m}/${d}/${yearInt}`;
       return posID ? `${label} ${posID}` : label;
     }
 
@@ -76,12 +88,27 @@ export function pickStep(range) {
   const base = roughStep / Math.pow(10, exponent);
 
   let niceBase;
-  if (base < 1.5) niceBase = 1;
-  else if (base < 3.5) niceBase = 2;
+  if (base < 3) niceBase = 1;
   else if (base < 7.5) niceBase = 5;
   else niceBase = 10;
 
   return niceBase * Math.pow(10, exponent);
+}
+
+const PREFERRED_LABEL_BASES = [1, 2, 5, 10, 50, 100];
+export function pickLabelStep(targetStep) {
+  if (!Number.isFinite(targetStep) || targetStep <= 0) return 1;
+  const exponent = Math.floor(Math.log10(targetStep));
+  let best = null;
+  for (let e = exponent - 2; e <= exponent + 2; e++) {
+    const scale = Math.pow(10, e);
+    for (const base of PREFERRED_LABEL_BASES) {
+      const candidate = base * scale;
+      if (candidate < targetStep) continue;
+      if (best === null || candidate < best) best = candidate;
+    }
+  }
+  return best ?? PREFERRED_LABEL_BASES[PREFERRED_LABEL_BASES.length - 1] * Math.pow(10, exponent + 1);
 }
 
 // build child -> { parentId, offset } from spans
@@ -576,7 +603,7 @@ export function layoutEvents({
   pinnedTags = [],
   negID,
   posID,
-  useMonths = false,
+  useCalendar = false,
   hideDecimals = false,
 }) {
   const laidOut = [...events]
@@ -659,7 +686,7 @@ export function layoutEvents({
 
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
-    const yearLabel = event.dateLabel ?? formatYear(event.date, negID, posID, useMonths, hideDecimals);
+    const yearLabel = event.dateLabel ?? formatYear(event.date, negID, posID, useCalendar, hideDecimals);
     const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags, yearLabel);
 
     // Find placed events that horizontally overlap

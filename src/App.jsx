@@ -32,7 +32,7 @@ import { getAppSettings, saveAppSettings } from "./utils/appSettings";
 import { cloneDefaultKeybinds, loadKeybinds, matchesKeybind } from "./utils/keybinds";
 import { apiGetTimelineById, apiUpdateTimeline } from "./lib/api.js";
 import { onAuthStateChange } from "./lib/auth.js";
-import { parseTimelineInput, snapToMonthGrid } from "./utils/dateUtils";
+import { parseTimelineInput, snapToMonthGrid, snapToDayGrid } from "./utils/dateUtils";
 import "./index.css";
 
 const DEFAULT_GROUP_ID = "g-main";
@@ -791,17 +791,17 @@ function App() {
   const handleAddEvent = (groupId, clickYear, clickCoords) => {
     if (!timelineData?.file) return;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-    const fallbackMid =
-      timelineData.file.start + Math.floor((timelineData.file.end - timelineData.file.start) / 2);
+    const fallbackMid = (timelineData.file.start + timelineData.file.end) / 2;
     const baseYear = Number.isFinite(clickYear) ? clickYear : Number.isFinite(viewportYear) ? viewportYear : fallbackMid;
     const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
+    const snappedYear = timelineData.file.useCalendar === true ? snapToDayGrid(clampedYear) : Math.round(clampedYear);
     const eventId = generateUniqueRandomElementId(timelineData.elements, "event");
     const defaultGroupId = groupId || timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newEvent = {
       id: eventId,
       type: "event",
       title: "New Event",
-      date: clampedYear,
+      date: snappedYear,
       groupId: defaultGroupId,
       parents: [],
       eventLineStyle: "solid",
@@ -836,7 +836,8 @@ function App() {
     const fallbackStart = timelineData.file.start + Math.floor(range / 2);
     const baseStart = Number.isFinite(clickYear) ? clickYear : Number.isFinite(viewportYear) ? viewportYear : fallbackStart;
     const start = clamp(baseStart, timelineData.file.start, timelineData.file.end);
-    const end = clamp(start + duration, timelineData.file.start, timelineData.file.end);
+    const snappedStart = timelineData.file.useCalendar === true ? snapToDayGrid(start) : Math.round(start);
+    const end = clamp(snappedStart + duration, timelineData.file.start, timelineData.file.end);
 
     const spanId = generateUniqueRandomElementId(timelineData.elements, "span");
     const defaultGroupId = groupId || timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
@@ -844,7 +845,7 @@ function App() {
       id: spanId,
       type: "span",
       title: "New Span",
-      start,
+      start: snappedStart,
       end,
       groupId: defaultGroupId,
       color: "#A6977E",
@@ -1002,13 +1003,14 @@ function App() {
     start,
     end,
     detailLevel,
+    tickDensity,
     negID,
     posID,
     theme,
     font,
     startLabel,
     endLabel,
-    useMonths,
+    useCalendar,
     scaleSections,
     layout,
     branchOrdering,
@@ -1039,7 +1041,7 @@ function App() {
       const nextTimelineId = title
         ? generateIdFromTitle(title, "timeline").replace(/^timeline-/, "")
         : oldTimelineId;
-      const applyMonthSnap = useMonths === true;
+      const applyMonthSnap = useCalendar === true;
       const startValue = parsedStart.value ?? prevData.file.start;
       const endValue = parsedEnd.value ?? prevData.file.end;
       const nextFile = {
@@ -1055,13 +1057,14 @@ function App() {
             ? snapToMonthGrid(endValue)
             : endValue,
         detailLevel,
+        tickDensity,
         negID,
         posID,
         theme,
         font,
         startLabel,
         endLabel,
-        useMonths,
+        useCalendar: useCalendar || undefined,
         scaleSections,
         layout,
         branchOrdering,
@@ -1090,7 +1093,11 @@ function App() {
       delete nextFile.breaks;
       if (!startLabel) delete nextFile.startLabel;
       if (!endLabel) delete nextFile.endLabel;
-      if (useMonths === undefined) delete nextFile.useMonths;
+      delete nextFile.useMonths;
+      delete nextFile.useDays;
+      delete nextFile.datePrecision;
+      if (!nextFile.useCalendar) delete nextFile.useCalendar;
+      if (!tickDensity || tickDensity === 1) delete nextFile.tickDensity;
       if (!scaleSections || scaleSections.length === 0) delete nextFile.scaleSections;
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;

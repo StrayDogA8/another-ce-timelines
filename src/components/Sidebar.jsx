@@ -262,7 +262,7 @@ export default function Sidebar({
 
   const fmtYear = (y) => {
     if (!file) return String(y);
-    return formatYear(y, file.negID, file.posID, file.useMonths === true, file.hideDecimals);
+    return formatYear(y, file.negID, file.posID, file.useCalendar === true, file.hideDecimals);
   };
 
   const spanById = useMemo(() => new Map(spans.map((s) => [s.id, s])), [spans]);

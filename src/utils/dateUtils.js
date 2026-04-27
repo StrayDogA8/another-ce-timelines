@@ -1,4 +1,4 @@
-const daysInMonth = (year, month) => {
+export const daysInMonth = (year, month) => {
   const isLeap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const monthDays = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   return monthDays[month - 1] || 0;
@@ -28,7 +28,8 @@ export const parseTimelineInput = (value) => {
     if (parts.length !== 2 && parts.length !== 3) return { value: null, label: null, precision: null };
     const [monthRaw, midRaw, yearRaw] = parts.map((part) => part.trim());
     const month = Number(monthRaw);
-    const year = Number(parts.length === 2 ? midRaw : yearRaw);
+    const rawYear = Number(parts.length === 2 ? midRaw : yearRaw);
+    const year = (Number.isFinite(rawYear) && rawYear >= 0 && rawYear <= 99) ? rawYear + 2000 : rawYear;
     const day = parts.length === 2 ? 1 : Number(midRaw);
 
     if (!Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(year)) {
@@ -57,4 +58,27 @@ export const parseTimelineInput = (value) => {
 export const snapToMonthGrid = (value) => {
   if (!Number.isFinite(value)) return value;
   return Math.round(value * 12) / 12;
+};
+
+export const fractionalYearToDate = (value) => {
+  const yearInt = Math.floor(value);
+  const fraction = Math.max(0, value - yearInt);
+  const monthIndex = Math.min(11, Math.floor(fraction * 12 + 1e-9));
+  const month = monthIndex + 1;
+  const monthFraction = Math.max(0, fraction * 12 - monthIndex);
+  const days = daysInMonth(yearInt, month);
+  const day = Math.min(days, Math.max(1, Math.floor(monthFraction * days + 1e-9) + 1));
+  return { year: yearInt, month, day };
+};
+
+export const snapToDayGrid = (value) => {
+  if (!Number.isFinite(value)) return value;
+  const yearInt = Math.floor(value);
+  const fraction = Math.max(0, value - yearInt);
+  const monthIndex = Math.min(11, Math.floor(fraction * 12 + 1e-9));
+  const month = monthIndex + 1;
+  const monthFraction = Math.max(0, fraction * 12 - monthIndex);
+  const days = daysInMonth(yearInt, month);
+  const day = Math.min(days, Math.max(1, Math.round(monthFraction * days + 0.5 - 1e-9) + 1));
+  return yearInt + (month - 1) / 12 + (day - 1) / (days * 12);
 };

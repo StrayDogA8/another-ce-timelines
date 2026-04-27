@@ -1,29 +1,21 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
+import { formatYear } from "../utils/timelineUtils";
 
 const TypeDot = () => <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor", flexShrink: 0 }} />;
 const TypeBar = () => <span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor", flexShrink: 0 }} />;
 const TypeBox = () => <span style={{ display: "inline-block", width: 9, height: 9, border: "2px solid currentColor", borderRadius: 2, flexShrink: 0 }} />;
 
 function formatElementDate(el, fileSettings) {
-  const negID = fileSettings?.negativeYearIdentifier || "BCE";
-  const posID = fileSettings?.positiveYearIdentifier || "";
-  const useMonths = fileSettings?.useMonths === true;
+  const negID = fileSettings?.negID || "BCE";
+  const posID = fileSettings?.posID || "";
+  const useCalendar = fileSettings?.useCalendar === true;
+  const hideDecimals = fileSettings?.hideDecimals;
 
   const fmtYear = (year, label) => {
     if (label && typeof label === "string") return label;
     if (!Number.isFinite(year)) return "";
-    if (useMonths) {
-      const wholeYear = Math.floor(Math.abs(year));
-      const month = Math.round((Math.abs(year) - Math.floor(Math.abs(year))) * 12) + 1;
-      const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      const monthName = monthNames[Math.min(month - 1, 11)];
-      const suffix = year < 0 ? ` ${negID}` : (posID ? ` ${posID}` : "");
-      return `${monthName} ${wholeYear}${suffix}`;
-    }
-    const absYear = Math.abs(Math.round(year));
-    if (year < 0) return `${absYear} ${negID}`;
-    return posID ? `${absYear} ${posID}` : String(absYear);
+    return formatYear(year, negID, posID, useCalendar, hideDecimals);
   };
 
   if (el.type === "event") {

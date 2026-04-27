@@ -313,8 +313,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   const file = timelineData?.file;
   const displayYear = (value) => {
     if (!Number.isFinite(value)) return "--";
-    const useMonths = file?.useMonths === true;
-    return formatYear(useMonths ? value : Math.round(value), file?.negID, file?.posID, useMonths, file?.hideDecimals);
+    return formatYear(value, file?.negID, file?.posID, file?.useCalendar === true, file?.hideDecimals);
   };
   const selectedStartYear = previewData?.percentToYear
     ? previewData.percentToYear(exportRange.startPercent)
