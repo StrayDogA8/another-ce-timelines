@@ -1273,7 +1273,7 @@ function App() {
         id: `${timelineId}-timeline`,
         type: "timeline",
         title: timelineConfig.title,
-        appVersion: "0.4.0-alpha.1",
+        appVersion: "0.4.0-alpha.2",
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
