@@ -1132,6 +1132,7 @@
   cursor: pointer;
   background: none;
   padding: 0;
+  direction: rtl;
 }
 
 .edit-color-picker::-webkit-color-swatch-wrapper {
