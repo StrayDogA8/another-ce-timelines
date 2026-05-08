@@ -270,7 +270,7 @@ export default function Sidebar({
   const eraGroups = useMemo(() => {
     const sortedEras = [...eras].sort((a, b) => a.start - b.start);
     const allItems = [...events, ...spans].sort(compareEraGroupItems);
-    if (sortedEras.length === 0) return { groups: [], ungrouped: allItems };
+    if (sortedEras.length === 0) return { groups: [], ungrouped: allItems, tree: [] };
     const allDates = [
       ...sortedEras.flatMap((e) => [e.start, e.end]),
       ...allItems.map((el) => el.type === "event" ? el.date : el.start),
