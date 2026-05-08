@@ -18,15 +18,25 @@ A free, open-source app for creating customizable, interactive timelines for wor
 
 Timelines are stored as `.timeline` JSON files and notes as `.md` files. By default these live in your system app data folder. You can point to a custom directory in app settings.
 
-## Development
+## Setup
 
-**Prerequisites:** Node.js 20.19+ or 22+
+**Prerequisites:** [Node.js LTS](https://nodejs.org/)
 
+**1. Clone the repo**
+```bash
+git clone https://github.com/sreegjl/timelines.git
+
+cd timelines
+```
+
+**2. Install dependencies**
 ```bash
 npm install
 ```
 
-**Run in development (Electron + Vite):**
+## Development
+
+**Start the app:**
 ```bash
 npm run electron:dev
 ```
@@ -37,5 +47,7 @@ npm run electron:dev
 ```bash
 npm run electron:build
 ```
+
+The output installer will be in the `release/` folder.
 
 <!-- ![Design Doc](docs/design-doc.png) -->
