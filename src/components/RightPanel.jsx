@@ -1852,7 +1852,7 @@ export default function RightPanel({
                         }}
                         onFocus={() => setIsGroupMenuOpen(true)}
                         onBlur={handleGroupBlur}
-                        placeholder={groups.find((g) => g.id === formData.groupId)?.title || "Select group..."}
+                        placeholder={formData.groupId == null ? "Inherit" : (groups.find((g) => g.id === formData.groupId)?.title || "Select group...")}
                         className="edit-input branch-input"
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
@@ -1863,6 +1863,22 @@ export default function RightPanel({
                       />
                       {isGroupMenuOpen && (
                         <div className="branch-suggestions">
+                          {!newGroupName && (
+                            <button
+                              type="button"
+                              className={`branch-suggestion-item${formData.groupId == null ? " branch-suggestion-selected" : ""}`}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const next = { ...formData, groupId: null };
+                                setFormData(next);
+                                commitDraft(next);
+                                setNewGroupName("");
+                                setIsGroupMenuOpen(false);
+                              }}
+                            >
+                              <span className="branch-suggestion-title">Inherit</span>
+                            </button>
+                          )}
                           {filteredGroups.map((g) => (
                             <button
                               key={g.id}
@@ -1952,7 +1968,7 @@ export default function RightPanel({
                               e.preventDefault();
                               const choice = parentSuggestions[0];
                               if (choice) {
-                                const next = { ...formData, parents: [choice.id] };
+                                const next = { ...formData, parents: [choice.id], groupId: choice.groupId ?? formData.groupId };
                                 setFormData(next);
                                 commitDraft(next);
                                 setParentQuery("");
@@ -1971,7 +1987,7 @@ export default function RightPanel({
                                   className="branch-suggestion-item"
                                   onMouseDown={(e) => {
                                     e.preventDefault();
-                                    const next = { ...formData, parents: [span.id] };
+                                    const next = { ...formData, parents: [span.id], groupId: span.groupId ?? formData.groupId };
                                     setFormData(next);
                                     commitDraft(next);
                                     setParentQuery("");

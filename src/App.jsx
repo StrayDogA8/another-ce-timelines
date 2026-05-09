@@ -91,11 +91,18 @@ function App() {
       }
     }
 
+    const spanGroupById = Object.fromEntries(
+      elements.filter((el) => el.type === "span" && groupIdSet.has(el.groupId)).map((el) => [el.id, el.groupId])
+    );
+
     const nextElements = elements.map((element) => {
       const next = { ...element };
       const needsGroupId = next.type === "event" || next.type === "span";
       if (needsGroupId && !groupIdSet.has(next.groupId)) {
-        next.groupId = defaultGroupId;
+        const parentGroupId = next.type === "event" && Array.isArray(next.parents)
+          ? next.parents.map((pid) => spanGroupById[pid]).find(Boolean)
+          : undefined;
+        next.groupId = parentGroupId ?? defaultGroupId;
       }
 
       if (next.type !== "span") return next;
@@ -796,13 +803,12 @@ function App() {
     const clampedYear = clamp(baseYear, timelineData.file.start, timelineData.file.end);
     const snappedYear = timelineData.file.useCalendar === true ? snapToDayGrid(clampedYear) : Math.round(clampedYear);
     const eventId = generateUniqueRandomElementId(timelineData.elements, "event");
-    const defaultGroupId = groupId || timelineData.file?.groups?.[0]?.id || DEFAULT_GROUP_ID;
     const newEvent = {
       id: eventId,
       type: "event",
       title: "New Event",
       date: snappedYear,
-      groupId: defaultGroupId,
+      groupId: groupId || null,
       parents: [],
       eventLineStyle: "solid",
       eventBorderStyle: "solid",
@@ -1710,10 +1716,24 @@ function App() {
     });
   }, [timelineData, activeTags, hiddenTags]);
 
-  const filteredTimelineData = useMemo(() => ({
-    ...timelineData,
-    elements: filteredElements,
-  }), [timelineData, filteredElements]);
+  const filteredTimelineData = useMemo(() => {
+    const groups = timelineData.file?.groups ?? [];
+    const groupIdSet = new Set(groups.map((g) => g.id).filter(Boolean));
+    const defaultGroupId = groups[0]?.id || DEFAULT_GROUP_ID;
+    const spanGroupById = Object.fromEntries(
+      filteredElements
+        .filter((el) => el.type === "span" && groupIdSet.has(el.groupId))
+        .map((el) => [el.id, el.groupId])
+    );
+    const resolvedElements = filteredElements.map((el) => {
+      if ((el.type !== "event" && el.type !== "span") || groupIdSet.has(el.groupId)) return el;
+      const parentGroupId = el.type === "event" && Array.isArray(el.parents)
+        ? el.parents.map((pid) => spanGroupById[pid]).find(Boolean)
+        : undefined;
+      return { ...el, groupId: parentGroupId ?? defaultGroupId };
+    });
+    return { ...timelineData, elements: resolvedElements };
+  }, [timelineData, filteredElements]);
 
   const allTags = useMemo(() => {
     if (!timelineData?.elements) return [];
