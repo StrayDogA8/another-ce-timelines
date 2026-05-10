@@ -1717,6 +1717,7 @@ function App() {
   }, [timelineData, activeTags, hiddenTags]);
 
   const filteredTimelineData = useMemo(() => {
+    if (!timelineData) return null;
     const groups = timelineData.file?.groups ?? [];
     const groupIdSet = new Set(groups.map((g) => g.id).filter(Boolean));
     const defaultGroupId = groups[0]?.id || DEFAULT_GROUP_ID;
