@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw, ArrowUpAZ, Clock } from "lucide-react";
 import { login, logout, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
 import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
 import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile } from "../utils/electronApi.js";
@@ -65,6 +65,7 @@ export default function HomePage({
   const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("list");
+  const [sortMode, setSortMode] = useState("date");
   const [filter, setFilter] = useState("all");
   const [cloudUser, setCloudUser] = useState(() => getCurrentUser());
   const [cloudEmail, setCloudEmail] = useState("");
@@ -720,7 +721,10 @@ export default function HomePage({
       const matchesFilter = filter === "all" || file.storageType === filter;
       return matchesSearch && matchesFilter;
     })
-    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
+    .sort((a, b) => sortMode === "name"
+      ? a.name.localeCompare(b.name)
+      : (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0)
+    );
 
   if (loading && !settingsOnly) {
     return (
@@ -820,6 +824,14 @@ export default function HomePage({
                   <RefreshCw size={15} className={syncing ? "spin" : ""} />
                 </button>
               )}
+              <button
+                className="timeline-view-toggle"
+                onClick={() => setSortMode(s => s === "date" ? "name" : "date")}
+                aria-label="Toggle sort"
+                title={sortMode === "date" ? "Sort: Date modified" : "Sort: A–Z"}
+              >
+                {sortMode === "date" ? <ArrowUpAZ size={15} /> : <Clock size={15} />}
+              </button>
               <button
                 className="timeline-view-toggle"
                 onClick={() => setViewMode(v => v === "list" ? "grid" : "list")}
