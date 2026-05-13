@@ -1015,7 +1015,7 @@ export default function HomePage({
                 aria-label="Toggle sort"
                 title={sortMode === "date" ? "Sort: Date modified" : sortMode === "name" ? "Sort: A–Z" : "Sort: Z–A"}
               >
-                {sortMode === "date" ? <Clock size={15} /> : sortMode === "name" ? <ArrowUpAZ size={15} /> : <ArrowDownAZ size={15} />}
+                {sortMode === "date" ? <Clock size={15} /> : sortMode === "name" ? <ArrowDownAZ size={15} /> : <ArrowUpAZ size={15} />}
                 <span>{sortMode === "date" ? "Date" : sortMode === "name" ? "A–Z" : "Z–A"}</span>
               </button>
               <div className="view-mode-pill">
