@@ -1,0 +1,25 @@
+{
+  "name": "Parchment v2",
+  "colors": {
+    "dark-bg": "#3A2E22",
+    "element-bg": "#90816D",
+    "active-bg": "#E6DAC1",
+    "secondary-bg": "#F1E8D6",
+    "tertiary-bg": "#FBF3E1",
+    "primary-bg": "#FEF7E8",
+    "gray-1": "#918C85",
+    "gray-2": "#807C76",
+    "gray-3": "#211F1E",
+    "gray-4": "#141414",
+    "gray-5": "#151515",
+    "info-bg": "#87C6FA",
+    "info-blue": "#87C6FA",
+    "link-blue": "#417FB2",
+    "off-white": "#FFFAF4",
+    "light-bg": "#F3EDE3",
+    "hover-bg": "#EDE6DA",
+    "border-color": "#D4CAB8",
+    "secondary-text": "#807C76",
+    "highlight-color": "#F6D66A"
+  }
+}

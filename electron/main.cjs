@@ -47,6 +47,29 @@ const sanitizeId = (value, fallback = '') => safeName(value) || fallback;
 
 const sanitizeTimelineId = (value) => sanitizeId(value, 'timeline');
 
+const sanitizeTimelinePath = (value) => {
+  const parts = String(value || '').split(/[/\\]/);
+  const sanitized = parts.map(p => safeName(p)).filter(Boolean);
+  return sanitized.length > 0 ? sanitized.join('/') : 'timeline';
+};
+
+async function listTimelineFilesRecursive(dir, baseDir) {
+  const results = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        results.push(...await listTimelineFilesRecursive(fullPath, baseDir));
+      } else if (entry.isFile() && entry.name.endsWith('.timeline')) {
+        const rel = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+        results.push({ fullPath, relativeId: rel.replace(/\.timeline$/, '') });
+      }
+    }
+  } catch {}
+  return results;
+}
+
 const sanitizeNoteFilename = (value) => {
   const base = String(value || '').replace(/\.md$/i, '');
   const cleaned = sanitizeId(base, 'note');
@@ -406,52 +429,39 @@ ipcMain.on('close-window', () => {
 ipcMain.handle('save-timeline', async (event, { data, filename }) => {
   try {
     const dataDir = await getTimelinesDir();
-
-    // Ensure directory exists
-    await fs.mkdir(dataDir, { recursive: true });
-
-    const safeFilename = sanitizeTimelineId(filename);
-    const filePath = path.join(dataDir, `${safeFilename}.timeline`);
-
+    const safePath = sanitizeTimelinePath(filename);
+    const filePath = path.join(dataDir, `${safePath}.timeline`);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
-
-    return {
-      success: true,
-      message: 'Timeline saved successfully',
-      path: filePath,
-    };
+    return { success: true, message: 'Timeline saved successfully', path: filePath };
   } catch (error) {
     console.error('Error saving timeline:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 });
 
 ipcMain.handle('list-timelines', async () => {
   try {
     const userDataDir = await getTimelinesDir();
-    const files = await fs.readdir(userDataDir);
-    const timelineFiles = files.filter(f => f.endsWith('.timeline'));
+    const files = await listTimelineFilesRecursive(userDataDir, userDataDir);
 
     const timelines = (await Promise.all(
-      timelineFiles.map(async (file) => {
+      files.map(async ({ fullPath, relativeId }) => {
         try {
-          const filePath = path.join(userDataDir, file);
-          const content = await fs.readFile(filePath, 'utf8');
+          const content = await fs.readFile(fullPath, 'utf8');
           const data = JSON.parse(content);
-          const filename = file.replace('.timeline', '');
-
-          const stat = await fs.stat(filePath);
+          const stat = await fs.stat(fullPath);
+          const parts = relativeId.split('/');
+          const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
           return {
-            id: filename,
-            name: data.file?.title || filename,
+            id: relativeId,
+            name: data.file?.title || parts[parts.length - 1],
             modifiedAt: stat.mtimeMs,
             eventCount: Array.isArray(data.elements) ? data.elements.length : 0,
+            folder,
           };
         } catch (err) {
-          console.warn(`Skipping corrupt timeline ${file}:`, err.message);
+          console.warn(`Skipping corrupt timeline ${relativeId}:`, err.message);
           return null;
         }
       })
@@ -467,9 +477,8 @@ ipcMain.handle('list-timelines', async () => {
 ipcMain.handle('load-timeline', async (event, filename) => {
   try {
     const userDataDir = await getTimelinesDir();
-    const safeFilename = sanitizeTimelineId(filename);
-    const filePath = path.join(userDataDir, `${safeFilename}.timeline`);
-
+    const safePath = sanitizeTimelinePath(filename);
+    const filePath = path.join(userDataDir, `${safePath}.timeline`);
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
     console.log(`Loaded timeline: ${filename}`);
@@ -624,26 +633,155 @@ ipcMain.handle('delete-timeline', async (event, payload) => {
     const deleteAssets = Boolean(request.deleteAssets);
     const filename = request.id ?? request.filename ?? request.timelineId;
     const userDataDir = await getTimelinesDir();
-    const safeFilename = sanitizeTimelineId(filename);
-    const filePath = path.join(userDataDir, `${safeFilename}.timeline`);
+    const safePath = sanitizeTimelinePath(filename);
+    const filePath = path.join(userDataDir, `${safePath}.timeline`);
 
     await fs.unlink(filePath);
     console.log(`Deleted timeline: ${filename}`);
 
+    // Remove folder if now empty
+    const dir = path.dirname(filePath);
+    if (dir !== userDataDir) {
+      const remaining = await fs.readdir(dir).catch(() => ['x']);
+      if (remaining.length === 0) await fs.rmdir(dir).catch(() => {});
+    }
+
     if (deleteAssets) {
-      const notesDir = await getNotesDir(safeFilename);
+      const notesDir = await getNotesDir(safePath.split('/').pop());
       await fs.rm(notesDir, { recursive: true, force: true });
     }
 
-    return {
-      success: true,
-    };
+    return { success: true };
   } catch (error) {
     console.error('Error deleting timeline:', error);
-    return {
-      success: false,
-      error: error.message,
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('rename-folder', async (event, { folderPath, newName }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safeOld = sanitizeTimelinePath(folderPath);
+    const parts = safeOld.split('/');
+    parts[parts.length - 1] = safeName(newName);
+    const safeNew = parts.join('/');
+    if (safeOld === safeNew) return { success: true, newPath: safeNew };
+    await fs.rename(path.join(baseDir, safeOld), path.join(baseDir, safeNew));
+    return { success: true, newPath: safeNew };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-timeline-title', async (event, { id, title }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safePath = sanitizeTimelinePath(id);
+    const filePath = path.join(baseDir, `${safePath}.timeline`);
+    const content = await fs.readFile(filePath, 'utf8');
+    const data = JSON.parse(content);
+    data.file = { ...data.file, title };
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-folder', async (event, { folderPath }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safe = sanitizeTimelinePath(folderPath);
+    await fs.rm(path.join(baseDir, safe), { recursive: true, force: true });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('move-folder', async (event, { folderPath, targetFolder }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safeSrc = sanitizeTimelinePath(folderPath);
+    const folderName = safeSrc.split('/').pop();
+    const safeDest = targetFolder
+      ? `${sanitizeTimelinePath(targetFolder)}/${folderName}`
+      : folderName;
+    if (safeSrc === safeDest) return { success: true };
+    // Prevent moving into own subtree
+    if (safeDest.startsWith(safeSrc + '/')) return { success: false, error: 'Cannot move folder into itself' };
+    await fs.mkdir(path.join(baseDir, path.dirname(safeDest)), { recursive: true });
+    await fs.rename(path.join(baseDir, safeSrc), path.join(baseDir, safeDest));
+    return { success: true, newPath: safeDest };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('create-folder', async (event, { folderName, parentFolder }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safeFolderName = parentFolder
+      ? `${sanitizeTimelinePath(parentFolder)}/${safeName(folderName)}`
+      : sanitizeTimelinePath(folderName);
+    if (!safeFolderName) return { success: false, error: 'Invalid folder name' };
+    await fs.mkdir(path.join(baseDir, safeFolderName), { recursive: true });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-folders', async () => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const folders = [];
+    const scan = async (dir, prefix) => {
+      const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+          folders.push(name);
+          await scan(path.join(dir, entry.name), name);
+        }
+      }
     };
+    await scan(baseDir, '');
+    return folders;
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle('move-timeline', async (event, { id, targetFolder }) => {
+  try {
+    const baseDir = await getTimelinesDir();
+    const safePath = sanitizeTimelinePath(id);
+    const filename = safePath.split('/').pop();
+    const safeTarget = targetFolder ? sanitizeTimelinePath(targetFolder) : '';
+    const newRelId = safeTarget ? `${safeTarget}/${filename}` : filename;
+    const oldFile = path.join(baseDir, `${safePath}.timeline`);
+    const newFile = path.join(baseDir, `${newRelId}.timeline`);
+    if (oldFile === newFile) return { success: true, newId: newRelId };
+    await fs.mkdir(path.dirname(newFile), { recursive: true });
+    await fs.rename(oldFile, newFile);
+    const oldDir = path.dirname(oldFile);
+    if (oldDir !== baseDir) {
+      const remaining = await fs.readdir(oldDir).catch(() => ['x']);
+      if (remaining.length === 0) await fs.rmdir(oldDir).catch(() => {});
+    }
+    // Migrate notes directory to match new timeline ID
+    const notesBase = await getNotesBaseDir();
+    const oldNotesId = sanitizeTimelineId(safePath);
+    const newNotesId = sanitizeTimelineId(newRelId);
+    if (oldNotesId !== newNotesId) {
+      const oldNotesPath = path.join(notesBase, oldNotesId);
+      const newNotesPath = path.join(notesBase, newNotesId);
+      await fs.rename(oldNotesPath, newNotesPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
+    }
+    return { success: true, newId: newRelId };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -811,29 +949,20 @@ ipcMain.handle('rename-note', async (event, { timelineId, oldFilename, newFilena
 
 ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
   try {
-    if (!oldId || !newId) {
-      return { success: false, error: 'Missing timeline ids' };
-    }
+    if (!oldId || !newId) return { success: false, error: 'Missing timeline ids' };
     const timelinesDir = await getTimelinesDir();
-    const safeOldId = sanitizeTimelineId(oldId);
-    const safeNewId = sanitizeTimelineId(newId);
-    const oldTimelinePath = path.join(timelinesDir, `${safeOldId}.timeline`);
-    const newTimelinePath = path.join(timelinesDir, `${safeNewId}.timeline`);
+    const safeOldPath = sanitizeTimelinePath(oldId);
+    const safeNewPath = sanitizeTimelinePath(newId);
+    const oldFilePath = path.join(timelinesDir, `${safeOldPath}.timeline`);
+    const newFilePath = path.join(timelinesDir, `${safeNewPath}.timeline`);
 
-    try {
-      await fs.rename(oldTimelinePath, newTimelinePath);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    await fs.mkdir(path.dirname(newFilePath), { recursive: true });
+    await fs.rename(oldFilePath, newFilePath).catch(e => { if (e.code !== 'ENOENT') throw e; });
 
     const notesBase = await getNotesBaseDir();
-    const oldNotesPath = path.join(notesBase, safeOldId);
-    const newNotesPath = path.join(notesBase, safeNewId);
-    try {
-      await fs.rename(oldNotesPath, newNotesPath);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    const oldNotesPath = path.join(notesBase, safeOldPath.split('/').pop());
+    const newNotesPath = path.join(notesBase, safeNewPath.split('/').pop());
+    await fs.rename(oldNotesPath, newNotesPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
 
     return { success: true };
   } catch (error) {

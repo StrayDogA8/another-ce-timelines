@@ -363,3 +363,38 @@ export async function deleteUserTheme({ id }) {
     return { success: false, error: error.message };
   }
 }
+
+export async function createFolder(folderName, parentFolder) {
+  if (!window.electron?.createFolder) return { success: false };
+  return window.electron.createFolder({ folderName, parentFolder });
+}
+
+export async function listFolders() {
+  if (!window.electron?.listFolders) return [];
+  return window.electron.listFolders();
+}
+
+export async function moveTimeline(id, targetFolder) {
+  if (!window.electron?.moveTimeline) return { success: false };
+  return window.electron.moveTimeline({ id, targetFolder });
+}
+
+export async function renameFolder(folderPath, newName) {
+  if (!window.electron?.renameFolder) return { success: false };
+  return window.electron.renameFolder({ folderPath, newName });
+}
+
+export async function updateTimelineTitle(id, title) {
+  if (!window.electron?.updateTimelineTitle) return { success: false };
+  return window.electron.updateTimelineTitle({ id, title });
+}
+
+export async function deleteFolder(folderPath) {
+  if (!window.electron?.deleteFolder) return { success: false };
+  return window.electron.deleteFolder({ folderPath });
+}
+
+export async function moveFolder(folderPath, targetFolder) {
+  if (!window.electron?.moveFolder) return { success: false };
+  return window.electron.moveFolder({ folderPath, targetFolder });
+}

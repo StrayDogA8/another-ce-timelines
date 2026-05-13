@@ -1,8 +1,77 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw, ArrowUpAZ, Clock } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
 import { login, logout, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
 import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
-import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile } from "../utils/electronApi.js";
+import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile, createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
+
+function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
+  const [dest, setDest] = useState(null);
+  return (
+    <div className="folder-modal folder-modal-pick" onClick={(e) => e.stopPropagation()}>
+      <FolderTree folders={folders} currentFolder={currentFolder} selected={dest} onSelect={setDest} />
+      <div className="folder-modal-actions">
+        <button className="folder-modal-btn" onClick={onCancel}>Cancel</button>
+        <button className="folder-modal-btn folder-modal-btn-primary" disabled={dest === null} onClick={() => onConfirm(dest)}>OK</button>
+      </div>
+    </div>
+  );
+}
+
+function FolderTree({ folders, currentFolder, selected, onSelect }) {
+  const [collapsed, setCollapsed] = useState({});
+
+  const toggle = (path) => setCollapsed(prev => ({ ...prev, [path]: !prev[path] }));
+
+  const hasChildren = (path) => folders.some(f => f.startsWith(path + '/') && f.split('/').length === path.split('/').length + 1);
+
+  const renderLevel = (parentPath, depth) => {
+    const prefix = parentPath ? parentPath + '/' : '';
+    const items = folders.filter(f => {
+      const parts = f.split('/');
+      const parentParts = parentPath ? parentPath.split('/') : [];
+      return parts.length === parentParts.length + 1 && f.startsWith(prefix);
+    });
+
+    return items.map((f) => {
+      const label = f.split('/').pop();
+      const isOpen = !collapsed[f];
+      const children = hasChildren(f);
+      return (
+        <div key={f}>
+          <div className={`timeline-folder-option${selected === f ? ' is-selected' : ''}${currentFolder === f ? ' is-current' : ''}`} style={{ paddingLeft: 8 + depth * 16 }}>
+            <button
+              type="button"
+              className="folder-tree-toggle"
+              onClick={() => children && toggle(f)}
+              style={{ visibility: children ? 'visible' : 'hidden' }}
+              aria-label={isOpen ? 'Collapse' : 'Expand'}
+            >
+              <ChevronRight size={11} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+            </button>
+            <button type="button" className="folder-tree-label" onClick={() => onSelect(f)}>
+              <Folder size={13} />
+              <span>{label}</span>
+            </button>
+          </div>
+          {children && isOpen && renderLevel(f, depth + 1)}
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="timeline-folder-list">
+      <div className={`timeline-folder-option${selected === '' ? ' is-selected' : ''}${currentFolder === '' ? ' is-current' : ''}`} style={{ paddingLeft: 8 }}>
+        <span className="folder-tree-toggle" style={{ visibility: 'hidden' }} />
+        <button type="button" className="folder-tree-label" onClick={() => onSelect('')}>
+          <Folder size={13} />
+          <span>Home</span>
+        </button>
+      </div>
+      {renderLevel('', 0)}
+    </div>
+  );
+}
 
 function relativeTime(ms) {
   if (!ms) return null;
@@ -66,6 +135,18 @@ export default function HomePage({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("list");
   const [sortMode, setSortMode] = useState("date");
+  const [currentFolder, setCurrentFolder] = useState("");
+  const [allFolders, setAllFolders] = useState([]);
+  const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [moveDialogFile, setMoveDialogFile] = useState(null);
+  const [availableFolders, setAvailableFolders] = useState([]);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameName, setRenameName] = useState("");
+  const [folderContextMenu, setFolderContextMenu] = useState(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
+  const [moveFolderTarget, setMoveFolderTarget] = useState(null);
+  const [showAllFolders, setShowAllFolders] = useState(false);
   const [filter, setFilter] = useState("all");
   const [cloudUser, setCloudUser] = useState(() => getCurrentUser());
   const [cloudEmail, setCloudEmail] = useState("");
@@ -303,10 +384,18 @@ export default function HomePage({
         console.warn("Timeline listing is only available in the desktop app.");
         setTimelineFiles([]);
       }
+      if (window.electron?.listFolders) {
+        try {
+          const folders = await window.electron.listFolders();
+          setAllFolders(folders);
+        } catch { setAllFolders([]); }
+      }
       setLoading(false);
     };
 
     loadTimelineList();
+    setCurrentFolder("");
+    setShowAllFolders(false);
   }, [timelineStorageDir]);
 
   // Sync auth state and refresh user data (including plan) when logged in
@@ -539,19 +628,18 @@ export default function HomePage({
     }
   };
 
-  // Close context menu when clicking outside
+  // Close context menus when clicking outside
   useEffect(() => {
-    if (!contextMenu) return;
-
+    if (!contextMenu && !folderContextMenu) return;
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setContextMenu(null);
+        setFolderContextMenu(null);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [contextMenu]);
+  }, [contextMenu, folderContextMenu]);
 
   const handleNewTimeline = () => {
     setIsNewTimelineModalOpen(true);
@@ -679,6 +767,72 @@ export default function HomePage({
     }
   };
 
+  const refreshLocal = async () => {
+    if (window.electron?.listTimelines) {
+      const files = await window.electron.listTimelines();
+      setTimelineFiles(files.map(f => ({ ...f, storageType: 'local' })));
+    }
+    if (window.electron?.listFolders) {
+      const folders = await window.electron.listFolders();
+      setAllFolders(folders);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    await createFolder(name, currentFolder || undefined);
+    setNewFolderName("");
+    setNewFolderDialogOpen(false);
+    await refreshLocal();
+  };
+
+  const handleOpenMoveDialog = async (file) => {
+    setMoveDialogFile(file);
+    const folders = await listFolders();
+    setAvailableFolders(folders);
+  };
+
+  const handleRename = async () => {
+    if (!renameTarget || !renameName.trim()) return;
+    const name = renameName.trim();
+    if (renameTarget.type === 'folder') {
+      await renameFolder(renameTarget.id, name);
+      if (currentFolder === renameTarget.id) {
+        const parts = renameTarget.id.split('/');
+        parts[parts.length - 1] = name;
+        setCurrentFolder(parts.join('/'));
+      }
+    } else {
+      await updateTimelineTitle(renameTarget.id, name);
+    }
+    setRenameTarget(null);
+    setRenameName("");
+    await refreshLocal();
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!deleteFolderTarget) return;
+    await deleteFolder(deleteFolderTarget.folderPath);
+    if (currentFolder.startsWith(deleteFolderTarget.folderPath)) setCurrentFolder("");
+    setDeleteFolderTarget(null);
+    await refreshLocal();
+  };
+
+  const handleMoveFolder = async (targetFolder) => {
+    if (!moveFolderTarget) return;
+    await moveFolder(moveFolderTarget.folderPath, targetFolder || '');
+    setMoveFolderTarget(null);
+    await refreshLocal();
+  };
+
+  const handleMoveTimeline = async (targetFolder) => {
+    if (!moveDialogFile) return;
+    const result = await moveTimeline(moveDialogFile.id, targetFolder);
+    setMoveDialogFile(null);
+    if (result.success) await refreshLocal();
+  };
+
   const handleDelete = async (file) => {
     setDeleteDialogFile(file);
     setDeleteDialogWithAssets(false);
@@ -715,14 +869,36 @@ export default function HomePage({
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const allTimelines = [...timelineFiles, ...cloudTimelineFiles];
+
+  const visibleSubfolders = useMemo(() => {
+    if (normalizedQuery) return [];
+    const depth = currentFolder ? currentFolder.split('/').length : 0;
+    return allFolders
+      .filter(f => {
+        if (!f) return false;
+        const parts = f.split('/');
+        if (parts.length !== depth + 1) return false;
+        if (currentFolder && !f.startsWith(currentFolder + '/')) return false;
+        if (!currentFolder && parts.length !== 1) return false;
+        return true;
+      })
+      .map(f => f.split('/').pop())
+      .filter(name => !name.startsWith('.') && !name.endsWith('.assets'))
+      .sort((a, b) => a.localeCompare(b));
+  }, [allFolders, currentFolder, normalizedQuery]);
+
   const filteredTimelines = allTimelines
     .filter((file) => {
       const matchesSearch = !normalizedQuery || file.name.toLowerCase().includes(normalizedQuery);
       const matchesFilter = filter === "all" || file.storageType === filter;
-      return matchesSearch && matchesFilter;
+      const matchesFolder = normalizedQuery
+        ? true
+        : (file.folder ?? '') === currentFolder;
+      return matchesSearch && matchesFilter && matchesFolder;
     })
-    .sort((a, b) => sortMode === "name"
-      ? a.name.localeCompare(b.name)
+    .sort((a, b) =>
+      sortMode === "name" ? a.name.localeCompare(b.name)
+      : sortMode === "name-desc" ? b.name.localeCompare(a.name)
       : (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0)
     );
 
@@ -768,14 +944,17 @@ export default function HomePage({
             </svg>
           </div>
           <div className="homepage-header-right">
-            <input
-              className="homepage-search"
-              type="text"
-              placeholder="Search timelines..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search timelines"
-            />
+            <div className="homepage-search-wrap">
+              <Search size={14} className="homepage-search-icon" />
+              <input
+                className="homepage-search"
+                type="text"
+                placeholder="Search timelines..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search timelines"
+              />
+            </div>
             <button
               className="homepage-settings-icon"
               onClick={handleOpenMarketplace}
@@ -794,10 +973,16 @@ export default function HomePage({
         </div>
 
         <div className="timeline-view-toolbar">
-          <button className="timeline-new-btn" onClick={handleNewTimeline}>
-            <FilePlus size={14} strokeWidth={2.5} />
-            New Timeline
-          </button>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button className="timeline-new-btn toolbar-btn-equal" onClick={handleNewTimeline}>
+              <FilePlus size={14} strokeWidth={2.5} />
+              New Timeline
+            </button>
+            <button className="timeline-new-btn timeline-new-btn-secondary toolbar-btn-equal" onClick={() => { setNewFolderName(""); setNewFolderDialogOpen(true); }}>
+              <FolderPlus size={14} strokeWidth={2.5} />
+              New Folder
+            </button>
+          </div>
           <div className="timeline-toolbar-right">
             {cloudTimelineFiles.length > 0 && (
               <div className="timeline-filter-tabs">
@@ -812,7 +997,7 @@ export default function HomePage({
                 ))}
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               {canUseCloud && (
                 <button
                   className="timeline-view-toggle"
@@ -825,28 +1010,114 @@ export default function HomePage({
                 </button>
               )}
               <button
-                className="timeline-view-toggle"
-                onClick={() => setSortMode(s => s === "date" ? "name" : "date")}
+                className="timeline-view-toggle timeline-sort-btn"
+                onClick={() => setSortMode(s => s === "date" ? "name" : s === "name" ? "name-desc" : "date")}
                 aria-label="Toggle sort"
-                title={sortMode === "date" ? "Sort: Date modified" : "Sort: A–Z"}
+                title={sortMode === "date" ? "Sort: Date modified" : sortMode === "name" ? "Sort: A–Z" : "Sort: Z–A"}
               >
-                {sortMode === "date" ? <ArrowUpAZ size={15} /> : <Clock size={15} />}
+                {sortMode === "date" ? <Clock size={15} /> : sortMode === "name" ? <ArrowUpAZ size={15} /> : <ArrowDownAZ size={15} />}
+                <span>{sortMode === "date" ? "Date" : sortMode === "name" ? "A–Z" : "Z–A"}</span>
               </button>
-              <button
-                className="timeline-view-toggle"
-                onClick={() => setViewMode(v => v === "list" ? "grid" : "list")}
-                aria-label="Toggle view"
-              >
-                {viewMode === "list" ? <LayoutGrid size={15} /> : <List size={15} />}
-              </button>
+              <div className="view-mode-pill">
+                <button
+                  className={`view-mode-pill-btn${viewMode === "list" ? " is-active" : ""}`}
+                  onClick={() => setViewMode("list")}
+                  aria-label="List view"
+                  title="List"
+                >
+                  <List size={15} />
+                </button>
+                <button
+                  className={`view-mode-pill-btn${viewMode === "grid" ? " is-active" : ""}`}
+                  onClick={() => setViewMode("grid")}
+                  aria-label="Grid view"
+                  title="Grid"
+                >
+                  <LayoutGrid size={15} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
+
+        {currentFolder && (
+          <div className="timeline-breadcrumb">
+            <button className="timeline-breadcrumb-item" onClick={() => setCurrentFolder("")}>Home</button>
+            {currentFolder.split('/').map((part, i, arr) => {
+              const path = arr.slice(0, i + 1).join('/');
+              return (
+                <span key={path} className="timeline-breadcrumb-sep-wrap">
+                  <ChevronRight size={12} className="timeline-breadcrumb-sep" />
+                  <button className="timeline-breadcrumb-item" onClick={() => setCurrentFolder(path)}>{part}</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {cloudActionError && (
           <div className="cloud-action-error">{cloudActionError}</div>
         )}
 
+        {currentFolder && (() => {
+          const folderName = currentFolder.split('/').pop();
+          const timelineCount = timelineFiles.filter(f => f.folder === currentFolder).length;
+          const subfolderCount = visibleSubfolders.length;
+          const lastModified = timelineFiles
+            .filter(f => f.folder === currentFolder && f.modifiedAt)
+            .reduce((max, f) => Math.max(max, f.modifiedAt), 0);
+          return (
+            <div className="folder-hero">
+              <h2 className="folder-hero-title"><FolderOpen size={30} className="folder-hero-icon" />{folderName}</h2>
+              <p className="folder-hero-meta">
+                {timelineCount} {timelineCount === 1 ? 'timeline' : 'timelines'}
+                {subfolderCount > 0 && <> · {subfolderCount} {subfolderCount === 1 ? 'folder' : 'folders'}</>}
+                {lastModified > 0 && <> · Updated {relativeTime(lastModified)}</>}
+              </p>
+            </div>
+          );
+        })()}
+
+        {visibleSubfolders.length > 0 && (
+          <div className="homepage-section">
+            <span className="homepage-section-label">Folders</span>
+            <div className="timeline-folders-row">
+              {(showAllFolders ? visibleSubfolders : visibleSubfolders.slice(0, 9)).map((folderName) => {
+                const fullPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
+                const count = timelineFiles.filter(f => (f.folder ?? '').startsWith(fullPath) && (f.folder === fullPath || f.folder.startsWith(fullPath + '/'))).length;
+                return (
+                  <div key={fullPath} className="timeline-folder-chip-wrap">
+                    <div className="timeline-folder-chip" onClick={() => setCurrentFolder(fullPath)}>
+                      <div className="timeline-folder-chip-icon"><FolderOpen size={16} /></div>
+                      <div className="timeline-folder-chip-body">
+                        <span className="timeline-folder-chip-name">{folderName}</span>
+                        <span className={`timeline-folder-chip-meta${count === 0 ? ' is-empty' : ''}`}>{count === 0 ? 'Empty' : `${count} ${count === 1 ? 'timeline' : 'timelines'}`}</span>
+                      </div>
+                      <button
+                        className="timeline-folder-chip-dots"
+                        onClick={(e) => { e.stopPropagation(); setFolderContextMenu({ x: e.clientX, y: e.clientY, nearRight: e.clientX > window.innerWidth / 2, folderPath: fullPath, folderName }); }}
+                        aria-label="More options"
+                      >
+                        <MoreVertical size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {visibleSubfolders.length > 9 && (
+              <button className="folders-show-more" onClick={() => setShowAllFolders(v => !v)}>
+                {showAllFolders ? 'Show less' : `Show ${visibleSubfolders.length - 9} more`}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="homepage-section">
+          <span className="homepage-section-label">
+            {normalizedQuery ? 'Results' : currentFolder ? 'Timelines' : 'All timelines'}
+            <span className="homepage-section-count">{filteredTimelines.length}</span>
+          </span>
         {viewMode === "list" ? (
           <div className="timeline-list">
             {filteredTimelines.map((file) => (
@@ -856,21 +1127,13 @@ export default function HomePage({
                 onClick={() => onSelectTimeline(file.id)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
-                <div className="timeline-item-icon">
-                  <svg width="20" height="8" viewBox="0 0 67 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect y="8.89844" width="29.2656" height="6.80469" fill="currentColor" />
-                    <rect x="34.0703" width="32.9297" height="7.32812" fill="currentColor" />
-                    <rect x="34.0703" y="16.75" width="32.9297" height="7.32812" fill="currentColor" />
-                    <path d="M28.2656 5C28.2656 2.23858 30.5042 0 33.2656 0H35.0703V24.0781H33.2656C30.5042 24.0781 28.2656 21.8395 28.2656 19.0781V5Z" fill="currentColor" />
-                  </svg>
-                </div>
                 <div className="timeline-item-body">
                   <span className="timeline-item-title">{file.name}</span>
-                  <span className="timeline-item-meta">
-                    {file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}
-                  </span>
                 </div>
                 <div className="timeline-item-right">
+                  {file.modifiedAt && (
+                    <span className="timeline-item-meta">{relativeTime(file.modifiedAt)}</span>
+                  )}
                   {cloudTimelineFiles.length > 0 && (
                     <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
                       {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
@@ -925,6 +1188,7 @@ export default function HomePage({
             <p>No timelines found. Create a new one to get started.</p>
           </div>
         )}
+        </div>
           </div>
 
           <NewTimelineModal
@@ -981,7 +1245,7 @@ export default function HomePage({
                   <>
                     <div className="settings-row">
                       <div className="settings-row-left">
-                        <div className="settings-row-label">Version 0.4.0-alpha.2</div>
+                        <div className="settings-row-label">Version 0.4.0-alpha.3</div>
                         <div className="settings-row-description">
                           {updateStatus === 'available'
                             ? 'Update available'
@@ -1580,6 +1844,25 @@ export default function HomePage({
             </>
           )}
 
+          {contextMenu?.file?.storageType !== 'cloud' && (
+            <>
+              <button
+                className="context-menu-item"
+                onClick={() => handleMenuAction(() => { setRenameTarget({ type: 'timeline', id: contextMenu.file.id, currentName: contextMenu.file.name }); setRenameName(contextMenu.file.name); })}
+              >
+                <Pencil size={16} />
+                <span>Rename</span>
+              </button>
+              <button
+                className="context-menu-item"
+                onClick={() => handleMenuAction(() => handleOpenMoveDialog(contextMenu.file))}
+              >
+                <Folder size={16} />
+                <span>Move to Folder</span>
+              </button>
+            </>
+          )}
+
           <div className="context-menu-separator" />
 
           <button
@@ -1713,6 +1996,110 @@ export default function HomePage({
               </div>
             )}
           </div>
+        </div>
+      )}
+      {folderContextMenu && (
+        <div
+          ref={menuRef}
+          className="timeline-context-menu"
+          style={{
+            position: 'fixed',
+            ...(folderContextMenu.nearRight
+              ? { right: `${window.innerWidth - folderContextMenu.x}px` }
+              : { left: `${folderContextMenu.x}px` }),
+            top: `${folderContextMenu.y}px`,
+          }}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => { setRenameTarget({ type: 'folder', id: folderContextMenu.folderPath, currentName: folderContextMenu.folderName }); setRenameName(folderContextMenu.folderName); setFolderContextMenu(null); }}
+          >
+            <Pencil size={16} />
+            <span>Rename</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={async () => { const fc = folderContextMenu; setFolderContextMenu(null); const folders = await listFolders(); setAvailableFolders(folders.filter(f => f !== fc.folderPath && !f.startsWith(fc.folderPath + '/'))); setMoveFolderTarget(fc); }}
+          >
+            <Folder size={16} />
+            <span>Move to Folder</span>
+          </button>
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item context-menu-item-danger"
+            onClick={() => { const fc = folderContextMenu; setFolderContextMenu(null); const fileCount = timelineFiles.filter(f => (f.folder ?? '').startsWith(fc.folderPath)).length; setDeleteFolderTarget({ ...fc, fileCount }); }}
+          >
+            <Trash2 size={16} />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
+
+      {renameTarget && (
+        <div className="settings-backdrop" onClick={() => setRenameTarget(null)}>
+          <div className="folder-modal" onClick={(e) => e.stopPropagation()}>
+            <input
+              className="folder-modal-input"
+              type="text"
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleRename()}
+              autoFocus
+            />
+            <div className="folder-modal-actions">
+              <button className="folder-modal-btn" onClick={() => setRenameTarget(null)}>Cancel</button>
+              <button className="folder-modal-btn folder-modal-btn-primary" onClick={handleRename} disabled={!renameName.trim()}>Rename</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteFolderTarget && (
+        <div className="settings-backdrop" onClick={() => setDeleteFolderTarget(null)}>
+          <div className="folder-modal" onClick={(e) => e.stopPropagation()}>
+            <p className="folder-modal-text">
+              <strong>{deleteFolderTarget.folderName}</strong>
+              {deleteFolderTarget.fileCount > 0
+                ? ` contains ${deleteFolderTarget.fileCount} timeline${deleteFolderTarget.fileCount !== 1 ? 's' : ''}. This cannot be undone.`
+                : ' will be permanently deleted.'}
+            </p>
+            <div className="folder-modal-actions">
+              <button className="folder-modal-btn" onClick={() => setDeleteFolderTarget(null)}>Cancel</button>
+              <button className="folder-modal-btn folder-modal-btn-danger" onClick={handleDeleteFolder}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveFolderTarget && (
+        <div className="settings-backdrop" onClick={() => setMoveFolderTarget(null)}>
+          <MovePicker folders={availableFolders} currentFolder={null} onConfirm={handleMoveFolder} onCancel={() => setMoveFolderTarget(null)} />
+        </div>
+      )}
+
+      {newFolderDialogOpen && (
+        <div className="settings-backdrop" onClick={() => setNewFolderDialogOpen(false)}>
+          <div className="folder-modal" onClick={(e) => e.stopPropagation()}>
+            <input
+              className="folder-modal-input"
+              type="text"
+              placeholder="Folder name"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+              autoFocus
+            />
+            <div className="folder-modal-actions">
+              <button className="folder-modal-btn" onClick={() => setNewFolderDialogOpen(false)}>Cancel</button>
+              <button className="folder-modal-btn folder-modal-btn-primary" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveDialogFile && (
+        <div className="settings-backdrop" onClick={() => setMoveDialogFile(null)}>
+          <MovePicker folders={availableFolders} currentFolder={moveDialogFile.folder ?? ''} onConfirm={handleMoveTimeline} onCancel={() => setMoveDialogFile(null)} />
         </div>
       )}
     </div>

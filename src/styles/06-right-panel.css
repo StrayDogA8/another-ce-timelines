@@ -1479,9 +1479,10 @@
 }
 
 .view-separator {
-  border-bottom: 1px solid var(--active-bg);
+  border-bottom: 1px solid var(--element-bg);
   padding-bottom: 5px;
   position: relative;
+  opacity: 0.3;
 }
 
 .view-group p {
