@@ -119,6 +119,8 @@ export default function HomePage({
   onOpenNotesFolder,
   hardwareAcceleration = true,
   onHardwareAccelerationChange,
+  startMaximized = false,
+  onStartMaximizedChange,
   onRefreshThemes,
   openSettingsSignal = 0,
   openCloudSettingsSignal = 0,
@@ -1419,6 +1421,25 @@ export default function HomePage({
                             {appFontSize || 14}px
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Start App Maximized</div>
+                        <div className="settings-row-description">
+                          Launch the app in a maximized window.
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <label className="settings-toggle">
+                          <input
+                            type="checkbox"
+                            checked={startMaximized}
+                            onChange={(e) => onStartMaximizedChange?.(e.target.checked)}
+                          />
+                          <span className="settings-toggle-slider"></span>
+                        </label>
                       </div>
                     </div>
 

@@ -178,6 +178,7 @@ function App() {
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [appFontSize, setAppFontSize] = useState(14);
   const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
+  const [startMaximized, setStartMaximized] = useState(false);
   const [keybinds, setKeybinds] = useState(() => cloneDefaultKeybinds());
   const [availableFonts, setAvailableFonts] = useState([]);
   const [activeTags, setActiveTags] = useState([]);
@@ -1414,6 +1415,7 @@ function App() {
       setAppFontFamily(storedFontFamily);
       setAppFontSize(storedFontSize);
       setHardwareAcceleration(settings?.hardwareAcceleration !== false);
+      setStartMaximized(settings?.startMaximized === true);
       setKeybinds(savedKeybinds);
     };
 
@@ -1530,6 +1532,7 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1567,6 +1570,7 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1581,6 +1585,7 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1596,6 +1601,7 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1610,6 +1616,7 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1639,6 +1646,7 @@ function App() {
       appFontFamily: nextFont,
       appFontSize,
       hardwareAcceleration,
+      startMaximized,
     });
   };
 
@@ -1653,11 +1661,27 @@ function App() {
       appFontFamily,
       appFontSize,
       hardwareAcceleration: next,
+      startMaximized,
     });
     if (window.electron?.relaunchApp) {
       const confirmed = window.confirm("Restart required to apply hardware acceleration change. Restart now?");
       if (confirmed) window.electron.relaunchApp();
     }
+  };
+
+  const handleStartMaximizedChange = async (next) => {
+    setStartMaximized(next);
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      notesSubfolder,
+      notesSubfolderEnabled,
+      appFontFamily,
+      appFontSize,
+      hardwareAcceleration,
+      startMaximized: next,
+    });
   };
 
   const handlePickTimelinesDir = async () => {
@@ -1917,6 +1941,8 @@ function App() {
             onAppFontSizeChange={handleAppFontSizeChange}
             hardwareAcceleration={hardwareAcceleration}
             onHardwareAccelerationChange={handleHardwareAccelerationChange}
+            startMaximized={startMaximized}
+            onStartMaximizedChange={handleStartMaximizedChange}
             onRefreshThemes={refreshUserThemes}
             openSettingsSignal={homeSettingsSignal}
             openCloudSettingsSignal={openCloudSettingsSignal}
@@ -2086,6 +2112,8 @@ function App() {
           onAppFontSizeChange={handleAppFontSizeChange}
           hardwareAcceleration={hardwareAcceleration}
           onHardwareAccelerationChange={handleHardwareAccelerationChange}
+          startMaximized={startMaximized}
+          onStartMaximizedChange={handleStartMaximizedChange}
           onRefreshThemes={refreshUserThemes}
           openSettingsSignal={homeSettingsSignal}
           openCloudSettingsSignal={openCloudSettingsSignal}

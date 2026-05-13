@@ -217,6 +217,11 @@ async function createWindow() {
 
   Menu.setApplicationMenu(null);
 
+  try {
+    const raw = fsSync.readFileSync(appSettingsPath(), 'utf8');
+    if (JSON.parse(raw)?.startMaximized === true) mainWindow.maximize();
+  } catch {}
+
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
@@ -1003,7 +1008,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'timelineStorageDir', 'storageDir', 'notesStorageDir',
   'pluginsStorageDir', 'themeKey', 'enabledPlugins',
   'theme', 'notesSubfolder', 'notesSubfolderEnabled',
-  'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration',
+  'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration', 'startMaximized',
 ]);
 
 ipcMain.handle('set-app-settings', async (event, settings) => {
