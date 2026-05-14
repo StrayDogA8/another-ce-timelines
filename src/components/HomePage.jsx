@@ -1261,7 +1261,15 @@ export default function HomePage({
                       <div className="settings-row-right">
                         <div className="settings-folder settings-folder-column">
                           <div className="settings-folder-actions">
-                            {updateStatus === 'downloaded' ? (
+                            {window.electron?.platform === 'darwin' ? (
+                              <button
+                                className="settings-folder-button"
+                                type="button"
+                                onClick={() => window.electron?.openExternal?.({ url: 'https://github.com/sreegjl/timelines/releases/latest' })}
+                              >
+                                Download Latest Release
+                              </button>
+                            ) : updateStatus === 'downloaded' ? (
                               <button
                                 className="settings-folder-button"
                                 type="button"

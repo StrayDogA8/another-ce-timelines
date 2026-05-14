@@ -1,10 +1,14 @@
 {
   "name": "Parchment v2",
+  "font": {
+    "family": "Lexend",
+    "cssUrl": "https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&display=swap"
+  },
   "colors": {
     "dark-bg": "#3A2E22",
     "element-bg": "#90816D",
-    "active-bg": "#E6DAC1",
-    "secondary-bg": "#F1E8D6",
+    "active-bg": "#DFD2B6",
+    "secondary-bg": "#EADFC8",
     "tertiary-bg": "#FBF3E1",
     "primary-bg": "#FEF7E8",
     "gray-1": "#918C85",

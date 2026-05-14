@@ -62,4 +62,5 @@ contextBridge.exposeInMainWorld('electron', {
   offUpdaterStatus: () => {
     ipcRenderer.removeAllListeners('updater-status');
   },
+  platform: process.platform,
 });

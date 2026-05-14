@@ -282,6 +282,7 @@ protocol.registerSchemesAsPrivileged([
 function setupAutoUpdater() {
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) return;
+  if (process.platform === 'darwin') return;
 
   autoUpdater.allowPrerelease = true;
   autoUpdater.autoDownload = false;
