@@ -78,7 +78,7 @@ const sanitizeNoteFilename = (value) => {
 
 const resolveNotePath = async (timelineId, notePath) => {
   const notesRootDir = await getNotesRootDir();
-  const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
+  const notesDir = await getNotesDir(timelineId);
   const rawPath = String(notePath || '').trim();
   if (!rawPath) {
     throw new Error('Missing note path');
@@ -164,13 +164,13 @@ const getNotesRootDir = async () => {
     const trimmed = customDir.trim();
     if (trimmed) return trimmed;
   }
-  return getTimelinesDir();
+  return path.join(await getTimelinesDir(), '.notes');
 };
 
 const getNotesDir = async (timelineId) => {
   const baseDir = await getNotesBaseDir();
-  const safeTimelineId = safeName(timelineId) || 'timeline';
-  return path.join(baseDir, safeTimelineId);
+  const safePath = sanitizeTimelinePath(String(timelineId || 'timeline'));
+  return path.join(baseDir, ...safePath.split('/'));
 };
 
 const getFontsDir = async () => defaultFontsDir();
@@ -653,7 +653,7 @@ ipcMain.handle('delete-timeline', async (event, payload) => {
     }
 
     if (deleteAssets) {
-      const notesDir = await getNotesDir(safePath.split('/').pop());
+      const notesDir = await getNotesDir(safePath);
       await fs.rm(notesDir, { recursive: true, force: true });
     }
 
@@ -776,13 +776,10 @@ ipcMain.handle('move-timeline', async (event, { id, targetFolder }) => {
       const remaining = await fs.readdir(oldDir).catch(() => ['x']);
       if (remaining.length === 0) await fs.rmdir(oldDir).catch(() => {});
     }
-    // Migrate notes directory to match new timeline ID
     const notesBase = await getNotesBaseDir();
-    const oldNotesId = sanitizeTimelineId(safePath);
-    const newNotesId = sanitizeTimelineId(newRelId);
-    if (oldNotesId !== newNotesId) {
-      const oldNotesPath = path.join(notesBase, oldNotesId);
-      const newNotesPath = path.join(notesBase, newNotesId);
+    const oldNotesPath = path.join(notesBase, ...sanitizeTimelinePath(safePath).split('/'));
+    const newNotesPath = path.join(notesBase, ...sanitizeTimelinePath(newRelId).split('/'));
+    if (oldNotesPath !== newNotesPath) {
       await fs.rename(oldNotesPath, newNotesPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
     }
     return { success: true, newId: newRelId };
@@ -797,7 +794,7 @@ ipcMain.handle('create-note', async (event, { timelineId, title, elementId }) =>
       return { success: false, error: 'Missing timelineId' };
     }
 
-    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
+    const notesDir = await getNotesDir(timelineId);
     await fs.mkdir(notesDir, { recursive: true });
 
     const base = safeName(elementId) || safeName(title) || 'note';
@@ -913,7 +910,7 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const notesDir = await getNotesDir(sanitizeTimelineId(timelineId));
+    const notesDir = await getNotesDir(timelineId);
     await fs.mkdir(notesDir, { recursive: true });
     const filePath = await resolveNotePath(timelineId, filename);
     await fs.writeFile(filePath, content ?? '', 'utf8');

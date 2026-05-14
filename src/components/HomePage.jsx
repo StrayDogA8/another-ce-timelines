@@ -649,7 +649,7 @@ export default function HomePage({
 
   const handleCreateTimeline = (timelineConfig) => {
     setIsNewTimelineModalOpen(false);
-    onCreateTimeline(timelineConfig);
+    onCreateTimeline({ ...timelineConfig, folder: currentFolder || '' });
   };
 
   const handleContextMenu = (e, file) => {
@@ -792,7 +792,7 @@ export default function HomePage({
   const handleOpenMoveDialog = async (file) => {
     setMoveDialogFile(file);
     const folders = await listFolders();
-    setAvailableFolders(folders);
+    setAvailableFolders(folders.filter(f => !f.split('/').some(part => part.startsWith('.') || part.endsWith('.assets'))));
   };
 
   const handleRename = async () => {
@@ -893,9 +893,12 @@ export default function HomePage({
     .filter((file) => {
       const matchesSearch = !normalizedQuery || file.name.toLowerCase().includes(normalizedQuery);
       const matchesFilter = filter === "all" || file.storageType === filter;
-      const matchesFolder = normalizedQuery
-        ? true
-        : (file.folder ?? '') === currentFolder;
+      const fileFolder = file.folder ?? '';
+      const matchesFolder = currentFolder
+        ? fileFolder === currentFolder || fileFolder.startsWith(currentFolder + '/')
+        : normalizedQuery
+          ? true
+          : fileFolder === '';
       return matchesSearch && matchesFilter && matchesFolder;
     })
     .sort((a, b) =>
@@ -1117,7 +1120,7 @@ export default function HomePage({
 
         <div className="homepage-section">
           <span className="homepage-section-label">
-            {normalizedQuery ? 'Results' : currentFolder ? 'Timelines' : 'All timelines'}
+            {normalizedQuery ? 'Results' : 'Timelines'}
             <span className="homepage-section-count">{filteredTimelines.length}</span>
           </span>
         {viewMode === "list" ? (
@@ -1131,6 +1134,9 @@ export default function HomePage({
               >
                 <div className="timeline-item-body">
                   <span className="timeline-item-title">{file.name}</span>
+                  {normalizedQuery && file.folder && (
+                    <span className="timeline-item-folder">{file.folder}</span>
+                  )}
                 </div>
                 <div className="timeline-item-right">
                   {file.modifiedAt && (
@@ -1172,6 +1178,9 @@ export default function HomePage({
                 </div>
                 <div className="timeline-card-body">
                   <span className="timeline-item-title">{file.name}</span>
+                  {normalizedQuery && file.folder && (
+                    <span className="timeline-item-folder">{file.folder}</span>
+                  )}
                   <span className="timeline-item-meta">{file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}</span>
                 </div>
                 {cloudTimelineFiles.length > 0 && (
@@ -1247,7 +1256,7 @@ export default function HomePage({
                   <>
                     <div className="settings-row">
                       <div className="settings-row-left">
-                        <div className="settings-row-label">Version 0.4.0-alpha.3</div>
+                        <div className="settings-row-label">Version 0.4.0-alpha.4</div>
                         <div className="settings-row-description">
                           {updateStatus === 'available'
                             ? 'Update available'
@@ -1255,7 +1264,7 @@ export default function HomePage({
                             ? 'Ready to install'
                             : updateStatus === 'error'
                             ? 'Update check failed'
-                            : 'Up to date'}
+                            : <>Notes storage has changed in this version. <a href="https://github.com/sreegjl/timelines/releases/tag/v0.4.0-alpha.4" target="_blank" rel="noopener noreferrer">See release notes.</a></>}
                         </div>
                       </div>
                       <div className="settings-row-right">
@@ -2048,7 +2057,7 @@ export default function HomePage({
           </button>
           <button
             className="context-menu-item"
-            onClick={async () => { const fc = folderContextMenu; setFolderContextMenu(null); const folders = await listFolders(); setAvailableFolders(folders.filter(f => f !== fc.folderPath && !f.startsWith(fc.folderPath + '/'))); setMoveFolderTarget(fc); }}
+            onClick={async () => { const fc = folderContextMenu; setFolderContextMenu(null); const folders = await listFolders(); setAvailableFolders(folders.filter(f => f !== fc.folderPath && !f.startsWith(fc.folderPath + '/') && !f.split('/').some(part => part.startsWith('.') || part.endsWith('.assets')))); setMoveFolderTarget(fc); }}
           >
             <Folder size={16} />
             <span>Move to Folder</span>

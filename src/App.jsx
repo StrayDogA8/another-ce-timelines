@@ -442,7 +442,7 @@ function App() {
       }
       return;
     }
-    return saveTimelineToFile(data, localId);
+    return saveTimelineToFile(data, id || localId);
   };
 
   const undoTimeline = () => {
@@ -1280,7 +1280,7 @@ function App() {
         id: `${timelineId}-timeline`,
         type: "timeline",
         title: timelineConfig.title,
-        appVersion: "0.4.0-alpha.3",
+        appVersion: "0.4.0-alpha.4",
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
@@ -1298,12 +1298,13 @@ function App() {
     if (!timelineConfig.endLabel) delete newTimeline.file.endLabel;
 
     // Save to file system
+    const saveId = timelineConfig.folder ? `${timelineConfig.folder}/${timelineId}` : timelineId;
     try {
-      await saveTimelineToFile(newTimeline, timelineId);
+      await saveTimelineToFile(newTimeline, saveId);
 
       // Load the newly created timeline
       setTimelineData(newTimeline);
-      setCurrentTimelineId(timelineId);
+      setCurrentTimelineId(saveId);
       setSelectedId(null);
     } catch (error) {
       console.error('Failed to create timeline:', error);
