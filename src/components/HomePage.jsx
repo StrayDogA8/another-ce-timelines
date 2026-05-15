@@ -1271,13 +1271,24 @@ export default function HomePage({
                         <div className="settings-folder settings-folder-column">
                           <div className="settings-folder-actions">
                             {window.electron?.platform === 'darwin' ? (
-                              <button
-                                className="settings-folder-button"
-                                type="button"
-                                onClick={() => window.electron?.openExternal?.({ url: 'https://github.com/sreegjl/timelines/releases/latest' })}
-                              >
-                                Download Latest Release
-                              </button>
+                              updateStatus === 'available' ? (
+                                <button
+                                  className="settings-folder-button"
+                                  type="button"
+                                  onClick={() => window.electron?.openExternal?.({ url: 'https://github.com/sreegjl/timelines/releases/latest' })}
+                                >
+                                  Download Latest Release
+                                </button>
+                              ) : (
+                                <button
+                                  className="settings-folder-button"
+                                  type="button"
+                                  disabled={updateStatus === 'checking'}
+                                  onClick={() => window.electron?.checkForUpdates?.()}
+                                >
+                                  {updateStatus === 'checking' ? 'Checking…' : 'Check for Updates'}
+                                </button>
+                              )
                             ) : updateStatus === 'downloaded' ? (
                               <button
                                 className="settings-folder-button"
