@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar, FileText } from "lucide-react";
+import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar, FileText, ImagePlay } from "lucide-react";
 import { parseTimelineInput, fractionalYearToDate } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
@@ -87,6 +87,24 @@ const NoteEditor = forwardRef(function NoteEditor(
     });
   };
 
+  const insertImage = () => {
+    const textarea = document.querySelector('.note-textarea');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const content = noteContentRef.current;
+    const before = content.slice(0, start);
+    const after = content.slice(start);
+    const token = `![](https://)`;
+    setNoteContent(`${before}${token}${after}`);
+    const urlStart = before.length + 4;
+    const urlEnd = urlStart + 8;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(urlStart, urlEnd);
+    });
+  };
+
+
   return (
     <div className="note-editor">
       <div className="note-toolbar">
@@ -102,6 +120,7 @@ const NoteEditor = forwardRef(function NoteEditor(
           <button type="button" onClick={() => wrapSelection('==')} title="Highlight"><Highlighter size={14} /></button>
           <div className="note-toolbar-divider" />
           <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
+          <button type="button" onClick={insertImage} title="Embed image or video"><ImagePlay size={14} /></button>
         </div>
         {noteExists && (
           <div className="note-toolbar-actions">
@@ -1210,7 +1229,42 @@ export default function RightPanel({
     const raw = isLoading ? "_Loading note..._" : content || "";
     const withUnderline = raw.replace(/__(.+?)__/g, "<u>$1</u>");
     const withHighlight = withUnderline.replace(/==(.+?)==/g, "<mark>$1</mark>");
-    const html = marked.parse(withHighlight);
+
+    const extractYouTubeId = (url) => {
+      try {
+        const u = new URL(url);
+        if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0];
+        if (u.hostname.endsWith("youtube.com")) return u.searchParams.get("v");
+      } catch {}
+      return null;
+    };
+
+    const extractVimeoId = (url) => {
+      try {
+        const u = new URL(url);
+        if (u.hostname === "vimeo.com" || u.hostname.endsWith(".vimeo.com")) {
+          const match = u.pathname.match(/\/(\d+)/);
+          return match ? match[1] : null;
+        }
+      } catch {}
+      return null;
+    };
+
+    const renderer = new marked.Renderer();
+    const originalImage = renderer.image.bind(renderer);
+    renderer.image = (href, title, text) => {
+      const youtubeId = extractYouTubeId(href);
+      if (youtubeId) {
+        return `<iframe class="video-embed" src="https://www.youtube-nocookie.com/embed/${youtubeId}" width="560" height="315" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+      }
+      const vimeoId = extractVimeoId(href);
+      if (vimeoId) {
+        return `<iframe class="video-embed" src="https://player.vimeo.com/video/${vimeoId}" width="560" height="315" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>`;
+      }
+      return originalImage(href, title, text);
+    };
+
+    const html = marked.parse(withHighlight, { renderer });
     return sanitizeHtml(html);
   };
 
@@ -1333,6 +1387,7 @@ export default function RightPanel({
         "h6",
         "hr",
         "i",
+        "iframe",
         "img",
         "li",
         "mark",
@@ -1363,6 +1418,10 @@ export default function RightPanel({
         "width",
         "height",
         "loading",
+        "frameborder",
+        "allowfullscreen",
+        "allow",
+        "class",
       ],
       KEEP_CONTENT: true,
     });
@@ -1395,11 +1454,37 @@ export default function RightPanel({
           node.setAttribute("loading", "lazy");
         }
       }
+
+      if (tagName === "iframe") {
+        const ALLOWED_IFRAME_ORIGINS = [
+          "https://www.youtube-nocookie.com",
+          "https://www.youtube.com",
+          "https://player.vimeo.com",
+        ];
+        const src = node.getAttribute("src") || "";
+        const allowed = ALLOWED_IFRAME_ORIGINS.some((origin) =>
+          src.startsWith(origin + "/")
+        );
+        if (!allowed) {
+          node.remove();
+          return;
+        }
+      }
     });
 
     return doc.body.innerHTML;
   };
 
+  const renderedNoteHtml = useMemo(
+    () => renderNoteMarkdown(noteInitialContent, isNoteLoading),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [noteInitialContent, isNoteLoading, notesBaseUrl, notesBasePath]
+  );
+
+  const noteViewCallbackRef = useCallback((node) => {
+    noteRenderRef.current = node;
+    if (node) node.innerHTML = renderedNoteHtml;
+  }, [renderedNoteHtml]);
 
   const showLegacyBreaks = timelineData?.file?.allowLegacyBreaks === true;
 
@@ -1578,6 +1663,14 @@ export default function RightPanel({
               ) : null;
             })()}
 
+            {timelineData?.file?.useMaps && (formData.lat != null || formData.lng != null) && (
+              <div className="view-group">
+                <label>Coordinates</label>
+                <div className="view-separator" />
+                <p>{[formData.lat, formData.lng].filter((v) => v !== "" && v != null).join(", ")}</p>
+              </div>
+            )}
+
             {formData.noteFile && (
               <>
                 <div className="note-divider" />
@@ -1589,22 +1682,9 @@ export default function RightPanel({
                   </span>
                 </button>
                 {!isNoteCollapsed && (
-                  <div
-                    className="note-render"
-                    dangerouslySetInnerHTML={{
-                      __html: renderNoteMarkdown(noteInitialContent, isNoteLoading),
-                    }}
-                  />
+                  <div className="note-render" ref={noteViewCallbackRef} />
                 )}
               </>
-            )}
-
-            {timelineData?.file?.useMaps && (formData.lat != null || formData.lng != null) && (
-              <div className="view-group">
-                <label>Coordinates</label>
-                <div className="view-separator" />
-                <p>{[formData.lat, formData.lng].filter((v) => v !== "" && v != null).join(", ")}</p>
-              </div>
             )}
 
             {timelineData?.file?.useWikipedia && formData.wikiUrl && (
@@ -1848,62 +1928,6 @@ export default function RightPanel({
                 </div>
               </>
             )}
-
-            {/* Group (events and spans only) */}
-            {(formData.type === "event" || formData.type === "span") && (() => {
-              const groups = timelineData?.file?.groups || [];
-              const filteredGroups = groups.filter((g) =>
-                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
-              );
-              const handleGroupBlur = () => {
-                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
-              };
-              const addGroup = (name) => {
-                const trimmed = name.trim();
-                if (!trimmed) return;
-                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-                if (groups.some((g) => g.id === id)) {
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                } else {
-                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
-                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
-                  onUpdateGroups([...groups, newGroup]);
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                }
-                setNewGroupName("");
-                setIsGroupMenuOpen(false);
-              };
-              return (
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label htmlFor="groupId">Group</label>
-                    <div className="edit-separator" />
-                    <div className="edit-select-wrap">
-                      <select
-                        id="groupId"
-                        className="edit-select"
-                        value={formData.groupId ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value || null;
-                          const next = { ...formData, groupId: val };
-                          setFormData(next);
-                          commitDraft(next);
-                        }}
-                      >
-                        <option value="">Inherit</option>
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>{g.title || g.id}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* Relations */}
             {(formData.type === "event" || formData.type === "span") && (
@@ -2154,6 +2178,62 @@ export default function RightPanel({
                 </div>
               </div>
             </div>
+
+            {/* Group (events and spans only) */}
+            {(formData.type === "event" || formData.type === "span") && (() => {
+              const groups = timelineData?.file?.groups || [];
+              const filteredGroups = groups.filter((g) =>
+                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
+              );
+              const handleGroupBlur = () => {
+                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
+              };
+              const addGroup = (name) => {
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+                if (groups.some((g) => g.id === id)) {
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                } else {
+                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
+                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
+                  onUpdateGroups([...groups, newGroup]);
+                  const next = { ...formData, groupId: id };
+                  setFormData(next);
+                  commitDraft(next);
+                }
+                setNewGroupName("");
+                setIsGroupMenuOpen(false);
+              };
+              return (
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="groupId">Group</label>
+                    <div className="edit-separator" />
+                    <div className="edit-select-wrap">
+                      <select
+                        id="groupId"
+                        className="edit-select"
+                        value={formData.groupId ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value || null;
+                          const next = { ...formData, groupId: val };
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      >
+                        <option value="">Inherit</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>{g.title || g.id}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Map */}
             {timelineData?.file?.useMaps && (
