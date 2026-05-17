@@ -14,7 +14,6 @@ import {
   saveTimelineToFile,
   chooseTimelinesDir,
   chooseNotesDir,
-  chooseNotesSubfolder,
   listFonts,
   openFontsFolder,
   openTimelinesFolder,
@@ -173,8 +172,6 @@ function App() {
   const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
-  const [notesSubfolder, setNotesSubfolder] = useState("");
-  const [notesSubfolderEnabled, setNotesSubfolderEnabled] = useState(false);
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [appFontSize, setAppFontSize] = useState(14);
   const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
@@ -1405,14 +1402,10 @@ function App() {
       setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
-      const storedNotesSubfolder = settings?.notesSubfolder ?? "";
-      const storedNotesSubfolderEnabled = settings?.notesSubfolderEnabled ?? false;
       const storedFontFamily = settings?.appFontFamily ?? "Inter";
       const storedFontSize = settings?.appFontSize ?? 14;
       setTimelineStorageDir(storedTimelineDir);
       setNotesStorageDir(storedNotesDir);
-      setNotesSubfolder(storedNotesSubfolder);
-      setNotesSubfolderEnabled(storedNotesSubfolderEnabled);
       setAppFontFamily(storedFontFamily);
       setAppFontSize(storedFontSize);
       setHardwareAcceleration(settings?.hardwareAcceleration !== false);
@@ -1528,8 +1521,6 @@ function App() {
       theme: nextThemeKey,
       timelineStorageDir,
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
@@ -1566,8 +1557,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir: nextDir || "",
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
@@ -1581,8 +1570,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir: nextDir || "",
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
@@ -1590,36 +1577,6 @@ function App() {
     });
   };
 
-  const handleNotesSubfolderChange = async (nextValue) => {
-    const next = nextValue || "";
-    setNotesSubfolder(next);
-    await saveAppSettings({
-      theme: appThemePreference,
-      timelineStorageDir,
-      notesStorageDir,
-      notesSubfolder: next,
-      notesSubfolderEnabled,
-      appFontFamily,
-      appFontSize,
-      hardwareAcceleration,
-      startMaximized,
-    });
-  };
-
-  const handleNotesSubfolderEnabledChange = async (nextEnabled) => {
-    setNotesSubfolderEnabled(nextEnabled);
-    await saveAppSettings({
-      theme: appThemePreference,
-      timelineStorageDir,
-      notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled: nextEnabled,
-      appFontFamily,
-      appFontSize,
-      hardwareAcceleration,
-      startMaximized,
-    });
-  };
 
   const handleAppFontSizeChange = async (nextSize) => {
     const next = Number(nextSize) || 14;
@@ -1628,8 +1585,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize: next,
       hardwareAcceleration,
@@ -1642,8 +1597,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily: nextFont,
       appFontSize,
       hardwareAcceleration,
@@ -1657,8 +1610,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
       hardwareAcceleration: next,
@@ -1676,8 +1627,6 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir,
-      notesSubfolder,
-      notesSubfolderEnabled,
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
@@ -1699,12 +1648,6 @@ function App() {
     }
   };
 
-  const handlePickNotesSubfolder = async () => {
-    const result = await chooseNotesSubfolder();
-    if (result?.success && result.subfolder) {
-      await handleNotesSubfolderChange(result.subfolder);
-    }
-  };
 
   const handleOpenFontsFolder = async () => {
     await openFontsFolder();
@@ -1926,13 +1869,8 @@ function App() {
             fonts={availableFonts}
             timelineStorageDir={timelineStorageDir}
             notesStorageDir={notesStorageDir}
-            notesSubfolder={notesSubfolder}
-            notesSubfolderEnabled={notesSubfolderEnabled}
             onTimelineStorageDirChange={handleTimelineStorageDirChange}
             onNotesStorageDirChange={handleNotesStorageDirChange}
-            onNotesSubfolderChange={handleNotesSubfolderChange}
-            onNotesSubfolderEnabledChange={handleNotesSubfolderEnabledChange}
-            onPickNotesSubfolder={handlePickNotesSubfolder}
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
             onOpenFontsFolder={handleOpenFontsFolder}

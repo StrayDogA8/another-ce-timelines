@@ -105,13 +105,8 @@ export default function HomePage({
   onAppFontSizeChange,
   timelineStorageDir,
   notesStorageDir,
-  notesSubfolder,
-  notesSubfolderEnabled,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
-  onNotesSubfolderChange,
-  onNotesSubfolderEnabledChange,
-  onPickNotesSubfolder,
   onPickTimelinesDir,
   onPickNotesDir,
   onOpenFontsFolder,
@@ -300,17 +295,6 @@ export default function HomePage({
 
   const timelinePathIssue = getPathIssue(timelineStorageDir);
   const notesPathIssue = getPathIssue(notesStorageDir);
-  const notesSubfolderIssue = useMemo(() => {
-    const value = String(notesSubfolder || "").trim();
-    if (!value) return null;
-    if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\")) {
-      return "Subfolder must be relative to the Notes Folder.";
-    }
-    if (value.split(/[\\/]+/).includes("..")) {
-      return "Subfolder cannot include ..";
-    }
-    return null;
-  }, [notesSubfolder]);
 
   useEffect(() => {
     if (openSettingsSignal > 0) {
@@ -1620,65 +1604,6 @@ export default function HomePage({
                         </div>
                       </div>
                     </div>
-                    <div className="settings-row">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Use Subfolder For New Files</div>
-                        <div className="settings-row-description">
-                          When enabled, new notes are placed under the default subfolder.
-                        </div>
-                      </div>
-                      <div className="settings-row-right">
-                        <label className="settings-toggle">
-                          <input
-                            type="checkbox"
-                            checked={notesSubfolderEnabled}
-                            onChange={(e) =>
-                              onNotesSubfolderEnabledChange?.(e.target.checked)
-                            }
-                          />
-                          <span className="settings-toggle-slider" />
-                        </label>
-                      </div>
-                    </div>
-                    {notesSubfolderEnabled && (
-                    <div className="settings-row">
-                      <div className="settings-row-left">
-                        <div className="settings-row-label">Default Notes Subfolder</div>
-                        <div
-                          className="settings-path-pill"
-                          title={notesSubfolder || "Default (none)"}
-                        >
-                          <Folder className="settings-path-icon" size={14} />
-                          <span className="settings-path-text">
-                            {notesSubfolder || "Default (none)"}
-                          </span>
-                        </div>
-                        {notesSubfolderIssue && (
-                          <div className="settings-path-error">{notesSubfolderIssue}</div>
-                        )}
-                      </div>
-                      <div className="settings-row-right">
-                        <div className="settings-folder settings-folder-column">
-                          <div className="settings-folder-actions">
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onPickNotesSubfolder?.()}
-                            >
-                              Choose...
-                            </button>
-                            <button
-                              className="settings-folder-button"
-                              type="button"
-                              onClick={() => onNotesSubfolderChange?.("")}
-                            >
-                              Use Default
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    )}
                   </>
                 )}
 

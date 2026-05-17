@@ -13,7 +13,7 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare } from "lucide-react";
+import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare, ExternalLink } from "lucide-react";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -2386,7 +2386,7 @@ const TimelineView = forwardRef(function TimelineView({
     <>
     <div
       ref={containerRef}
-      className="timeline-scroll"
+      className={`timeline-scroll${file?.fixedEventHeight ? ' fixed-event-height' : ''}`}
       style={file?.useSecondaryBg ? { backgroundColor: "var(--secondary-bg)" } : undefined}
       onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
       onContextMenu={handleContextMenu}
@@ -2535,7 +2535,7 @@ const TimelineView = forwardRef(function TimelineView({
               <div
                 key={era.id}
                 data-id={era.id}
-                className={`era-item ${isSelected ? "is-selected" : ""}`}
+                className={`era-item ${isSelected ? "is-selected" : ""}${era.sourceLink ? " has-source-link" : ""}`}
                 style={{
                   left: `${era.left}px`,
                   width: `${era.width}px`,
@@ -2549,14 +2549,16 @@ const TimelineView = forwardRef(function TimelineView({
                 }}
               >
                 {era.hideDetails !== true && (
-                  <span
-                    className="era-title"
-                    style={{
-                      color: eraTextColor,
-                      opacity: 1,
-                    }}
-                  >
-                    {era.title}
+                  <span className="era-title-wrap">
+                    <span
+                      className="era-title"
+                      style={{ color: eraTextColor, opacity: 1 }}
+                    >
+                      {era.title}
+                    </span>
+                    {era.sourceLink && (
+                      <a className="era-source-link" href={era.sourceLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open source" style={{ color: eraTextColor }}><ExternalLink size={8} strokeWidth={2.5} /></a>
+                    )}
                   </span>
                 )}
               </div>
@@ -2894,7 +2896,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={span.id}
                         data-id={span.id}
-                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}`}
+                        className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}${span.sourceLink ? " has-source-link" : ""}`}
                         style={{
                           "--span-fill": span.color || "var(--element-bg)",
                           left: `${span.left - childInset + neckLeft}px`,
@@ -2912,6 +2914,9 @@ const TimelineView = forwardRef(function TimelineView({
                           {!hideSpanName && (
                             <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
                           )}
+                          {span.sourceLink && !hideSpanName && (
+                            <a className="span-source-link" href={span.sourceLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open source" style={{ color: spanTextColor }}><ExternalLink size={9} strokeWidth={3} /></a>
+                          )}
                           {!hideSpanYears && (
                             <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
                               {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}
@@ -2921,15 +2926,18 @@ const TimelineView = forwardRef(function TimelineView({
                         {(() => {
                           const visiblePinnedTags = (Array.isArray(span.tags) ? span.tags : [])
                             .filter((tag) => pinnedTags.includes(tag));
-                          if (visiblePinnedTags.length === 0) return null;
                           return (
-                            <span className="pinned-tags" style={{ color: spanTextColor }}>
-                              {visiblePinnedTags.map((tag) => (
-                                <span key={tag} className="pinned-tag" style={tagColors[tag] ? { background: tagColors[tag], color: getReadableTextColor(tagColors[tag]) } : undefined}>
-                                  {tag}
+                            <>
+                              {visiblePinnedTags.length > 0 && (
+                                <span className="pinned-tags" style={{ color: spanTextColor }}>
+                                  {visiblePinnedTags.map((tag) => (
+                                    <span key={tag} className="pinned-tag" style={tagColors[tag] ? { background: tagColors[tag], color: getReadableTextColor(tagColors[tag]) } : undefined}>
+                                      {tag}
+                                    </span>
+                                  ))}
                                 </span>
-                              ))}
-                            </span>
+                              )}
+                            </>
                           );
                         })()}
                       </div>
@@ -2964,7 +2972,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={event.id}
                         data-id={event.id}
-                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}`}
+                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.sourceLink ? " has-source-link" : ""}`}
                         style={{
                           left: `${event._x}px`,
                           top: `${event.top}px`,
@@ -2979,6 +2987,16 @@ const TimelineView = forwardRef(function TimelineView({
                         }}
                       >
                         <div className="event-title">{event.title}</div>
+                        {event.sourceLink && (
+                          <a
+                            className="event-source-link"
+                            href={event.sourceLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Open source"
+                          ><ExternalLink size={11} strokeWidth={2.7} /></a>
+                        )}
                         {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
                           {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}</span>}
                           {(() => {
@@ -3075,6 +3093,9 @@ const TimelineView = forwardRef(function TimelineView({
                     <span className="span-years" style={{ color: spanTextColor, opacity: 0.7 }}>
                       {span.startLabel ?? formatYear(span.start, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)} - {span.endLabel ?? formatYear(span.end, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}
                     </span>
+                  )}
+                  {span.sourceLink && !hideSpanYears && (
+                    <a className="span-source-link" href={span.sourceLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open source" style={{ color: spanTextColor, opacity: 0.85 }}><ExternalLink size={9} strokeWidth={2.5} /></a>
                   )}
                 </>
                 {(() => {

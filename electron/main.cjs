@@ -140,23 +140,6 @@ const getTimelinesDir = async () => {
   return defaultTimelinesDir();
 };
 
-const getNotesBaseDir = async () => {
-  const baseDir = await getNotesRootDir();
-  const settings = await readAppSettings();
-  const useSubfolder = settings?.notesSubfolderEnabled === true;
-  const subfolderValue = useSubfolder ? String(settings?.notesSubfolder || '').trim() : '';
-  const normalizeSubfolder = (value) => {
-    if (!value) return '';
-    if (path.isAbsolute(value)) return '';
-    const normalized = path.normalize(value);
-    const parts = normalized.split(path.sep).filter(Boolean);
-    if (parts.some((part) => part === '..')) return '';
-    return parts.join(path.sep);
-  };
-  const subfolder = normalizeSubfolder(subfolderValue);
-  return subfolder ? path.join(baseDir, subfolder) : baseDir;
-};
-
 const getNotesRootDir = async () => {
   const settings = await readAppSettings();
   const customDir = settings?.notesStorageDir;
@@ -168,7 +151,7 @@ const getNotesRootDir = async () => {
 };
 
 const getNotesDir = async (timelineId) => {
-  const baseDir = await getNotesBaseDir();
+  const baseDir = await getNotesRootDir();
   const safePath = sanitizeTimelinePath(String(timelineId || 'timeline'));
   return path.join(baseDir, ...safePath.split('/'));
 };
@@ -776,7 +759,7 @@ ipcMain.handle('move-timeline', async (event, { id, targetFolder }) => {
       const remaining = await fs.readdir(oldDir).catch(() => ['x']);
       if (remaining.length === 0) await fs.rmdir(oldDir).catch(() => {});
     }
-    const notesBase = await getNotesBaseDir();
+    const notesBase = await getNotesRootDir();
     const oldNotesPath = path.join(notesBase, ...sanitizeTimelinePath(safePath).split('/'));
     const newNotesPath = path.join(notesBase, ...sanitizeTimelinePath(newRelId).split('/'));
     if (oldNotesPath !== newNotesPath) {
@@ -821,9 +804,11 @@ ipcMain.handle('add-existing-note', async (event, { timelineId } = {}) => {
       return { success: false, error: 'Missing timelineId' };
     }
 
+    const notesDir = await getNotesDir(timelineId);
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile'],
       filters: [{ name: 'Markdown', extensions: ['md'] }],
+      defaultPath: notesDir,
     });
 
     if (result.canceled || !result.filePaths?.length) {
@@ -962,7 +947,7 @@ ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
     await fs.mkdir(path.dirname(newFilePath), { recursive: true });
     await fs.rename(oldFilePath, newFilePath).catch(e => { if (e.code !== 'ENOENT') throw e; });
 
-    const notesBase = await getNotesBaseDir();
+    const notesBase = await getNotesRootDir();
     const oldNotesPath = path.join(notesBase, safeOldPath.split('/').pop());
     const newNotesPath = path.join(notesBase, safeNewPath.split('/').pop());
     await fs.rename(oldNotesPath, newNotesPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
@@ -1164,34 +1149,6 @@ ipcMain.handle('read-plugin-module', async (event, payload) => {
   }
 });
 
-ipcMain.handle('choose-notes-subfolder', async () => {
-  try {
-    const rootDir = await getNotesRootDir();
-    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory'],
-      defaultPath: rootDir,
-    });
-
-    if (canceled || filePaths.length === 0) {
-      return { success: false, canceled: true };
-    }
-
-    const selectedPath = filePaths[0];
-    const resolvedRoot = path.resolve(rootDir);
-    const resolvedSelected = path.resolve(selectedPath);
-    const relative = path.relative(resolvedRoot, resolvedSelected);
-
-    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-      return { success: false, error: 'OUTSIDE_NOTES_DIR' };
-    }
-
-    const normalizedRelative = relative.split(path.sep).join('/');
-    return { success: true, subfolder: normalizedRelative };
-  } catch (error) {
-    console.error('Error choosing notes subfolder:', error);
-    return { success: false, error: error.message };
-  }
-});
 
 ipcMain.handle('relaunch-app', () => {
   app.relaunch();
@@ -1265,7 +1222,7 @@ ipcMain.handle('open-external', async (event, { url }) => {
 
 ipcMain.handle('get-notes-base-dir', async () => {
   try {
-    const dir = await getNotesBaseDir();
+    const dir = await getNotesRootDir();
     const fileUrl = pathToFileURL(dir).toString();
     return { success: true, path: dir, fileUrl };
   } catch (error) {

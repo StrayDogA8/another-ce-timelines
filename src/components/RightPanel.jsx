@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar } from "lucide-react";
+import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar, FileText } from "lucide-react";
 import { parseTimelineInput, fractionalYearToDate } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
@@ -7,6 +7,7 @@ import { normalizeColor } from "../utils/colorUtils";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, fetchWikipedia } from "../utils/electronApi";
+
 
 const NoteEditor = forwardRef(function NoteEditor(
   { initialContent, isNoteLoading, noteExists, onSave, onUnlink, onDelete },
@@ -155,7 +156,10 @@ export default function RightPanel({
   const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
+  const [isNoteAddOpen, setIsNoteAddOpen] = useState(false);
   const noteEditorRef = useRef(null);
+  const noteRenderRef = useRef(null);
+
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const [notesBasePath, setNotesBasePath] = useState("");
   const prevSelectedIdRef = useRef(null);
@@ -179,6 +183,14 @@ export default function RightPanel({
   const [wikiContent, setWikiContent] = useState("");
   const [isWikiLoading, setIsWikiLoading] = useState(false);
   const [wikiError, setWikiError] = useState("");
+  const [isSourceFormOpen, setIsSourceFormOpen] = useState(false);
+  const [isSourcesCollapsed, setIsSourcesCollapsed] = useState(false);
+  const [isNoteCollapsed, setIsNoteCollapsed] = useState(false);
+  const [isWikiCollapsed, setIsWikiCollapsed] = useState(false);
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceDescription, setSourceDescription] = useState("");
+  const [editingSourceIndex, setEditingSourceIndex] = useState(null);
   const wikiCacheRef = useRef(new Map());
   const wikiRenderRef = useRef(null);
   const WIKI_SANITIZE_VERSION = "collapsible-1";
@@ -361,6 +373,7 @@ export default function RightPanel({
       if (!selectedElement?.noteFile) {
         setNoteInitialContent("");
         setNoteExists(false);
+        setIsNoteAddOpen(false);
         return;
       }
       const timelineId = timelineData?.file?.id?.replace('-timeline', '');
@@ -388,7 +401,7 @@ export default function RightPanel({
     return () => {
       isMounted = false;
     };
-  }, [selectedElement, timelineData?.file?.id]);
+  }, [selectedElement?.id, selectedElement?.noteFile, timelineData?.file?.id]);
 
   useEffect(() => {
     if (!selectedElement?.wikiUrl) {
@@ -617,6 +630,22 @@ export default function RightPanel({
     return noteInitialContent.trim().split(/\s+/).filter(Boolean).length;
   }, [noteInitialContent]);
 
+  useEffect(() => {
+    if (!noteRenderRef.current) return;
+    const imgs = noteRenderRef.current.querySelectorAll('img');
+    imgs.forEach((img) => {
+      if (img.complete && img.naturalWidth === 0) {
+        img.style.display = 'none';
+      } else {
+        img.addEventListener('error', function() {
+          this.style.display = 'none';
+          this.style.minHeight = '0';
+        }, { once: true });
+      }
+    });
+  }, [noteInitialContent]);
+
+
   const renderEventStrokeStyleControl = (field, currentValue, ariaLabel, variant) => (
     <div className="event-style-toggle" role="group" aria-label={ariaLabel}>
       {EVENT_STROKE_STYLE_OPTIONS.map((option) => {
@@ -780,6 +809,7 @@ export default function RightPanel({
     setFormData((prev) => ({ ...prev, tags: nextTags }));
     commitDraft({ ...formData, tags: nextTags });
     setTagQuery("");
+    setIsTagMenuOpen(false);
   };
 
   const removeTag = (tag) => {
@@ -787,6 +817,44 @@ export default function RightPanel({
     const nextTags = existing.filter((value) => value !== tag);
     setFormData((prev) => ({ ...prev, tags: nextTags }));
     commitDraft({ ...formData, tags: nextTags });
+  };
+
+  const handleEditSource = (i) => {
+    const src = formData.sources[i];
+    setEditingSourceIndex(i);
+    setSourceTitle(src.title || "");
+    setSourceUrl(src.url || "");
+    setSourceDescription(src.description || src.citation || "");
+  };
+
+  const handleSaveEditedSource = () => {
+    const title = sourceTitle.trim();
+    if (!title) return;
+    const next = (Array.isArray(formData.sources) ? formData.sources : []).map((src, i) =>
+      i === editingSourceIndex ? { title, url: sourceUrl.trim(), description: sourceDescription.trim() } : src
+    );
+    setFormData((prev) => ({ ...prev, sources: next }));
+    commitDraft({ ...formData, sources: next });
+    setEditingSourceIndex(null);
+    setSourceTitle(""); setSourceUrl(""); setSourceDescription("");
+  };
+
+  const handleAddSource = () => {
+    const title = sourceTitle.trim();
+    if (!title) return;
+    const next = [...(Array.isArray(formData.sources) ? formData.sources : []), { title, url: sourceUrl.trim(), description: sourceDescription.trim() }];
+    setFormData((prev) => ({ ...prev, sources: next }));
+    commitDraft({ ...formData, sources: next });
+    setSourceTitle("");
+    setSourceUrl("");
+    setSourceDescription("");
+    setIsSourceFormOpen(false);
+  };
+
+  const handleRemoveSource = (index) => {
+    const next = (Array.isArray(formData.sources) ? formData.sources : []).filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, sources: next }));
+    commitDraft({ ...formData, sources: next });
   };
 
   const commitDraft = (draft) => {
@@ -1513,18 +1581,21 @@ export default function RightPanel({
             {formData.noteFile && (
               <>
                 <div className="note-divider" />
-                <div className="rp-note-header">
+                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsNoteCollapsed(v => !v)}>
                   <span className="rp-note-label rp-note-label-note">Note</span>
-                  {noteWordCount > 0 && (
-                    <span className="rp-note-meta">markdown · {noteWordCount} words</span>
-                  )}
-                </div>
-                <div
-                  className="note-render"
-                  dangerouslySetInnerHTML={{
-                    __html: renderNoteMarkdown(noteInitialContent, isNoteLoading),
-                  }}
-                />
+                  <span className="sources-collapse-right">
+                    {noteWordCount > 0 && <span className="rp-note-meta">markdown · {noteWordCount} words</span>}
+                    <ChevronDown size={14} style={{transform: isNoteCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
+                  </span>
+                </button>
+                {!isNoteCollapsed && (
+                  <div
+                    className="note-render"
+                    dangerouslySetInnerHTML={{
+                      __html: renderNoteMarkdown(noteInitialContent, isNoteLoading),
+                    }}
+                  />
+                )}
               </>
             )}
 
@@ -1539,19 +1610,23 @@ export default function RightPanel({
             {timelineData?.file?.useWikipedia && formData.wikiUrl && (
               <>
                 <div className="note-divider" />
-                <div className="rp-note-header">
+                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsWikiCollapsed(v => !v)}>
                   <span className="rp-note-label rp-note-label-wiki">Wiki</span>
-                  <a
-                    className="rp-note-meta wiki-header-link"
-                    href={formData.wikiUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open in browser"
-                  >
-                    Open article
-                  </a>
-                </div>
-                {isWikiLoading ? (
+                  <span className="sources-collapse-right">
+                    <a
+                      className="rp-note-meta wiki-header-link"
+                      href={formData.wikiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in browser"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Open article
+                    </a>
+                    <ChevronDown size={14} style={{transform: isWikiCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
+                  </span>
+                </button>
+                {!isWikiCollapsed && (isWikiLoading ? (
                   <div className="wiki-loading">Loading wiki article...</div>
                 ) : wikiError ? (
                   <div className="wiki-error">{wikiError}</div>
@@ -1561,6 +1636,33 @@ export default function RightPanel({
                     className="wiki-render"
                     dangerouslySetInnerHTML={{ __html: wikiContent }}
                   />
+                ))}
+              </>
+            )}
+
+            {Array.isArray(formData.sources) && formData.sources.length > 0 && (
+              <>
+                <div className="note-divider" />
+                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsSourcesCollapsed(v => !v)}>
+                  <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
+                  <span className="sources-collapse-right">
+                    <span className="rp-note-meta">{formData.sources.length}</span>
+                    <ChevronDown size={14} style={{transform: isSourcesCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
+                  </span>
+                </button>
+                {!isSourcesCollapsed && (
+                  <div className="sources-list">
+                    {formData.sources.map((src, i) => (
+                      <div key={i} className="wiki-url-card">
+                        <div className="wiki-url-card-avatar">{src.title.charAt(0).toUpperCase()}</div>
+                        <div className="wiki-url-card-info">
+                          <div className="wiki-url-card-title">{src.title}</div>
+                          {(src.description || src.citation) && <div className="wiki-url-card-host">{src.description || src.citation}</div>}
+                        </div>
+                        {src.url && <a href={src.url} target="_blank" rel="noopener noreferrer" className="wiki-url-card-btn" title="Open"><ExternalLink size={13} /></a>}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             )}
@@ -1747,67 +1849,6 @@ export default function RightPanel({
               </>
             )}
 
-            {/* Tags */}
-            <div className="form-group">
-              <div className="edit-row edit-row-tags">
-                <label htmlFor="tags">Tags</label>
-                <div className="tag-edit-flow">
-                  {Array.isArray(formData.tags) && formData.tags.map((tag) => (
-                    <div key={tag} className="tag-edit-chip">
-                      <span>{tag}</span>
-                      <button
-                        type="button"
-                        className="tag-edit-remove"
-                        onClick={() => removeTag(tag)}
-                        aria-label={`Remove ${tag}`}
-                      >×</button>
-                    </div>
-                  ))}
-                  <div className="branch-picker tag-picker tag-edit-picker">
-                    <input
-                      id="tags"
-                      type="text"
-                      value={tagQuery}
-                      onChange={(e) => {
-                        setTagQuery(e.target.value);
-                        setIsTagMenuOpen(true);
-                        if (validationErrors.length) setValidationErrors([]);
-                      }}
-                      onFocus={() => setIsTagMenuOpen(true)}
-                      onBlur={handleTagBlur}
-                      placeholder="add tag..."
-                      className="tag-edit-input"
-                      maxLength={TAG_MAX_LENGTH}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const trimmed = tagQuery.trim();
-                          if (trimmed) addTag(trimmed);
-                        }
-                      }}
-                    />
-                    {isTagMenuOpen && tagSuggestions.length > 0 && (
-                      <div className="branch-suggestions">
-                        {tagSuggestions.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            className="branch-suggestion-item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              addTag(tag);
-                            }}
-                          >
-                            <span className="branch-suggestion-title">{tag}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Group (events and spans only) */}
             {(formData.type === "event" || formData.type === "span") && (() => {
               const groups = timelineData?.file?.groups || [];
@@ -1841,75 +1882,23 @@ export default function RightPanel({
                   <div className="edit-row">
                     <label htmlFor="groupId">Group</label>
                     <div className="edit-separator" />
-                    <div className="branch-picker">
-                      <input
+                    <div className="edit-select-wrap">
+                      <select
                         id="groupId"
-                        type="text"
-                        value={newGroupName}
+                        className="edit-select"
+                        value={formData.groupId ?? ""}
                         onChange={(e) => {
-                          setNewGroupName(e.target.value);
-                          setIsGroupMenuOpen(true);
+                          const val = e.target.value || null;
+                          const next = { ...formData, groupId: val };
+                          setFormData(next);
+                          commitDraft(next);
                         }}
-                        onFocus={() => setIsGroupMenuOpen(true)}
-                        onBlur={handleGroupBlur}
-                        placeholder={formData.groupId == null ? "Inherit" : (groups.find((g) => g.id === formData.groupId)?.title || "Select group...")}
-                        className="edit-input branch-input"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (newGroupName.trim()) addGroup(newGroupName);
-                          }
-                        }}
-                      />
-                      {isGroupMenuOpen && (
-                        <div className="branch-suggestions">
-                          {!newGroupName && (
-                            <button
-                              type="button"
-                              className={`branch-suggestion-item${formData.groupId == null ? " branch-suggestion-selected" : ""}`}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const next = { ...formData, groupId: null };
-                                setFormData(next);
-                                commitDraft(next);
-                                setNewGroupName("");
-                                setIsGroupMenuOpen(false);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">Inherit</span>
-                            </button>
-                          )}
-                          {filteredGroups.map((g) => (
-                            <button
-                              key={g.id}
-                              type="button"
-                              className={`branch-suggestion-item${g.id === formData.groupId ? " branch-suggestion-selected" : ""}`}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const next = { ...formData, groupId: g.id };
-                                setFormData(next);
-                                commitDraft(next);
-                                setNewGroupName("");
-                                setIsGroupMenuOpen(false);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">{g.title || g.id}</span>
-                            </button>
-                          ))}
-                          {newGroupName.trim() && !groups.some((g) => (g.title || g.id).toLowerCase() === newGroupName.trim().toLowerCase()) && (
-                            <button
-                              type="button"
-                              className="branch-suggestion-item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                addGroup(newGroupName);
-                              }}
-                            >
-                              <span className="branch-suggestion-title">+ Create "{newGroupName.trim()}"</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      >
+                        <option value="">Inherit</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>{g.title || g.id}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -1929,78 +1918,30 @@ export default function RightPanel({
                     {formData.parents?.[0] ? (
                       <div className="relation-selected-list">
                         <div className="relation-selected-item">
-                          <button
-                            type="button"
-                            className="relation-selected-link"
-                            onClick={() => onSelect(formData.parents[0])}
-                          >
+                          <button type="button" className="relation-selected-link" onClick={() => onSelect(formData.parents[0])}>
                             {timelineData.elements.find((el) => el.id === formData.parents[0])?.title || formData.parents[0]}
                           </button>
-                          <button
-                            type="button"
-                            className="relation-selected-remove"
-                            onClick={() => {
-                              const next = { ...formData, parents: [] };
-                              setFormData(next);
-                              commitDraft(next);
-                              setParentQuery("");
-                            }}
-                            aria-label="Remove parent"
-                          >×</button>
+                          <button type="button" className="relation-selected-remove" onClick={() => { const next = { ...formData, parents: [] }; setFormData(next); commitDraft(next); setParentQuery(""); }}>×</button>
                         </div>
                       </div>
                     ) : (
                       <div className="branch-picker">
                         <input
-                          id="parents"
-                          type="text"
-                          value={parentQuery}
-                          onChange={(e) => {
-                            setParentQuery(e.target.value);
-                            setIsParentMenuOpen(true);
-                          }}
+                          id="parents" type="text" value={parentQuery}
+                          onChange={(e) => { setParentQuery(e.target.value); setIsParentMenuOpen(true); }}
                           onFocus={() => setIsParentMenuOpen(true)}
                           onBlur={handleParentBlur}
-                          placeholder="Search span ID or title..."
-                          className="edit-input branch-input"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const choice = parentSuggestions[0];
-                              if (choice) {
-                                const next = { ...formData, parents: [choice.id], groupId: choice.groupId ?? formData.groupId };
-                                setFormData(next);
-                                commitDraft(next);
-                                setParentQuery("");
-                                setIsParentMenuOpen(false);
-                              }
-                            }
-                          }}
+                          placeholder="Search span..." className="edit-input branch-input"
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const choice = parentSuggestions[0]; if (choice) { const next = { ...formData, parents: [choice.id], groupId: choice.groupId ?? formData.groupId }; setFormData(next); commitDraft(next); setParentQuery(""); setIsParentMenuOpen(false); } } }}
                         />
                         {isParentMenuOpen && (
                           <div className="branch-suggestions">
-                            {parentSuggestions.length > 0 ? (
-                              parentSuggestions.map((span) => (
-                                <button
-                                  key={span.id}
-                                  type="button"
-                                  className="branch-suggestion-item"
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    const next = { ...formData, parents: [span.id], groupId: span.groupId ?? formData.groupId };
-                                    setFormData(next);
-                                    commitDraft(next);
-                                    setParentQuery("");
-                                    setIsParentMenuOpen(false);
-                                  }}
-                                >
-                                  <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                  <span className="branch-suggestion-id">{span.id}</span>
-                                </button>
-                              ))
-                            ) : (
-                              <div className="branch-suggestion-empty">No matching spans</div>
-                            )}
+                            {parentSuggestions.length > 0 ? parentSuggestions.map((span) => (
+                              <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); const next = { ...formData, parents: [span.id], groupId: span.groupId ?? formData.groupId }; setFormData(next); commitDraft(next); setParentQuery(""); setIsParentMenuOpen(false); }}>
+                                <span className="branch-suggestion-title">{span.title || span.id}</span>
+                                <span className="branch-suggestion-id">{span.id}</span>
+                              </button>
+                            )) : <div className="branch-suggestion-empty">No matching spans</div>}
                           </div>
                         )}
                       </div>
@@ -2066,46 +2007,21 @@ export default function RightPanel({
                     {(formData.parent || formData.extendFrom) ? (
                       <div className="relation-selected-list">
                         <div className="relation-selected-item">
-                          <button
-                            type="button"
-                            className="relation-selected-link"
-                            onClick={() => onSelect(formData.parent || formData.extendFrom)}
-                          >
+                          <button type="button" className="relation-selected-link" onClick={() => onSelect(formData.parent || formData.extendFrom)}>
                             {(() => { const id = formData.parent || formData.extendFrom; return timelineData.elements.find((el) => el.id === id)?.title || id; })()}
                           </button>
-                          <button
-                            type="button"
-                            className="relation-selected-remove"
-                            onClick={() => { clearSpanParent(); clearExtendFrom(); }}
-                            aria-label="Remove parent"
-                          >×</button>
+                          <button type="button" className="relation-selected-remove" onClick={() => { clearSpanParent(); clearExtendFrom(); }}>×</button>
                         </div>
                       </div>
                     ) : (
                       <div className="branch-picker">
                         <input
-                          id="spanParent"
-                          type="text"
-                          value={spanParentQuery}
-                          onChange={(e) => {
-                            setSpanParentQuery(e.target.value);
-                            setIsSpanParentMenuOpen(true);
-                          }}
+                          id="spanParent" type="text" value={spanParentQuery}
+                          onChange={(e) => { setSpanParentQuery(e.target.value); setIsSpanParentMenuOpen(true); }}
                           onFocus={() => setIsSpanParentMenuOpen(true)}
                           onBlur={handleSpanParentBlur}
-                          placeholder="Search span..."
-                          className="edit-input branch-input"
-                          maxLength={ID_MAX_LENGTH}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const suggestions = spanRelationType === "branch" ? spanParentSuggestions : extendFromSuggestions;
-                              if (suggestions.length > 0) {
-                                if (spanRelationType === "branch") setSpanParent(suggestions[0].id);
-                                else setExtendFrom(suggestions[0].id);
-                              }
-                            }
-                          }}
+                          placeholder="Search span..." className="edit-input branch-input" maxLength={ID_MAX_LENGTH}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const suggestions = spanRelationType === "branch" ? spanParentSuggestions : extendFromSuggestions; if (suggestions.length > 0) { if (spanRelationType === "branch") setSpanParent(suggestions[0].id); else setExtendFrom(suggestions[0].id); } } }}
                         />
                         {isSpanParentMenuOpen && spanParentQuery.trim().length > 0 && (() => {
                           const suggestions = spanRelationType === "branch" ? spanParentSuggestions : extendFromSuggestions;
@@ -2113,22 +2029,11 @@ export default function RightPanel({
                           return (
                             <div className="branch-suggestions">
                               {suggestions.length > 0 ? suggestions.map((span) => (
-                                <button
-                                  key={span.id}
-                                  type="button"
-                                  className="branch-suggestion-item"
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    if (spanRelationType === "branch") setSpanParent(span.id);
-                                    else setExtendFrom(span.id);
-                                  }}
-                                >
+                                <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); if (spanRelationType === "branch") setSpanParent(span.id); else setExtendFrom(span.id); }}>
                                   <span className="branch-suggestion-title">{span.title || span.id}</span>
                                   <span className="branch-suggestion-id">{span.id}</span>
                                 </button>
-                              )) : (
-                                <div className="branch-suggestion-empty">{emptyMsg}</div>
-                              )}
+                              )) : <div className="branch-suggestion-empty">{emptyMsg}</div>}
                             </div>
                           );
                         })()}
@@ -2144,81 +2049,147 @@ export default function RightPanel({
                 <div className="edit-row">
                   <label htmlFor="mergeParent">Merge Into</label>
                   <div className="edit-separator" />
-                  {formData.mergeParent ? (
-                    <div className="relation-selected-list">
-                      <div className="relation-selected-item">
-                        <button
-                          type="button"
-                          className="relation-selected-link"
-                          onClick={() => onSelect(formData.mergeParent)}
-                        >
-                          {timelineData.elements.find((el) => el.id === formData.mergeParent)?.title || formData.mergeParent}
-                        </button>
-                        <button
-                          type="button"
-                          className="relation-selected-remove"
-                          onClick={clearMergeParent}
-                          aria-label="Remove merge target"
-                        >
-                          ×
-                        </button>
+                  <div className="span-relation-wrap"><div className="branch-picker">
+                    {formData.mergeParent ? (
+                      <div className="relation-selected-list">
+                        <div className="relation-selected-item">
+                          <button type="button" className="relation-selected-link" onClick={() => onSelect(formData.mergeParent)}>
+                            {timelineData.elements.find((el) => el.id === formData.mergeParent)?.title || formData.mergeParent}
+                          </button>
+                          <button type="button" className="relation-selected-remove" onClick={clearMergeParent}>×</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="branch-picker">
-                      <input
-                        id="mergeParent"
-                        type="text"
-                        value={mergeParentQuery}
-                        onChange={(e) => {
-                          setMergeParentQuery(e.target.value);
-                          setIsMergeParentMenuOpen(true);
-                        }}
-                        onFocus={() => setIsMergeParentMenuOpen(true)}
-                        onBlur={handleMergeParentBlur}
-                        placeholder="Search span ID or title..."
-                        className="edit-input branch-input"
-                        maxLength={ID_MAX_LENGTH}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (mergeParentSuggestions.length > 0) {
-                              setMergeParent(mergeParentSuggestions[0].id);
-                            }
-                          }
-                        }}
-                      />
-                      {isMergeParentMenuOpen && mergeParentQuery.trim().length > 0 && (
-                        <div className="branch-suggestions">
-                          {mergeParentSuggestions.length > 0 ? (
-                            mergeParentSuggestions.map((span) => (
-                              <button
-                                key={span.id}
-                                type="button"
-                                className="branch-suggestion-item"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setMergeParent(span.id);
-                                }}
-                              >
+                    ) : (
+                      <>
+                        <input
+                          id="mergeParent" type="text" value={mergeParentQuery}
+                          onChange={(e) => { setMergeParentQuery(e.target.value); setIsMergeParentMenuOpen(true); }}
+                          onFocus={() => setIsMergeParentMenuOpen(true)}
+                          onBlur={handleMergeParentBlur}
+                          placeholder="Search span..." className="edit-input branch-input" maxLength={ID_MAX_LENGTH}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (mergeParentSuggestions.length > 0) setMergeParent(mergeParentSuggestions[0].id); } }}
+                        />
+                        {isMergeParentMenuOpen && mergeParentQuery.trim().length > 0 && (
+                          <div className="branch-suggestions">
+                            {mergeParentSuggestions.length > 0 ? mergeParentSuggestions.map((span) => (
+                              <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); setMergeParent(span.id); }}>
                                 <span className="branch-suggestion-title">{span.title || span.id}</span>
                                 <span className="branch-suggestion-id">{span.id}</span>
                               </button>
-                            ))
-                          ) : (
-                            <div className="branch-suggestion-empty">No matching spans</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            )) : <div className="branch-suggestion-empty">No matching spans</div>}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div></div>
                 </div>
               </div>
             )}
 
             </>)}
 
+            {/* Tags */}
+            <div className="form-group">
+              <div className="edit-row edit-row-tags">
+                <label htmlFor="tags">Tags</label>
+                <div className="tag-edit-flow">
+                  {Array.isArray(formData.tags) && formData.tags.map((tag) => (
+                    <div key={tag} className="tag-edit-chip">
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        className="tag-edit-remove"
+                        onClick={() => removeTag(tag)}
+                        aria-label={`Remove ${tag}`}
+                      >×</button>
+                    </div>
+                  ))}
+                  <div className="branch-picker tag-picker tag-edit-picker">
+                    {!isTagMenuOpen && (
+                      <button type="button" className="tag-add-chip" onClick={() => { setIsTagMenuOpen(true); document.getElementById('tags')?.focus(); }}>
+                        + Add tag
+                      </button>
+                    )}
+                    <input
+                      id="tags"
+                      type="text"
+                      value={tagQuery}
+                      onChange={(e) => {
+                        setTagQuery(e.target.value);
+                        setIsTagMenuOpen(true);
+                        if (validationErrors.length) setValidationErrors([]);
+                      }}
+                      onFocus={() => { clearTimeout(tagMenuTimeoutRef.current); setIsTagMenuOpen(true); }}
+                      onBlur={handleTagBlur}
+                      placeholder="add tag..."
+                      className="tag-edit-input"
+                      style={{display: isTagMenuOpen ? 'block' : 'none'}}
+                      maxLength={TAG_MAX_LENGTH}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = tagQuery.trim();
+                          if (trimmed) addTag(trimmed);
+                        }
+                      }}
+                    />
+                    {isTagMenuOpen && tagSuggestions.length > 0 && (
+                      <div className="branch-suggestions">
+                        {tagSuggestions.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className="branch-suggestion-item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              addTag(tag);
+                            }}
+                          >
+                            <span className="branch-suggestion-title">{tag}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Map */}
+            {timelineData?.file?.useMaps && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label>Coordinates</label>
+                  <div className="edit-separator" />
+                  <div className="coord-inputs">
+                    <input
+                      id="lat"
+                      type="number"
+                      className="edit-input"
+                      value={formData.lat ?? ""}
+                      onChange={(e) => handleChange("lat", e.target.value === "" ? null : Number(e.target.value))}
+                      onBlur={(e) => commitDraft({ ...formData, lat: e.target.value === "" ? null : Number(e.target.value) })}
+                      placeholder="lat"
+                      step="any"
+                    />
+                    <span className="coord-sep">,</span>
+                    <input
+                      id="lng"
+                      type="number"
+                      className="edit-input"
+                      value={formData.lng ?? ""}
+                      onChange={(e) => handleChange("lng", e.target.value === "" ? null : Number(e.target.value))}
+                      onBlur={(e) => commitDraft({ ...formData, lng: e.target.value === "" ? null : Number(e.target.value) })}
+                      placeholder="lng"
+                      step="any"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Style */}
+            <div className="edit-section-divider" />
 
             {/* Color (spans and eras only) */}
             {formData.type !== "event" && (
@@ -2294,7 +2265,7 @@ export default function RightPanel({
                   <div className="edit-row">
                     <label htmlFor="hideSpanDetails">Hide Details</label>
                     <div className="edit-separator" />
-                    <div className="edit-checkbox-wrap">
+                    <label className="settings-toggle" style={{gridColumn: 2, justifySelf: 'end'}}>
                       <input
                         id="hideSpanDetails"
                         type="checkbox"
@@ -2307,30 +2278,28 @@ export default function RightPanel({
                           commitDraft(next);
                         }}
                       />
-                    </div>
+                      <span className="settings-toggle-slider" />
+                    </label>
                   </div>
                 </div>
                 <div className="form-group">
                   <div className="edit-row">
                     <label htmlFor="hideSpanYears">Hide Year</label>
                     <div className="edit-separator" />
-                    <div className="edit-checkbox-wrap">
+                    <label className="settings-toggle" style={{gridColumn: 2, justifySelf: 'end'}}>
                       <input
                         id="hideSpanYears"
                         type="checkbox"
                         checked={formData.hideYears === true}
                         onChange={(e) => {
                           const next = { ...formData };
-                          if (e.target.checked) {
-                            next.hideYears = true;
-                          } else {
-                            delete next.hideYears;
-                          }
+                          if (e.target.checked) { next.hideYears = true; } else { delete next.hideYears; }
                           setFormData(next);
                           commitDraft(next);
                         }}
                       />
-                    </div>
+                      <span className="settings-toggle-slider" />
+                    </label>
                   </div>
                 </div>
               </>
@@ -2370,23 +2339,20 @@ export default function RightPanel({
                   <div className="edit-row">
                     <label htmlFor="hideEraDetails">Hide Details</label>
                     <div className="edit-separator" />
-                    <div className="edit-checkbox-wrap">
+                    <label className="settings-toggle" style={{gridColumn: 2, justifySelf: 'end'}}>
                       <input
                         id="hideEraDetails"
                         type="checkbox"
                         checked={formData.hideDetails === true}
                         onChange={(e) => {
                           const next = { ...formData };
-                          if (e.target.checked) {
-                            next.hideDetails = true;
-                          } else {
-                            delete next.hideDetails;
-                          }
+                          if (e.target.checked) { next.hideDetails = true; } else { delete next.hideDetails; }
                           setFormData(next);
                           commitDraft(next);
                         }}
                       />
-                    </div>
+                      <span className="settings-toggle-slider" />
+                    </label>
                   </div>
                 </div>
               </>
@@ -2395,29 +2361,6 @@ export default function RightPanel({
             {/* Event styling (events only) */}
             {formData.type === "event" && (
               <>
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label htmlFor="hideEventYears">Hide Year</label>
-                    <div className="edit-separator" />
-                    <div className="edit-checkbox-wrap">
-                      <input
-                        id="hideEventYears"
-                        type="checkbox"
-                        checked={formData.hideYears === true}
-                        onChange={(e) => {
-                          const next = { ...formData };
-                          if (e.target.checked) {
-                            next.hideYears = true;
-                          } else {
-                            delete next.hideYears;
-                          }
-                          setFormData(next);
-                          commitDraft(next);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
                 <div className="form-group">
                   <div className="edit-row">
                     <label>Line Style</label>
@@ -2432,8 +2375,30 @@ export default function RightPanel({
                     {renderEventStrokeStyleControl("eventBorderStyle", formData.eventBorderStyle, "Event border style", "border")}
                   </div>
                 </div>
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label htmlFor="hideEventYears">Hide Year</label>
+                    <div className="edit-separator" />
+                    <label className="settings-toggle" style={{gridColumn: 2, justifySelf: 'end'}}>
+                      <input
+                        id="hideEventYears"
+                        type="checkbox"
+                        checked={formData.hideYears === true}
+                        onChange={(e) => {
+                          const next = { ...formData };
+                          if (e.target.checked) { next.hideYears = true; } else { delete next.hideYears; }
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      />
+                      <span className="settings-toggle-slider" />
+                    </label>
+                  </div>
+                </div>
               </>
             )}
+
+            <div className="edit-section-divider" />
 
             {/* Breaks */}
             {showLegacyBreaks && formData.type === "span" && (
@@ -2595,63 +2560,34 @@ export default function RightPanel({
                 </div>
             )}
 
-            {/* Map */}
-            {timelineData?.file?.useMaps && (
-              <>
-                <div className="form-group">
-                  <div className="edit-row">
-                    <label>Coordinates</label>
-                    <div className="edit-separator" />
-                    <div className="coord-inputs">
-                      <input
-                        id="lat"
-                        type="number"
-                        className="edit-input"
-                        value={formData.lat ?? ""}
-                        onChange={(e) => handleChange("lat", e.target.value === "" ? null : Number(e.target.value))}
-                        onBlur={(e) => commitDraft({ ...formData, lat: e.target.value === "" ? null : Number(e.target.value) })}
-                        placeholder="lat"
-                        step="any"
-                      />
-                      <span className="coord-sep">,</span>
-                      <input
-                        id="lng"
-                        type="number"
-                        className="edit-input"
-                        value={formData.lng ?? ""}
-                        onChange={(e) => handleChange("lng", e.target.value === "" ? null : Number(e.target.value))}
-                        onBlur={(e) => commitDraft({ ...formData, lng: e.target.value === "" ? null : Number(e.target.value) })}
-                        placeholder="lng"
-                        step="any"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
             <div className="form-group note-form-group">
-              {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
-                <button type="button" className="btn-secondary btn-note" onClick={handleOpenWikiInput}>
-                  Add Wiki
-                </button>
-              )}
               {!formData.noteFile ? (
                 <div className="note-add-actions">
-                  <button type="button" className="btn-secondary btn-note" onClick={handleAddNote}>
-                    Create Note
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-note"
-                    onClick={handleAddExistingNote}
-                  >
-                    Add Existing Note
-                  </button>
+                  <div className="note-add-dropdown-wrap">
+                    <button type="button" className="note-create-card" onClick={() => setIsNoteAddOpen(v => !v)}>
+                      <div className="note-create-card-icon"><FileText size={18} /></div>
+                      <div className="note-create-card-text">
+                        <span className="note-create-card-title">Add note</span>
+                        <span className="note-create-card-subtitle">Attach a note to this event</span>
+                      </div>
+                    </button>
+                    {isNoteAddOpen && (
+                      <>
+                        <div className="note-add-dropdown-backdrop" onClick={() => setIsNoteAddOpen(false)} />
+                        <div className="note-add-dropdown">
+                          <button type="button" className="note-add-dropdown-item" onClick={() => { setIsNoteAddOpen(false); handleAddNote(); }}>
+                            Create Note
+                          </button>
+                          <button type="button" className="note-add-dropdown-item" onClick={() => { setIsNoteAddOpen(false); handleAddExistingNote(); }}>
+                            Add Existing Note
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <>
-                  <div className="note-divider" />
+                <div className="note-editor-card">
                   <div className="rp-note-header">
                     <span className="rp-note-label rp-note-label-note">Note</span>
                     {noteWordCount > 0 && (
@@ -2668,33 +2604,45 @@ export default function RightPanel({
                     onUnlink={handleUnlinkNote}
                     onDelete={handleDeleteNote}
                   />
-                </>
+                </div>
+              )}
+              {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
+                <button type="button" className="note-create-card" onClick={handleOpenWikiInput}>
+                  <div className="note-create-card-icon"><BookOpen size={18} /></div>
+                  <div className="note-create-card-text">
+                    <span className="note-create-card-title">Add wiki</span>
+                    <span className="note-create-card-subtitle">Link a MediaWiki article</span>
+                  </div>
+                </button>
               )}
               {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
                 <div className="wiki-url-input-card">
-                  <input
-                    ref={wikiUrlInputRef}
-                    type="text"
-                    className={`wiki-url-input-field${wikiUrlInputError ? " settings-input-error" : ""}`}
-                    value={wikiUrlInput}
-                    onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
-                    onKeyDown={handleWikiUrlKeyDown}
-                    placeholder="https://en.wikipedia.org/wiki/..."
-                  />
-                  {wikiUrlInputError && (
-                    <div className="wiki-url-error">{wikiUrlInputError}</div>
-                  )}
-                  <div className="wiki-url-input-actions">
+                  <div className="source-field">
+                    <label className="source-field-label">URL</label>
+                    <input
+                      ref={wikiUrlInputRef}
+                      type="text"
+                      className={`source-field-input${wikiUrlInputError ? " settings-input-error" : ""}`}
+                      value={wikiUrlInput}
+                      onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
+                      onKeyDown={handleWikiUrlKeyDown}
+                      placeholder="https://en.wikipedia.org/wiki/…"
+                    />
+                    {wikiUrlInputError && (
+                      <div className="wiki-url-error">{wikiUrlInputError}</div>
+                    )}
+                  </div>
+                  <div className="source-add-actions">
                     <button
                       type="button"
-                      className="wiki-url-input-btn"
+                      className="btn-secondary"
                       onClick={() => { setIsWikiUrlInputOpen(false); setWikiUrlInputError(""); }}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      className="wiki-url-input-btn wiki-url-input-btn-save"
+                      className="btn-primary"
                       onClick={handleWikiUrlSubmit}
                     >
                       Save
@@ -2720,7 +2668,7 @@ export default function RightPanel({
                     <div className="wiki-url-card-actions">
                       <button
                         type="button"
-                        className="wiki-url-card-btn wiki-url-card-btn-hover"
+                        className="wiki-url-card-btn"
                         onClick={handleOpenWikiInput}
                         title="Change"
                       >
@@ -2728,25 +2676,122 @@ export default function RightPanel({
                       </button>
                       <button
                         type="button"
-                        className="wiki-url-card-btn wiki-url-card-btn-hover wiki-url-card-btn-remove"
+                        className="wiki-url-card-btn wiki-url-card-btn-remove"
                         onClick={handleRemoveWikiUrl}
                         title="Remove"
                       >
                         <Trash2 size={13} />
                       </button>
-                      <a
-                        href={safeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="wiki-url-card-btn"
-                        title="Open article"
-                      >
-                        <ExternalLink size={13} />
-                      </a>
                     </div>
                   </div>
                 );
               })()}
+              <div className="sources-edit-section">
+                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsSourcesCollapsed(v => !v)}>
+                  <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
+                  <span className="sources-collapse-right">
+                    {Array.isArray(formData.sources) && formData.sources.length > 0 && (
+                      <span className="rp-note-meta">{formData.sources.length}</span>
+                    )}
+                    <ChevronDown size={14} style={{transform: isSourcesCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
+                  </span>
+                </button>
+                {!isSourcesCollapsed && <div className="sources-list">
+                  {(Array.isArray(formData.sources) ? formData.sources : []).map((src, i) => (
+                    editingSourceIndex === i ? (
+                      <div key={i} className="source-add-form" style={{marginTop: 0, paddingTop: 8, borderTop: 'none'}}>
+                        <div className="source-field">
+                          <label className="source-field-label">Title</label>
+                          <input type="text" className="source-field-input" value={sourceTitle} onChange={(e) => setSourceTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} autoFocus />
+                        </div>
+                        <div className="source-field">
+                          <label className="source-field-label">URL (optional)</label>
+                          <input type="text" className="source-field-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} />
+                        </div>
+                        <div className="source-field">
+                          <label className="source-field-label">Description (optional)</label>
+                          <textarea className="source-field-input source-field-textarea" value={sourceDescription} onChange={(e) => setSourceDescription(e.target.value)} placeholder="Author, year, notes…" rows={2} onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} />
+                        </div>
+                        <div className="source-add-actions">
+                          <button type="button" className="btn-secondary" onClick={() => { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}>Cancel</button>
+                          <button type="button" className="btn-primary" onClick={handleSaveEditedSource}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                    <div key={i} className="source-item">
+                      <div className="wiki-url-card-avatar">{src.title.charAt(0).toUpperCase()}</div>
+                      <div className="source-text">
+                        <span className="source-title">{src.title}</span>
+                        {(src.description || src.citation) && <span className="source-citation">{src.description || src.citation}</span>}
+                      </div>
+                      <div className="source-item-actions">
+                        {src.url && (
+                          <button
+                            type="button"
+                            className={`wiki-url-card-btn${formData.sourceLink === src.url ? ' source-link-active' : ''}`}
+                            title={formData.sourceLink === src.url ? 'Remove featured link' : 'Set as featured link'}
+                            onClick={() => {
+                              const next = { ...formData, sourceLink: formData.sourceLink === src.url ? undefined : src.url };
+                              if (!next.sourceLink) delete next.sourceLink;
+                              setFormData(next);
+                              commitDraft(next);
+                            }}
+                          ><Link size={13} /></button>
+                        )}
+                        <button type="button" className="wiki-url-card-btn" onClick={() => handleEditSource(i)} title="Edit"><Pencil size={13} /></button>
+                        <button type="button" className="wiki-url-card-btn wiki-url-card-btn-remove" onClick={() => handleRemoveSource(i)} title="Remove"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                    )
+                  ))}
+                </div>}
+                {!isSourcesCollapsed && (isSourceFormOpen ? (
+                  <div className="source-add-form">
+                    <div className="source-field">
+                      <label className="source-field-label">Title</label>
+                      <input
+                        type="text"
+                        className="source-field-input"
+                        placeholder="Source title"
+                        value={sourceTitle}
+                        onChange={(e) => setSourceTitle(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="source-field">
+                      <label className="source-field-label">URL (optional)</label>
+                      <input
+                        type="text"
+                        className="source-field-input"
+                        placeholder="https://…"
+                        value={sourceUrl}
+                        onChange={(e) => setSourceUrl(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
+                      />
+                    </div>
+                    <div className="source-field">
+                      <label className="source-field-label">Description (optional)</label>
+                      <textarea
+                        className="source-field-input source-field-textarea"
+                        placeholder="Author, year, notes…"
+                        value={sourceDescription}
+                        onChange={(e) => setSourceDescription(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="source-add-actions">
+                      <button type="button" className="btn-secondary" onClick={() => { setIsSourceFormOpen(false); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}>Cancel</button>
+                      <button type="button" className="btn-primary" onClick={handleAddSource}>Add source</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="source-add-btn" onClick={() => setIsSourceFormOpen(true)}>
+                    + Add source
+                  </button>
+                ))}
+              </div>
             </div>
 
           </form>

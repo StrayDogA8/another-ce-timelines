@@ -427,10 +427,90 @@
 .event-title {
   font-size: 10px;
   font-weight: 700;
-
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.event-source-link {
+  position: absolute;
+  top: 1.5px;
+  right: 3.5px;
+  display: flex;
+  align-items: center;
+  color: var(--dark-bg);
+  opacity: 1;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.event-source-link:hover {
+  opacity: 1;
+  color: var(--link-blue) !important;
+}
+
+.event.has-source-link {
+  height: auto;
+}
+
+.fixed-event-height .event.has-source-link {
+  height: 25px;
+}
+
+.fixed-event-height .event.has-source-link.event-compact {
+  height: 21px;
+}
+
+.event.has-source-link .event-title {
+  white-space: normal;
+  overflow: visible;
+}
+
+.fixed-event-height .event.has-source-link .event-title {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.event.has-source-link .event-title {
+  padding-right: 10px;
+}
+
+.event.has-source-link.event-compact .event-title {
+  padding-right: 18px;
+}
+
+.event.event-compact .event-source-link {
+  transform: scale(0.75);
+  transform-origin: top right;
+}
+
+.span-source-link {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 3px;
+  opacity: 0.85;
+  text-decoration: none;
+}
+
+.span-source-link:hover {
+  opacity: 1;
+  color: var(--link-blue) !important;
+}
+
+.span-source-link {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+  opacity: 0.85;
+  text-decoration: none;
+}
+
+.span-source-link:hover { opacity: 1; }
+
+.span-item.has-source-link {
+  overflow: visible;
 }
 
 .event.event-compact .event-title {
@@ -540,8 +620,14 @@
   justify-content: center;
 }
 
+.era-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 3px;
+}
+
 .era-title {
-  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -549,8 +635,19 @@
   box-sizing: border-box;
   text-align: center;
   line-height: 1.2;
-  width: 100%;
+  min-width: 0;
 }
+
+.era-source-link {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+  text-decoration: none;
+  margin-bottom: 1px;
+}
+
+.era-source-link:hover { opacity: 1; color: var(--link-blue) !important; }
 
 .event.is-selected {
   border-color: var(--info-bg) !important;
