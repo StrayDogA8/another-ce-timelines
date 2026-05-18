@@ -651,8 +651,14 @@ export function layoutEvents({
     probe.style.height = "auto";
     const baseContentHeight = probe.offsetHeight;
 
-    measureEvent = (title, tags, yearLabel) => {
-      probeTitle.textContent = title || "X";
+    // Reusable icon placeholder
+    const probeIcon = document.createElement("span");
+    probeIcon.style.cssText = "float: left; width: 10px; height: 10px; margin-right: 3px; margin-top: 1px;";
+
+    measureEvent = (title, tags, yearLabel, icon) => {
+      probeTitle.innerHTML = "";
+      if (icon) probeTitle.appendChild(probeIcon);
+      probeTitle.appendChild(document.createTextNode(title || "X"));
       probeYearSpan.textContent = yearLabel || "0000";
       setProbeTags(tags);
       const naturalHeight = probe.offsetHeight;
@@ -672,7 +678,7 @@ export function layoutEvents({
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
     const yearLabel = event.dateLabel ?? formatYear(event.date, negID, posID, useCalendar, hideDecimals);
-    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags, yearLabel);
+    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags, yearLabel, event.icon);
 
     // Find placed events that horizontally overlap
     const conflicts = placed

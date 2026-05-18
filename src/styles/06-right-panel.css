@@ -1869,6 +1869,18 @@
   align-items: baseline;
 }
 
+.view-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.view-title-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
 .view-group-title p {
   max-width: 100%;
   min-width: 0;

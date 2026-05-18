@@ -14,6 +14,7 @@ import {
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
 import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare, ExternalLink } from "lucide-react";
+import { ICON_MAP } from "../config/elementIcons";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -2550,6 +2551,7 @@ const TimelineView = forwardRef(function TimelineView({
               >
                 {era.hideDetails !== true && (
                   <span className="era-title-wrap">
+                    {era.icon && ICON_MAP[era.icon] && (() => { const I = ICON_MAP[era.icon]; return <I size={10} className="era-title-icon" style={{ color: eraTextColor }} />; })()}
                     <span
                       className="era-title"
                       style={{ color: eraTextColor, opacity: 1 }}
@@ -2912,7 +2914,7 @@ const TimelineView = forwardRef(function TimelineView({
                       >
                         <>
                           {!hideSpanName && (
-                            <span className="span-title" style={{ color: spanTextColor }}>{span.title}</span>
+                            <span className="span-title" style={{ color: spanTextColor }}>{span.icon && ICON_MAP[span.icon] && (() => { const I = ICON_MAP[span.icon]; return <I size={10} className="span-title-icon" />; })()}{span.title}</span>
                           )}
                           {span.sourceLink && !hideSpanName && (
                             <a className="span-source-link" href={span.sourceLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open source" style={{ color: spanTextColor }}><ExternalLink size={9} strokeWidth={3} /></a>
@@ -2986,7 +2988,7 @@ const TimelineView = forwardRef(function TimelineView({
                           handleSelect(event.id);
                         }}
                       >
-                        <div className="event-title">{event.title}</div>
+                        <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
                         {event.sourceLink && (
                           <a
                             className="event-source-link"

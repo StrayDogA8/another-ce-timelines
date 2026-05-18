@@ -163,7 +163,15 @@
   background: color-mix(in srgb, var(--active-bg), black 9%);
 }
 
+.sb-row-icon {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+
 .sb-row-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: var(--text-sm);
   font-weight: 440;
   color: var(--dark-bg);

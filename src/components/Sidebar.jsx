@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
 import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
+import { ICON_MAP as iconMap } from "../config/elementIcons";
 import "../styles/07-modals-menus.css";
 
 const DEFAULT_GROUP_COLOR = "#d9d9d9";
@@ -119,7 +120,10 @@ function SidebarRow({ item, rightText, level = 0, selectedId, onSelect, listRef,
         });
       }}
     >
-      <span className="sb-row-title">{item.title}</span>
+      <span className="sb-row-title">
+        {item.icon && (() => { const Icon = iconMap[item.icon]; return Icon ? <Icon size={11} className="sb-row-icon" /> : null; })()}
+        {item.title}
+      </span>
       <span className="sb-row-right">{rightText}</span>
     </button>
   );

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText } from "lucide-react";
+import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText, BookOpen } from "lucide-react";
 import NoteEditor from "./NoteEditor";
 import WikiSection from "./WikiSection";
 import SourcesSection from "./SourcesSection";
 import { useNoteManagement } from "../hooks/useNoteManagement";
+import IconPicker from "./IconPicker";
+import { ICON_MAP } from "../config/elementIcons";
 import { parseTimelineInput, fractionalYearToDate } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
 import { isValidIdValue, isValidTagValue, normalizeTagValue, buildValidatedUpdate } from "../utils/validation";
@@ -704,7 +706,10 @@ export default function RightPanel({
             <div className="view-group view-group-title">
               <label>Name</label>
               <div className="view-separator" />
-              <p>{formData.title}</p>
+              <p className="view-title-with-icon">
+                {formData.icon && (() => { const Icon = ICON_MAP[formData.icon]; return Icon ? <Icon size={14} className="view-title-icon" /> : null; })()}
+                {formData.title}
+              </p>
             </div>
 
             {/* Date/Start/End based on type */}
@@ -918,6 +923,7 @@ export default function RightPanel({
                 />
               </div>
             </div>
+
 
             {/* Date/Start/End based on type */}
             {formData.type === "event" ? (
@@ -1547,6 +1553,24 @@ export default function RightPanel({
                 </div>
               </>
             )}
+
+            {/* Icon */}
+            <div className="form-group">
+              <div className="edit-row">
+                <label>Icon</label>
+                <div className="edit-separator" />
+                <IconPicker
+                  value={formData.icon ?? null}
+                  onChange={(name) => {
+                    const next = { ...formData };
+                    if (name) next.icon = name;
+                    else delete next.icon;
+                    setFormData(next);
+                    commitDraft(next);
+                  }}
+                />
+              </div>
+            </div>
 
             {/* Event styling (events only) */}
             {formData.type === "event" && (

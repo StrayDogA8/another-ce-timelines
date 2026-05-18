@@ -1,3 +1,170 @@
+/* Icon Picker */
+.icon-picker-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+}
+
+.icon-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--active-bg);
+  border-radius: 6px;
+  background: var(--secondary-bg);
+  color: var(--dark-bg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  transition: border-color 0.12s ease;
+}
+
+.icon-picker-trigger:hover {
+  border-color: var(--element-bg);
+}
+
+.icon-picker-trigger.has-icon {
+  padding: 0 8px;
+}
+
+.icon-picker-placeholder {
+  color: var(--element-bg);
+  font-size: var(--text-xs);
+}
+
+.icon-picker-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--element-bg);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+}
+
+.icon-picker-clear:hover {
+  color: var(--dark-bg);
+  background: var(--active-bg);
+}
+
+.icon-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  width: 260px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--secondary-bg);
+  border: 1px solid var(--active-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  overflow: hidden;
+}
+
+.icon-picker-search-wrap {
+  padding: 8px;
+  border-bottom: 1px solid var(--active-bg);
+  flex-shrink: 0;
+}
+
+.icon-picker-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--active-bg);
+  border-radius: 5px;
+  background: var(--primary-bg);
+  color: var(--dark-bg);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  outline: none;
+}
+
+.icon-picker-search:focus {
+  border-color: var(--element-bg);
+}
+
+.icon-picker-grid-wrap {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px 8px;
+}
+
+.icon-picker-grid-wrap::-webkit-scrollbar {
+  width: 6px;
+}
+
+.icon-picker-grid-wrap::-webkit-scrollbar-thumb {
+  background-color: var(--active-bg);
+  border-radius: 3px;
+}
+
+.icon-picker-grid-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.icon-picker-category {
+  margin-bottom: 8px;
+}
+
+.icon-picker-category-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--element-bg);
+  padding: 4px 2px 4px;
+}
+
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.icon-picker-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dark-bg);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.icon-picker-cell:hover {
+  background: var(--active-bg);
+}
+
+.icon-picker-cell.is-selected {
+  background: var(--dark-bg);
+  color: var(--secondary-bg);
+}
+
+.icon-picker-empty {
+  padding: 16px 8px;
+  text-align: center;
+  color: var(--element-bg);
+  font-size: var(--text-xs);
+}
+
 /* Context Menus */
 .timeline-context-menu {
   background: var(--secondary-bg);
