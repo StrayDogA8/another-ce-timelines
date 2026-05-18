@@ -243,22 +243,28 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
 
   if (!isEditMode) {
     if (!wikiUrl) return null;
+    const parsedForLink = parseMediaWikiUrl(wikiUrl);
+    const safeHref = parsedForLink
+      ? `${parsedForLink.host}/wiki/${encodeURIComponent(parsedForLink.title)}`
+      : null;
     return (
       <>
         <div className="note-divider" />
         <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsWikiCollapsed(v => !v)}>
           <span className="rp-note-label rp-note-label-wiki">Wiki</span>
           <span className="sources-collapse-right">
-            <a
-              className="rp-note-meta wiki-header-link"
-              href={wikiUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open in browser"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Open article
-            </a>
+            {safeHref && (
+              <a
+                className="rp-note-meta wiki-header-link"
+                href={safeHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in browser"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Open article
+              </a>
+            )}
             <ChevronDown size={14} style={{ transform: isWikiCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--element-bg)" }} />
           </span>
         </button>
