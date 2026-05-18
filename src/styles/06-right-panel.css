@@ -1674,6 +1674,54 @@
   text-underline-offset: 2px;
 }
 
+.note-render .frontmatter {
+  border: 1px solid var(--active-bg);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  font-size: var(--text-sm);
+}
+
+.note-render .fm-header {
+  padding: 5px 12px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--element-bg);
+  background: var(--active-bg);
+  border-bottom: 1px solid var(--active-bg);
+}
+
+.note-render .fm-row {
+  display: flex;
+  align-items: baseline;
+  padding: 5px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--active-bg);
+}
+
+.note-render .fm-row:last-child {
+  border-bottom: none;
+}
+
+.note-render .fm-key {
+  flex: 0 0 120px;
+  font-weight: 500;
+  color: var(--element-bg);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-render .fm-val {
+  flex: 1;
+  color: var(--dark-bg);
+  font-size: var(--text-xs);
+  word-break: break-word;
+}
+
 .note-render img {
   max-width: 100%;
   height: auto;
@@ -1681,12 +1729,55 @@
   min-height: 1px;
 }
 
+.note-render table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  font-size: var(--text-sm);
+}
+
+.note-render th,
+.note-render td {
+  border: 1px solid var(--active-bg);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.note-render th {
+  background: var(--active-bg);
+  font-weight: 600;
+  color: var(--element-bg);
+}
+
+.note-render tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--active-bg), transparent 60%);
+}
+
+.note-render ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.note-render .contains-task-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.note-render .contains-task-list input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--element-bg);
+  cursor: pointer;
+}
+
 .note-render img:-moz-broken,
 .note-render img[style*="display: none"] {
   min-height: 0;
 }
 
-.note-render iframe.video-embed {
+.note-render iframe.video-embed,
+.note-render video.video-embed {
   display: block;
   max-width: 100%;
   width: 100%;

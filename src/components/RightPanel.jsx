@@ -1227,7 +1227,24 @@ export default function RightPanel({
 
   const renderNoteMarkdown = (content, isLoading) => {
     const raw = isLoading ? "_Loading note..._" : content || "";
-    const withUnderline = raw.replace(/__(.+?)__/g, "<u>$1</u>");
+
+    let frontmatterHtml = "";
+    let body = raw;
+    const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
+    if (fmMatch) {
+      body = raw.slice(fmMatch[0].length);
+      const rows = fmMatch[1].split(/\r?\n/).map((line) => {
+        const sep = line.indexOf(":");
+        if (sep === -1) return "";
+        const key = line.slice(0, sep).trim();
+        const val = line.slice(sep + 1).trim();
+        if (!key) return "";
+        return `<div class="fm-row"><span class="fm-key">${key}</span><span class="fm-val">${val}</span></div>`;
+      }).filter(Boolean).join("");
+      if (rows) frontmatterHtml = `<div class="frontmatter"><div class="fm-header">Properties</div>${rows}</div>`;
+    }
+
+    const withUnderline = body.replace(/__(.+?)__/g, "<u>$1</u>");
     const withHighlight = withUnderline.replace(/==(.+?)==/g, "<mark>$1</mark>");
 
     const extractYouTubeId = (url) => {
@@ -1261,11 +1278,14 @@ export default function RightPanel({
       if (vimeoId) {
         return `<iframe class="video-embed" src="https://player.vimeo.com/video/${vimeoId}" width="560" height="315" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>`;
       }
+      if (/^https:\/\//i.test(href) && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(href)) {
+        return `<video class="video-embed" src="${href}" controls></video>`;
+      }
       return originalImage(href, title, text);
     };
 
     const html = marked.parse(withHighlight, { renderer });
-    return sanitizeHtml(html);
+    return sanitizeHtml(frontmatterHtml + html);
   };
 
   const sanitizeHtml = (html) => {
@@ -1402,8 +1422,10 @@ export default function RightPanel({
         "tr",
         "td",
         "th",
+        "input",
         "u",
         "ul",
+        "video",
       ],
       ALLOWED_ATTR: [
         "href",
@@ -1422,6 +1444,10 @@ export default function RightPanel({
         "allowfullscreen",
         "allow",
         "class",
+        "controls",
+        "type",
+        "checked",
+        "disabled",
       ],
       KEEP_CONTENT: true,
     });
@@ -1429,6 +1455,7 @@ export default function RightPanel({
     const parser = new DOMParser();
     const doc = parser.parseFromString(sanitized, "text/html");
     const nodes = Array.from(doc.body.querySelectorAll("*"));
+    let checkboxIdx = 0;
     nodes.forEach((node) => {
       const tagName = node.tagName.toLowerCase();
 
@@ -1443,14 +1470,14 @@ export default function RightPanel({
         node.setAttribute("target", "_blank");
       }
 
-      if (tagName === "img") {
+      if (tagName === "img" || tagName === "video") {
         const src = normalizeSrc(node.getAttribute("src"));
         if (!src) {
           node.remove();
           return;
         }
         node.setAttribute("src", src);
-        if (!node.getAttribute("loading")) {
+        if (tagName === "img" && !node.getAttribute("loading")) {
           node.setAttribute("loading", "lazy");
         }
       }
@@ -1470,6 +1497,11 @@ export default function RightPanel({
           return;
         }
       }
+
+      if (tagName === "input" && node.getAttribute("type") === "checkbox") {
+        node.removeAttribute("disabled");
+        node.setAttribute("data-idx", checkboxIdx++);
+      }
     });
 
     return doc.body.innerHTML;
@@ -1480,6 +1512,19 @@ export default function RightPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [noteInitialContent, isNoteLoading, notesBaseUrl, notesBasePath]
   );
+
+  const handleTaskToggle = useCallback((idx) => {
+    let count = 0;
+    const newContent = noteInitialContent.replace(
+      /^(\s*[-*+] \[)([ x])(\])/gm,
+      (match, pre, state, post) => {
+        if (count++ === idx) return `${pre}${state === " " ? "x" : " "}${post}`;
+        return match;
+      }
+    );
+    setNoteInitialContent(newContent);
+    handleNoteSave(newContent);
+  }, [noteInitialContent, handleNoteSave]);
 
   const noteViewCallbackRef = useCallback((node) => {
     noteRenderRef.current = node;
@@ -1682,7 +1727,16 @@ export default function RightPanel({
                   </span>
                 </button>
                 {!isNoteCollapsed && (
-                  <div className="note-render" ref={noteViewCallbackRef} />
+                  <div
+                    className="note-render"
+                    ref={noteViewCallbackRef}
+                    onClick={(e) => {
+                      if (e.target.tagName !== "INPUT" || e.target.type !== "checkbox") return;
+                      e.preventDefault();
+                      const idx = parseInt(e.target.getAttribute("data-idx"), 10);
+                      if (!isNaN(idx)) handleTaskToggle(idx);
+                    }}
+                  />
                 )}
               </>
             )}
