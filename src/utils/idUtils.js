@@ -15,18 +15,6 @@ export function generateIdFromTitle(title, type) {
   return `${type}-${sanitized}`;
 }
 
-export function makeUniqueId(baseId, elements, excludeId) {
-  const ids = new Set(elements.map((el) => el.id));
-  if (excludeId) ids.delete(excludeId);
-  if (!ids.has(baseId)) return baseId;
-  let counter = 2;
-  let nextId = `${baseId}-${counter}`;
-  while (ids.has(nextId)) {
-    counter += 1;
-    nextId = `${baseId}-${counter}`;
-  }
-  return nextId;
-}
 
 const RANDOM_ID_RETRY_LIMIT = 1024;
 
@@ -57,43 +45,6 @@ export function generateUniqueRandomElementId(elements, type = "item", excludeId
   return fallback;
 }
 
-/**
- * Update all references to an element ID throughout the timeline data
- * @param {Object} timelineData 
- * @param {string} oldId 
- * @param {string} newId 
- * @returns {Object} 
- */
-export function updateElementReferences(timelineData, oldId, newId) {
-  const updatedElements = timelineData.elements.map(element => {
-    const updated = { ...element };
-
-    if (element.type === 'event' && element.parents) {
-      updated.parents = element.parents.map(parentId =>
-        parentId === oldId ? newId : parentId
-      );
-    }
-
-    if (element.type === 'span') {
-      if (element.parent === oldId) {
-        updated.parent = newId;
-      }
-      if (element.extendFrom === oldId) {
-        updated.extendFrom = newId;
-      }
-      if (element.mergeParent === oldId) {
-        updated.mergeParent = newId;
-      }
-    }
-
-    return updated;
-  });
-
-  return {
-    ...timelineData,
-    elements: updatedElements,
-  };
-}
 
 /**
  * Update an element with a new ID and update all references

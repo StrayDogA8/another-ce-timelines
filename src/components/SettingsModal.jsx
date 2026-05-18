@@ -456,7 +456,7 @@ export default function SettingsModal({
               <div className="settings-row-left">
                 <div className="settings-row-label">App Settings</div>
                 <div className="settings-row-description">
-                  Open global settings for themes, files, and plugins.
+                  Open global settings for themes and files.
                 </div>
               </div>
               <div className="settings-row-right">

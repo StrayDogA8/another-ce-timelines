@@ -32,7 +32,7 @@ import { cloneDefaultKeybinds, loadKeybinds, matchesKeybind } from "./utils/keyb
 import { apiGetTimelineById, apiUpdateTimeline } from "./lib/api.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid } from "./utils/dateUtils";
-import "./index.css";
+import "./styles/index.css";
 
 const DEFAULT_GROUP_ID = "g-main";
 const DEFAULT_GROUP = {
@@ -2035,13 +2035,8 @@ function App() {
           fonts={availableFonts}
           timelineStorageDir={timelineStorageDir}
           notesStorageDir={notesStorageDir}
-          notesSubfolder={notesSubfolder}
-          notesSubfolderEnabled={notesSubfolderEnabled}
           onTimelineStorageDirChange={handleTimelineStorageDirChange}
           onNotesStorageDirChange={handleNotesStorageDirChange}
-          onNotesSubfolderChange={handleNotesSubfolderChange}
-          onNotesSubfolderEnabledChange={handleNotesSubfolderEnabledChange}
-          onPickNotesSubfolder={handlePickNotesSubfolder}
           onPickTimelinesDir={handlePickTimelinesDir}
           onPickNotesDir={handlePickNotesDir}
           onOpenFontsFolder={handleOpenFontsFolder}

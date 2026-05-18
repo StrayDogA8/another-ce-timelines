@@ -117,12 +117,6 @@
   letter-spacing: 0.02em;
 }
 
-.homepage-subtitle {
-  font-size: var(--text-lg);
-  font-weight: 500;
-  color: var(--gray-2);
-  margin: 0 0 40px 0;
-}
 
 .homepage-search-wrap {
   position: relative;
@@ -393,40 +387,6 @@
   max-width: 720px;
 }
 
-.homepage-settings-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.homepage-settings-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 2px solid var(--active-bg);
-  background: var(--secondary-bg);
-  color: var(--dark-bg);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.homepage-settings-back:hover {
-  border-color: var(--element-bg);
-  background: var(--active-bg);
-}
-
-.homepage-settings-content {
-  border: 2px solid var(--active-bg);
-  border-radius: 14px;
-  background: var(--primary-bg);
-  overflow: hidden;
-}
 
 .settings-folder {
   display: flex;
@@ -1101,19 +1061,6 @@
   width: 280px;
 }
 
-.folder-modal-label {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--element-bg);
-  text-transform: lowercase;
-  letter-spacing: 0;
-}
-
-.folder-modal-label strong {
-  color: var(--dark-bg);
-  font-weight: 700;
-}
 
 .folder-modal-text {
   margin: 0;

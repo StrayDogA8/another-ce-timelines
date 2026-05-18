@@ -1,146 +1,15 @@
-import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Maximize2, Minimize2, Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link, Link2, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, BookOpen, Calendar, FileText, ImagePlay } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText } from "lucide-react";
+import NoteEditor from "./NoteEditor";
+import WikiSection from "./WikiSection";
+import SourcesSection from "./SourcesSection";
+import { useNoteManagement } from "../hooks/useNoteManagement";
 import { parseTimelineInput, fractionalYearToDate } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
-import { isValidIdValue, isValidTagValue, isSafeNoteFilename, normalizeTagValue, parseMediaWikiUrl, buildValidatedUpdate } from "../utils/validation";
+import { isValidIdValue, isValidTagValue, normalizeTagValue, buildValidatedUpdate } from "../utils/validation";
 import { normalizeColor } from "../utils/colorUtils";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, fetchWikipedia } from "../utils/electronApi";
 
 
-const NoteEditor = forwardRef(function NoteEditor(
-  { initialContent, isNoteLoading, noteExists, onSave, onUnlink, onDelete },
-  ref
-) {
-  const [noteContent, setNoteContent] = useState(initialContent ?? "");
-  const noteContentRef = useRef(noteContent);
-  noteContentRef.current = noteContent;
-
-  // Sync when parent resets content (element switch, note create/link/delete)
-  useEffect(() => {
-    setNoteContent(initialContent ?? "");
-  }, [initialContent]);
-
-  // Trigger save on outside-click
-  useImperativeHandle(ref, () => ({
-    save: () => onSave(noteContentRef.current),
-  }), [onSave]);
-
-  const wrapSelection = (prefix, suffix = prefix) => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const before = noteContentRef.current.slice(0, start);
-    const selected = noteContentRef.current.slice(start, end);
-    const after = noteContentRef.current.slice(end);
-    const next = `${before}${prefix}${selected || ''}${suffix}${after}`;
-    setNoteContent(next);
-    const cursorStart = start + prefix.length;
-    const cursorEnd = cursorStart + (selected || '').length;
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursorStart, cursorEnd);
-    });
-  };
-
-  const insertHeading = (level) => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const content = noteContentRef.current;
-    const lineStart = content.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = content.indexOf('\n', end);
-    const actualLineEnd = lineEnd === -1 ? content.length : lineEnd;
-    const line = content.slice(lineStart, actualLineEnd);
-    const cleaned = line.replace(/^#{1,6}\s+/, '');
-    const prefix = `${'#'.repeat(level)} `;
-    const nextLine = `${prefix}${cleaned}`;
-    const next = `${content.slice(0, lineStart)}${nextLine}${content.slice(actualLineEnd)}`;
-    setNoteContent(next);
-    const cursor = lineStart + prefix.length + (start - lineStart);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  };
-
-  const insertLink = () => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-    const content = noteContentRef.current;
-    const before = content.slice(0, start);
-    const selected = content.slice(start, end) || 'link text';
-    const after = content.slice(end);
-    const token = `[${selected}](https://)`;
-    const next = `${before}${token}${after}`;
-    setNoteContent(next);
-    const urlStart = before.length + token.indexOf('https://');
-    const urlEnd = urlStart + 'https://'.length;
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(urlStart, urlEnd);
-    });
-  };
-
-  const insertImage = () => {
-    const textarea = document.querySelector('.note-textarea');
-    if (!textarea) return;
-    const start = textarea.selectionStart ?? 0;
-    const content = noteContentRef.current;
-    const before = content.slice(0, start);
-    const after = content.slice(start);
-    const token = `![](https://)`;
-    setNoteContent(`${before}${token}${after}`);
-    const urlStart = before.length + 4;
-    const urlEnd = urlStart + 8;
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(urlStart, urlEnd);
-    });
-  };
-
-
-  return (
-    <div className="note-editor">
-      <div className="note-toolbar">
-        <div className="note-toolbar-format">
-          <button type="button" onClick={() => insertHeading(1)} title="Heading 1"><Heading1 size={14} /></button>
-          <button type="button" onClick={() => insertHeading(2)} title="Heading 2"><Heading2 size={14} /></button>
-          <button type="button" onClick={() => insertHeading(3)} title="Heading 3"><Heading3 size={14} /></button>
-          <div className="note-toolbar-divider" />
-          <button type="button" onClick={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
-          <button type="button" onClick={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
-          <button type="button" onClick={() => wrapSelection('~~')} title="Strikethrough"><Strikethrough size={14} /></button>
-          <button type="button" onClick={() => wrapSelection('__')} title="Underline"><Underline size={14} /></button>
-          <button type="button" onClick={() => wrapSelection('==')} title="Highlight"><Highlighter size={14} /></button>
-          <div className="note-toolbar-divider" />
-          <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
-          <button type="button" onClick={insertImage} title="Embed image or video"><ImagePlay size={14} /></button>
-        </div>
-        {noteExists && (
-          <div className="note-toolbar-actions">
-            <div className="note-toolbar-divider" />
-            <button type="button" onClick={onUnlink} title="Unlink Note"><Unlink size={14} /></button>
-            <button type="button" onClick={onDelete} title="Delete Note"><Trash2 size={14} /></button>
-          </div>
-        )}
-      </div>
-      <textarea
-        className="note-textarea"
-        value={noteContent}
-        onChange={(e) => setNoteContent(e.target.value)}
-        onBlur={() => onSave(noteContentRef.current)}
-        placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
-        rows={8}
-      />
-    </div>
-  );
-});
 
 const EVENT_STROKE_STYLE_OPTIONS = [
   { value: "solid", label: "Solid" },
@@ -161,7 +30,6 @@ export default function RightPanel({
   onFilterByTag,
   activeTags = [],
   onToggleTag,
-  onUpdateGroups,
   tagColors = {},
   onRequestDelete,
   onSelectPrevious,
@@ -172,15 +40,23 @@ export default function RightPanel({
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [noteInitialContent, setNoteInitialContent] = useState("");
-  const [isNoteLoading, setIsNoteLoading] = useState(false);
-  const [noteExists, setNoteExists] = useState(false);
-  const [isNoteAddOpen, setIsNoteAddOpen] = useState(false);
-  const noteEditorRef = useRef(null);
-  const noteRenderRef = useRef(null);
 
-  const [notesBaseUrl, setNotesBaseUrl] = useState("");
-  const [notesBasePath, setNotesBasePath] = useState("");
+  const {
+    noteInitialContent,
+    isNoteLoading,
+    noteExists,
+    isNoteAddOpen,
+    setIsNoteAddOpen,
+    noteEditorRef,
+    noteWordCount,
+    noteViewCallbackRef,
+    handleTaskToggle,
+    handleNoteSave,
+    handleAddNote,
+    handleAddExistingNote,
+    handleDeleteNote,
+    handleUnlinkNote,
+  } = useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate });
   const prevSelectedIdRef = useRef(null);
   const [spanParentQuery, setSpanParentQuery] = useState("");
   const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
@@ -196,23 +72,7 @@ export default function RightPanel({
   const [tagQuery, setTagQuery] = useState("");
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const tagMenuTimeoutRef = useRef(null);
-  const [newGroupName, setNewGroupName] = useState("");
-  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
-  const groupMenuTimeoutRef = useRef(null);
-  const [wikiContent, setWikiContent] = useState("");
-  const [isWikiLoading, setIsWikiLoading] = useState(false);
-  const [wikiError, setWikiError] = useState("");
-  const [isSourceFormOpen, setIsSourceFormOpen] = useState(false);
-  const [isSourcesCollapsed, setIsSourcesCollapsed] = useState(false);
   const [isNoteCollapsed, setIsNoteCollapsed] = useState(false);
-  const [isWikiCollapsed, setIsWikiCollapsed] = useState(false);
-  const [sourceTitle, setSourceTitle] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [sourceDescription, setSourceDescription] = useState("");
-  const [editingSourceIndex, setEditingSourceIndex] = useState(null);
-  const wikiCacheRef = useRef(new Map());
-  const wikiRenderRef = useRef(null);
-  const WIKI_SANITIZE_VERSION = "collapsible-1";
   const panelRef = useRef(null);
   const datePickerRefs = useRef({});
   const TAG_MAX_LENGTH = 32;
@@ -326,7 +186,7 @@ export default function RightPanel({
 
   useEffect(() => {
     const anyOpen = isSpanParentMenuOpen || isMergeParentMenuOpen ||
-      isParentMenuOpen || isTagMenuOpen || isGroupMenuOpen || isSpanRelationOpen;
+      isParentMenuOpen || isTagMenuOpen || isSpanRelationOpen;
     if (!anyOpen) return;
     const handleKeyDown = (e) => {
       if (e.key !== "Escape") return;
@@ -334,12 +194,11 @@ export default function RightPanel({
       setIsMergeParentMenuOpen(false);
       setIsParentMenuOpen(false);
       setIsTagMenuOpen(false);
-      setIsGroupMenuOpen(false);
       setIsSpanRelationOpen(false);
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isSpanParentMenuOpen, isMergeParentMenuOpen, isParentMenuOpen, isTagMenuOpen, isGroupMenuOpen, isSpanRelationOpen]);
+  }, [isSpanParentMenuOpen, isMergeParentMenuOpen, isParentMenuOpen, isTagMenuOpen, isSpanRelationOpen]);
 
   useEffect(() => {
     if (selectedElement) {
@@ -386,99 +245,6 @@ export default function RightPanel({
   }, [isEditMode]);
 
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadNote = async () => {
-      if (!selectedElement?.noteFile) {
-        setNoteInitialContent("");
-        setNoteExists(false);
-        setIsNoteAddOpen(false);
-        return;
-      }
-      const timelineId = timelineData?.file?.id?.replace('-timeline', '');
-      if (!timelineId) return;
-      setIsNoteLoading(true);
-      const result = await readNote({ timelineId, filename: selectedElement.noteFile });
-      if (!isMounted) return;
-      setIsNoteLoading(false);
-      if (result?.success) {
-        setNoteInitialContent(result.content ?? "");
-        setNoteExists(true);
-      } else {
-        if (result?.error === "NOT_FOUND") {
-          const next = { ...selectedElement };
-          delete next.noteFile;
-          setFormData(next);
-          onUpdate?.(next);
-        }
-        setNoteInitialContent("");
-        setNoteExists(false);
-      }
-    };
-
-    loadNote();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedElement?.id, selectedElement?.noteFile, timelineData?.file?.id]);
-
-  useEffect(() => {
-    if (!selectedElement?.wikiUrl) {
-      setWikiContent("");
-      setWikiError("");
-      return;
-    }
-    fetchWikiContent(selectedElement.wikiUrl);
-  }, [selectedElement?.wikiUrl]);
-
-  useEffect(() => {
-    if (!wikiRenderRef.current || !wikiContent) return;
-    const container = wikiRenderRef.current;
-    // Collapse infobox td cells with long lists (those not already wrapped by mw-collapsible)
-    container.querySelectorAll(".infobox td").forEach((td) => {
-      if (td.dataset.wikiInit) return;
-      td.dataset.wikiInit = "1";
-      if (td.querySelectorAll("li").length < 4) return;
-      const contentWrap = document.createElement("div");
-      contentWrap.className = "wiki-section-hidden";
-      while (td.firstChild) contentWrap.appendChild(td.firstChild);
-      const bracket = document.createElement("span");
-      bracket.className = "wiki-toggle-bracket";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "wiki-toggle-btn";
-      btn.textContent = "show";
-      bracket.appendChild(document.createTextNode("["));
-      bracket.appendChild(btn);
-      bracket.appendChild(document.createTextNode("]"));
-      btn.addEventListener("click", () => {
-        const nowHidden = contentWrap.classList.toggle("wiki-section-hidden");
-        btn.textContent = nowHidden ? "show" : "hide";
-      });
-      td.appendChild(bracket);
-      td.appendChild(contentWrap);
-    });
-  }, [wikiContent]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadNotesBaseDir = async () => {
-      const result = await getNotesBaseDir();
-      if (!isMounted) return;
-      if (result?.success && result.fileUrl) {
-        const normalized = result.fileUrl.endsWith("/") ? result.fileUrl : `${result.fileUrl}/`;
-        setNotesBaseUrl(normalized);
-      }
-      if (result?.success && result.path) {
-        setNotesBasePath(result.path);
-      }
-    };
-
-    loadNotesBaseDir();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!isEditMode) return;
@@ -644,25 +410,6 @@ export default function RightPanel({
       (span.title || "").toLowerCase().includes(needle)
     );
   }, [mergeParentCandidates, mergeParentQuery]);
-  const noteWordCount = useMemo(() => {
-    if (!noteInitialContent) return 0;
-    return noteInitialContent.trim().split(/\s+/).filter(Boolean).length;
-  }, [noteInitialContent]);
-
-  useEffect(() => {
-    if (!noteRenderRef.current) return;
-    const imgs = noteRenderRef.current.querySelectorAll('img');
-    imgs.forEach((img) => {
-      if (img.complete && img.naturalWidth === 0) {
-        img.style.display = 'none';
-      } else {
-        img.addEventListener('error', function() {
-          this.style.display = 'none';
-          this.style.minHeight = '0';
-        }, { once: true });
-      }
-    });
-  }, [noteInitialContent]);
 
 
   const renderEventStrokeStyleControl = (field, currentValue, ariaLabel, variant) => (
@@ -838,42 +585,14 @@ export default function RightPanel({
     commitDraft({ ...formData, tags: nextTags });
   };
 
-  const handleEditSource = (i) => {
-    const src = formData.sources[i];
-    setEditingSourceIndex(i);
-    setSourceTitle(src.title || "");
-    setSourceUrl(src.url || "");
-    setSourceDescription(src.description || src.citation || "");
-  };
-
-  const handleSaveEditedSource = () => {
-    const title = sourceTitle.trim();
-    if (!title) return;
-    const next = (Array.isArray(formData.sources) ? formData.sources : []).map((src, i) =>
-      i === editingSourceIndex ? { title, url: sourceUrl.trim(), description: sourceDescription.trim() } : src
-    );
-    setFormData((prev) => ({ ...prev, sources: next }));
-    commitDraft({ ...formData, sources: next });
-    setEditingSourceIndex(null);
-    setSourceTitle(""); setSourceUrl(""); setSourceDescription("");
-  };
-
-  const handleAddSource = () => {
-    const title = sourceTitle.trim();
-    if (!title) return;
-    const next = [...(Array.isArray(formData.sources) ? formData.sources : []), { title, url: sourceUrl.trim(), description: sourceDescription.trim() }];
-    setFormData((prev) => ({ ...prev, sources: next }));
-    commitDraft({ ...formData, sources: next });
-    setSourceTitle("");
-    setSourceUrl("");
-    setSourceDescription("");
-    setIsSourceFormOpen(false);
-  };
-
-  const handleRemoveSource = (index) => {
-    const next = (Array.isArray(formData.sources) ? formData.sources : []).filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, sources: next }));
-    commitDraft({ ...formData, sources: next });
+  const handleSourcesChange = (nextSources, nextSourceLink) => {
+    const next = { ...formData, sources: nextSources };
+    if (nextSourceLink !== undefined) {
+      if (nextSourceLink) next.sourceLink = nextSourceLink;
+      else delete next.sourceLink;
+    }
+    setFormData(next);
+    commitDraft(next);
   };
 
   const commitDraft = (draft) => {
@@ -928,608 +647,16 @@ export default function RightPanel({
     return () => window.removeEventListener("keydown", handler);
   }, [selectedElement, toggleEditMode]);
 
-  const handleAddNote = async () => {
-    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
-    if (!timelineId) return;
-    const result = await createNote({
-      timelineId,
-      title: formData.title,
-      elementId: formData.id,
-    });
-    if (!result?.success) {
-      console.error('Failed to create note:', result?.error);
-      return;
-    }
-    const next = { ...formData, noteFile: result.filename || `${formData.id}.md` };
-    setFormData(next);
-    onUpdate?.(next);
-    setNoteInitialContent(result?.content ?? `# ${formData.title}\n\n`);
-  };
-
-  const handleAddExistingNote = async () => {
-    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
-    if (!timelineId) return;
-    const result = await addExistingNote({ timelineId });
-    if (!result?.success) {
-      if (result?.error === "OUTSIDE_NOTES_DIR") {
-        window.alert("That note is outside your Notes Folder. Choose a note inside the Notes Folder or change the Notes Folder in App Settings.");
-      } else if (!result?.cancelled) {
-        console.error('Failed to add existing note:', result?.error);
-      }
-      return;
-    }
-    const next = { ...formData, noteFile: result.filename };
-    setFormData(next);
-    onUpdate?.(next);
-    setNoteInitialContent(result?.content ?? "");
-    setNoteExists(true);
-  };
-
-  const handleNoteSave = async (content) => {
-    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
-    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
-    if (!timelineId) return;
-    await writeNote({
-      timelineId,
-      filename: formData.noteFile,
-      content,
-    });
-    setNoteInitialContent(content);
-  };
-
-  const handleDeleteNote = async () => {
-    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
-    const confirmed = window.confirm("Delete this note? This cannot be undone.");
-    if (!confirmed) return;
-
-    const timelineId = timelineData?.file?.id?.replace('-timeline', '');
-    if (!timelineId) return;
-
-    const result = await deleteNote({
-      timelineId,
-      filename: formData.noteFile,
-    });
-
-    if (!result?.success) {
-      console.error('Failed to delete note:', result?.error);
-      return;
-    }
-
+  const handleWikiUrlChange = (newUrl) => {
     const next = { ...formData };
-    delete next.noteFile;
-    setFormData(next);
-    setNoteInitialContent("");
-    onUpdate?.(next);
-  };
-
-  const handleUnlinkNote = () => {
-    if (!formData?.noteFile) return;
-    const next = { ...formData };
-    delete next.noteFile;
-    setFormData(next);
-    setNoteInitialContent("");
-    setNoteExists(false);
-    onUpdate?.(next);
-  };
-
-  const sanitizeWikiHtml = (html, host = "https://en.wikipedia.org") => {
-    const preDoc = new DOMParser().parseFromString(html, "text/html");
-    preDoc.querySelectorAll("img").forEach((img) => {
-      const lazySrc = img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original");
-      if (lazySrc) img.setAttribute("src", lazySrc);
-    });
-    const sanitized = DOMPurify.sanitize(preDoc.body.innerHTML, {
-      ALLOWED_TAGS: [
-        "a", "abbr", "b", "blockquote", "br", "caption", "cite", "code",
-        "col", "colgroup", "dd", "del", "details", "dfn", "div", "dl", "dt",
-        "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "h6",
-        "hr", "i", "img", "ins", "kbd", "li", "mark", "ol", "p", "pre",
-        "q", "s", "samp", "section", "small", "span", "strong", "sub",
-        "summary", "sup", "table", "tbody", "td", "tfoot", "th", "thead",
-        "time", "tr", "u", "ul", "var", "wbr",
-      ],
-      ALLOWED_ATTR: [
-        "href", "target", "rel", "src", "alt", "title", "class", "id",
-        "colspan", "rowspan", "scope", "headers", "width", "height",
-        "loading", "decoding",
-      ],
-      ALLOW_DATA_ATTR: false,
-      FORBID_TAGS: ["style", "script", "iframe", "object", "embed", "form"],
-      KEEP_CONTENT: true,
-    });
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(sanitized, "text/html");
-    doc.body.querySelectorAll("a").forEach((node) => {
-      node.setAttribute("target", "_blank");
-      node.setAttribute("rel", "noopener noreferrer");
-      const href = node.getAttribute("href");
-      if (href && href.startsWith("/wiki/")) {
-        node.setAttribute("href", `${host}${href}`);
-      } else if (href && href.startsWith("./")) {
-        node.setAttribute("href", `${host}/wiki/${href.slice(2)}`);
-      }
-    });
-    doc.body.querySelectorAll("img").forEach((node) => {
-      let src = node.getAttribute("src");
-      if (src && src.startsWith("//")) {
-        src = `https:${src}`;
-      } else if (src && src.startsWith("/")) {
-        src = `${host}${src}`;
-      }
-      if (src) {
-        src = src.replace(/\/revision\/latest\/[^?]+/, "/revision/latest");
-        node.setAttribute("src", src);
-      }
-      node.setAttribute("loading", "eager");
-    });
-
-    // Remove embedded map widgets and coordinate/map-link blocks that render as noisy lists in-panel.
-    const mapLikeSelectors = [
-      ".mw-kartographer-map",
-      ".mw-kartographer-maplink",
-      ".mw-kartographer-container",
-      ".locmap",
-      ".maptable",
-      ".maplink",
-      ".mapframe",
-      ".coordinates",
-      ".geo-inline-hidden",
-      ".plainlist .geo",
-      ".plainlist .geo-inline",
-    ];
-    doc.body.querySelectorAll(mapLikeSelectors.join(",")).forEach((node) => {
-      const removableWrapper = node.closest("li, tr, figure, p, div");
-      if (removableWrapper && removableWrapper !== doc.body && removableWrapper.textContent?.trim() === node.textContent?.trim()) {
-        removableWrapper.remove();
-      } else {
-        node.remove();
-      }
-    });
-    doc.body.querySelectorAll('a[href*="geohack"], a[href*="openstreetmap"], a[href*="maplink"], a[href*="maps.wikimedia"]').forEach((node) => {
-      const removableWrapper = node.closest("li, tr, p, div");
-      if (removableWrapper && /map|coordinate|openstreetmap|geohack/i.test(removableWrapper.textContent || "")) {
-        removableWrapper.remove();
-      } else {
-        node.remove();
-      }
-    });
-    doc.body.querySelectorAll(".infobox tr").forEach((row) => {
-      const rowText = (row.textContent || "").toLowerCase();
-      const hasMapMarkers = Boolean(
-        row.querySelector(
-          '.mw-kartographer-map, .mw-kartographer-maplink, .mw-kartographer-container, .locmap, .maptable, .mapframe, .coordinates, .geo, a[href*="geohack"], a[href*="openstreetmap"], a[href*="maps.wikimedia"]'
-        )
-      );
-      const looksLikeLocationList =
-        row.querySelector(".plainlist, ul, ol") &&
-        /map|location|locations|coordinates|coord\./.test(rowText);
-      if (hasMapMarkers || looksLikeLocationList) {
-        row.remove();
-      }
-    });
-
-    // Transform mw-collapsible sections (sidebar lists) into native <details>/<summary>
-    doc.body.querySelectorAll(".mw-collapsible").forEach((collapsible) => {
-      const isOpen = !collapsible.classList.contains("mw-collapsed");
-      const titleEl = collapsible.querySelector(".sidebar-list-title");
-      const contentEl = collapsible.querySelector(".mw-collapsible-content");
-      if (!titleEl || !contentEl) return;
-      collapsible.querySelectorAll(".mw-collapsible-text").forEach((el) => el.remove());
-      const details = doc.createElement("details");
-      if (isOpen) details.open = true;
-      details.className = "wiki-sidebar-section";
-      const summary = doc.createElement("summary");
-      summary.className = "wiki-sidebar-summary";
-      while (titleEl.firstChild) summary.appendChild(titleEl.firstChild);
-      details.appendChild(summary);
-      contentEl.classList.add("wiki-sidebar-content");
-      details.appendChild(contentEl);
-      collapsible.parentNode.replaceChild(details, collapsible);
-    });
-
-    return doc.body.innerHTML;
-  };
-
-  const fetchWikiContent = async (url) => {
-    if (!url) return;
-
-    const cacheKey = `${WIKI_SANITIZE_VERSION}:${url}`;
-    if (wikiCacheRef.current.has(cacheKey)) {
-      setWikiContent(wikiCacheRef.current.get(cacheKey));
-      setWikiError("");
-      return;
+    if (newUrl) {
+      next.wikiUrl = newUrl;
+    } else {
+      delete next.wikiUrl;
     }
-
-    const parsed = parseMediaWikiUrl(url);
-    if (!parsed) {
-      setWikiError("Invalid wiki URL");
-      setWikiContent("");
-      return;
-    }
-
-    setIsWikiLoading(true);
-    setWikiError("");
-
-    try {
-      const apiPaths = [`${parsed.host}/api.php`, `${parsed.host}/w/api.php`];
-      const query = `?action=parse&page=${encodeURIComponent(parsed.title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
-      let data = null;
-      for (const base of apiPaths) {
-        const result = await fetchWikipedia({ url: base + query });
-        if (!result?.success) continue;
-        const parsed2 = JSON.parse(result.html);
-        if (parsed2?.parse?.text) { data = parsed2; break; }
-      }
-      if (!data) throw new Error("No content returned");
-      const wikiHtml = data.parse.text;
-      const sanitized = sanitizeWikiHtml(wikiHtml, parsed.host);
-      wikiCacheRef.current.set(cacheKey, sanitized);
-      setWikiContent(sanitized);
-    } catch (err) {
-      setWikiError(`Failed to load wiki article: ${err.message}`);
-      setWikiContent("");
-    } finally {
-      setIsWikiLoading(false);
-    }
-  };
-
-  const [wikiUrlInput, setWikiUrlInput] = useState("");
-  const [isWikiUrlInputOpen, setIsWikiUrlInputOpen] = useState(false);
-  const [wikiUrlInputError, setWikiUrlInputError] = useState("");
-  const wikiUrlInputRef = useRef(null);
-
-  const handleOpenWikiInput = () => {
-    setWikiUrlInput(formData.wikiUrl || "");
-    setWikiUrlInputError("");
-    setIsWikiUrlInputOpen(true);
-    setTimeout(() => wikiUrlInputRef.current?.focus(), 0);
-  };
-
-  const handleWikiUrlSubmit = () => {
-    const trimmed = wikiUrlInput.trim();
-    if (!trimmed) {
-      setIsWikiUrlInputOpen(false);
-      setWikiUrlInputError("");
-      return;
-    }
-    if (!parseMediaWikiUrl(trimmed)) {
-      setWikiUrlInputError("Enter a valid MediaWiki URL (e.g., https://en.wikipedia.org/wiki/Ancient_Greece)");
-      return;
-    }
-    const next = { ...formData, wikiUrl: trimmed };
     setFormData(next);
     commitDraft(next);
-    setIsWikiUrlInputOpen(false);
-    setWikiUrlInputError("");
   };
-
-  const handleWikiUrlKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleWikiUrlSubmit();
-    } else if (e.key === "Escape") {
-      setIsWikiUrlInputOpen(false);
-      setWikiUrlInputError("");
-    }
-  };
-
-  const handleRemoveWikiUrl = () => {
-    const next = { ...formData };
-    delete next.wikiUrl;
-    setFormData(next);
-    setWikiContent("");
-    setWikiError("");
-    setIsWikiUrlInputOpen(false);
-    setWikiUrlInputError("");
-    commitDraft(next);
-  };
-
-  const renderNoteMarkdown = (content, isLoading) => {
-    const raw = isLoading ? "_Loading note..._" : content || "";
-
-    let frontmatterHtml = "";
-    let body = raw;
-    const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
-    if (fmMatch) {
-      body = raw.slice(fmMatch[0].length);
-      const rows = fmMatch[1].split(/\r?\n/).map((line) => {
-        const sep = line.indexOf(":");
-        if (sep === -1) return "";
-        const key = line.slice(0, sep).trim();
-        const val = line.slice(sep + 1).trim();
-        if (!key) return "";
-        return `<div class="fm-row"><span class="fm-key">${key}</span><span class="fm-val">${val}</span></div>`;
-      }).filter(Boolean).join("");
-      if (rows) frontmatterHtml = `<div class="frontmatter"><div class="fm-header">Properties</div>${rows}</div>`;
-    }
-
-    const withUnderline = body.replace(/__(.+?)__/g, "<u>$1</u>");
-    const withHighlight = withUnderline.replace(/==(.+?)==/g, "<mark>$1</mark>");
-
-    const extractYouTubeId = (url) => {
-      try {
-        const u = new URL(url);
-        if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0];
-        if (u.hostname.endsWith("youtube.com")) return u.searchParams.get("v");
-      } catch {}
-      return null;
-    };
-
-    const extractVimeoId = (url) => {
-      try {
-        const u = new URL(url);
-        if (u.hostname === "vimeo.com" || u.hostname.endsWith(".vimeo.com")) {
-          const match = u.pathname.match(/\/(\d+)/);
-          return match ? match[1] : null;
-        }
-      } catch {}
-      return null;
-    };
-
-    const renderer = new marked.Renderer();
-    const originalImage = renderer.image.bind(renderer);
-    renderer.image = (href, title, text) => {
-      const youtubeId = extractYouTubeId(href);
-      if (youtubeId) {
-        return `<iframe class="video-embed" src="https://www.youtube-nocookie.com/embed/${youtubeId}" width="560" height="315" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
-      }
-      const vimeoId = extractVimeoId(href);
-      if (vimeoId) {
-        return `<iframe class="video-embed" src="https://player.vimeo.com/video/${vimeoId}" width="560" height="315" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>`;
-      }
-      if (/^https:\/\//i.test(href) && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(href)) {
-        return `<video class="video-embed" src="${href}" controls></video>`;
-      }
-      return originalImage(href, title, text);
-    };
-
-    const html = marked.parse(withHighlight, { renderer });
-    return sanitizeHtml(frontmatterHtml + html);
-  };
-
-  const sanitizeHtml = (html) => {
-    const baseUrl = notesBaseUrl || "";
-    const basePath = notesBasePath || "";
-
-    const normalizeFsPath = (inputPath) => {
-      if (!inputPath) return "";
-      let value = decodeURIComponent(String(inputPath)).replace(/\\/g, "/");
-      if (/^\/[a-zA-Z]:\//.test(value)) {
-        value = value.slice(1);
-      }
-      const parts = [];
-      value.split("/").forEach((part) => {
-        if (!part || part === ".") return;
-        if (part === "..") {
-          if (parts.length) parts.pop();
-          return;
-        }
-        parts.push(part);
-      });
-      return parts.join("/");
-    };
-
-    const isPathInsideBase = (candidatePath) => {
-      if (!basePath) return false;
-      const normalizedBase = normalizeFsPath(basePath).toLowerCase();
-      const normalizedCandidate = normalizeFsPath(candidatePath).toLowerCase();
-      if (!normalizedBase) return false;
-      if (normalizedCandidate === normalizedBase) return true;
-      return normalizedCandidate.startsWith(`${normalizedBase}/`);
-    };
-
-    const fileUrlToPath = (fileUrl) => {
-      try {
-        const url = new URL(fileUrl);
-        if (url.protocol !== "file:") return null;
-        return url.pathname;
-      } catch {
-        return null;
-      }
-    };
-
-    const normalizeSrc = (rawValue) => {
-      const value = String(rawValue || "").trim();
-      if (!value) return null;
-
-      if (/^https:\/\//i.test(value)) return value;
-
-      if (/^file:\/\//i.test(value)) {
-        const filePath = fileUrlToPath(value);
-        if (!filePath || !isPathInsideBase(filePath)) return null;
-        return value;
-      }
-
-      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
-        return null;
-      }
-
-      if (!baseUrl) return null;
-
-      try {
-        const resolved = new URL(value, baseUrl).toString();
-        const resolvedPath = fileUrlToPath(resolved);
-        if (!resolvedPath || !isPathInsideBase(resolvedPath)) return null;
-        return resolved;
-      } catch {
-        return null;
-      }
-    };
-
-    const normalizeHref = (rawValue) => {
-      const value = String(rawValue || "").trim();
-      if (!value) return null;
-
-      if (/^https:\/\//i.test(value) || /^mailto:/i.test(value)) {
-        return value;
-      }
-
-      if (/^file:\/\//i.test(value)) {
-        const filePath = fileUrlToPath(value);
-        if (!filePath || !isPathInsideBase(filePath)) return null;
-        return value;
-      }
-
-      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
-        return null;
-      }
-
-      if (!baseUrl) return null;
-
-      try {
-        const resolved = new URL(value, baseUrl).toString();
-        const resolvedPath = fileUrlToPath(resolved);
-        if (!resolvedPath || !isPathInsideBase(resolvedPath)) return null;
-        return resolved;
-      } catch {
-        return null;
-      }
-    };
-
-    const sanitized = DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: [
-        "a",
-        "abbr",
-        "b",
-        "blockquote",
-        "br",
-        "code",
-        "del",
-        "div",
-        "em",
-        "font",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "hr",
-        "i",
-        "iframe",
-        "img",
-        "li",
-        "mark",
-        "ol",
-        "p",
-        "pre",
-        "span",
-        "strong",
-        "table",
-        "tbody",
-        "thead",
-        "tr",
-        "td",
-        "th",
-        "input",
-        "u",
-        "ul",
-        "video",
-      ],
-      ALLOWED_ATTR: [
-        "href",
-        "target",
-        "rel",
-        "src",
-        "alt",
-        "title",
-        "color",
-        "face",
-        "size",
-        "width",
-        "height",
-        "loading",
-        "frameborder",
-        "allowfullscreen",
-        "allow",
-        "class",
-        "controls",
-        "type",
-        "checked",
-        "disabled",
-      ],
-      KEEP_CONTENT: true,
-    });
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(sanitized, "text/html");
-    const nodes = Array.from(doc.body.querySelectorAll("*"));
-    let checkboxIdx = 0;
-    nodes.forEach((node) => {
-      const tagName = node.tagName.toLowerCase();
-
-      if (tagName === "a") {
-        const href = normalizeHref(node.getAttribute("href"));
-        if (!href) {
-          node.removeAttribute("href");
-        } else {
-          node.setAttribute("href", href);
-        }
-        node.setAttribute("rel", "noopener noreferrer");
-        node.setAttribute("target", "_blank");
-      }
-
-      if (tagName === "img" || tagName === "video") {
-        const src = normalizeSrc(node.getAttribute("src"));
-        if (!src) {
-          node.remove();
-          return;
-        }
-        node.setAttribute("src", src);
-        if (tagName === "img" && !node.getAttribute("loading")) {
-          node.setAttribute("loading", "lazy");
-        }
-      }
-
-      if (tagName === "iframe") {
-        const ALLOWED_IFRAME_ORIGINS = [
-          "https://www.youtube-nocookie.com",
-          "https://www.youtube.com",
-          "https://player.vimeo.com",
-        ];
-        const src = node.getAttribute("src") || "";
-        const allowed = ALLOWED_IFRAME_ORIGINS.some((origin) =>
-          src.startsWith(origin + "/")
-        );
-        if (!allowed) {
-          node.remove();
-          return;
-        }
-      }
-
-      if (tagName === "input" && node.getAttribute("type") === "checkbox") {
-        node.removeAttribute("disabled");
-        node.setAttribute("data-idx", checkboxIdx++);
-      }
-    });
-
-    return doc.body.innerHTML;
-  };
-
-  const renderedNoteHtml = useMemo(
-    () => renderNoteMarkdown(noteInitialContent, isNoteLoading),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [noteInitialContent, isNoteLoading, notesBaseUrl, notesBasePath]
-  );
-
-  const handleTaskToggle = useCallback((idx) => {
-    let count = 0;
-    const newContent = noteInitialContent.replace(
-      /^(\s*[-*+] \[)([ x])(\])/gm,
-      (match, pre, state, post) => {
-        if (count++ === idx) return `${pre}${state === " " ? "x" : " "}${post}`;
-        return match;
-      }
-    );
-    setNoteInitialContent(newContent);
-    handleNoteSave(newContent);
-  }, [noteInitialContent, handleNoteSave]);
-
-  const noteViewCallbackRef = useCallback((node) => {
-    noteRenderRef.current = node;
-    if (node) node.innerHTML = renderedNoteHtml;
-  }, [renderedNoteHtml]);
 
   const showLegacyBreaks = timelineData?.file?.allowLegacyBreaks === true;
 
@@ -1741,65 +868,19 @@ export default function RightPanel({
               </>
             )}
 
-            {timelineData?.file?.useWikipedia && formData.wikiUrl && (
-              <>
-                <div className="note-divider" />
-                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsWikiCollapsed(v => !v)}>
-                  <span className="rp-note-label rp-note-label-wiki">Wiki</span>
-                  <span className="sources-collapse-right">
-                    <a
-                      className="rp-note-meta wiki-header-link"
-                      href={formData.wikiUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open in browser"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Open article
-                    </a>
-                    <ChevronDown size={14} style={{transform: isWikiCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
-                  </span>
-                </button>
-                {!isWikiCollapsed && (isWikiLoading ? (
-                  <div className="wiki-loading">Loading wiki article...</div>
-                ) : wikiError ? (
-                  <div className="wiki-error">{wikiError}</div>
-                ) : (
-                  <div
-                    ref={wikiRenderRef}
-                    className="wiki-render"
-                    dangerouslySetInnerHTML={{ __html: wikiContent }}
-                  />
-                ))}
-              </>
-            )}
+            <WikiSection
+              wikiUrl={formData.wikiUrl}
+              useWikipedia={timelineData?.file?.useWikipedia}
+              isEditMode={false}
+              onUrlChange={handleWikiUrlChange}
+            />
 
-            {Array.isArray(formData.sources) && formData.sources.length > 0 && (
-              <>
-                <div className="note-divider" />
-                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsSourcesCollapsed(v => !v)}>
-                  <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
-                  <span className="sources-collapse-right">
-                    <span className="rp-note-meta">{formData.sources.length}</span>
-                    <ChevronDown size={14} style={{transform: isSourcesCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
-                  </span>
-                </button>
-                {!isSourcesCollapsed && (
-                  <div className="sources-list">
-                    {formData.sources.map((src, i) => (
-                      <div key={i} className="wiki-url-card">
-                        <div className="wiki-url-card-avatar">{src.title.charAt(0).toUpperCase()}</div>
-                        <div className="wiki-url-card-info">
-                          <div className="wiki-url-card-title">{src.title}</div>
-                          {(src.description || src.citation) && <div className="wiki-url-card-host">{src.description || src.citation}</div>}
-                        </div>
-                        {src.url && <a href={src.url} target="_blank" rel="noopener noreferrer" className="wiki-url-card-btn" title="Open"><ExternalLink size={13} /></a>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            <SourcesSection
+              sources={formData.sources}
+              sourceLink={formData.sourceLink}
+              isEditMode={false}
+              onSourcesChange={handleSourcesChange}
+            />
           </div>
         ) : (
           /* Edit Mode */
@@ -2236,31 +1317,6 @@ export default function RightPanel({
             {/* Group (events and spans only) */}
             {(formData.type === "event" || formData.type === "span") && (() => {
               const groups = timelineData?.file?.groups || [];
-              const filteredGroups = groups.filter((g) =>
-                !newGroupName || (g.title || g.id).toLowerCase().includes(newGroupName.toLowerCase())
-              );
-              const handleGroupBlur = () => {
-                groupMenuTimeoutRef.current = setTimeout(() => setIsGroupMenuOpen(false), 150);
-              };
-              const addGroup = (name) => {
-                const trimmed = name.trim();
-                if (!trimmed) return;
-                const id = `g-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-                if (groups.some((g) => g.id === id)) {
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                } else {
-                  const maxStack = groups.reduce((max, g) => Math.max(max, g.stack || 0), 0);
-                  const newGroup = { id, title: trimmed, order: groups.length, stack: maxStack + 1, visible: true };
-                  onUpdateGroups([...groups, newGroup]);
-                  const next = { ...formData, groupId: id };
-                  setFormData(next);
-                  commitDraft(next);
-                }
-                setNewGroupName("");
-                setIsGroupMenuOpen(false);
-              };
               return (
                 <div className="form-group">
                   <div className="edit-row">
@@ -2740,192 +1796,18 @@ export default function RightPanel({
                   />
                 </div>
               )}
-              {timelineData?.file?.useWikipedia && !formData.wikiUrl && !isWikiUrlInputOpen && (
-                <button type="button" className="note-create-card" onClick={handleOpenWikiInput}>
-                  <div className="note-create-card-icon"><BookOpen size={18} /></div>
-                  <div className="note-create-card-text">
-                    <span className="note-create-card-title">Add wiki</span>
-                    <span className="note-create-card-subtitle">Link a MediaWiki article</span>
-                  </div>
-                </button>
-              )}
-              {timelineData?.file?.useWikipedia && isWikiUrlInputOpen && (
-                <div className="wiki-url-input-card">
-                  <div className="source-field">
-                    <label className="source-field-label">URL</label>
-                    <input
-                      ref={wikiUrlInputRef}
-                      type="text"
-                      className={`source-field-input${wikiUrlInputError ? " settings-input-error" : ""}`}
-                      value={wikiUrlInput}
-                      onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
-                      onKeyDown={handleWikiUrlKeyDown}
-                      placeholder="https://en.wikipedia.org/wiki/…"
-                    />
-                    {wikiUrlInputError && (
-                      <div className="wiki-url-error">{wikiUrlInputError}</div>
-                    )}
-                  </div>
-                  <div className="source-add-actions">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => { setIsWikiUrlInputOpen(false); setWikiUrlInputError(""); }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={handleWikiUrlSubmit}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
-              {timelineData?.file?.useWikipedia && formData.wikiUrl && !isWikiUrlInputOpen && (() => {
-                const parsedWiki = parseMediaWikiUrl(formData.wikiUrl);
-                if (!parsedWiki) return null;
-                const safeUrl = `${parsedWiki.host}/wiki/${encodeURIComponent(parsedWiki.title)}`;
-                const articleTitle = parsedWiki.title.replace(/_/g, " ");
-                let articleHost = "";
-                try { articleHost = new URL(parsedWiki.host).hostname; } catch {}
-                const avatarLetter = articleTitle.charAt(0).toUpperCase();
-                return (
-                  <div className="wiki-url-card">
-                    <div className="wiki-url-card-avatar">{avatarLetter}</div>
-                    <div className="wiki-url-card-info">
-                      <div className="wiki-url-card-title">{articleTitle}</div>
-                      <div className="wiki-url-card-host">{articleHost}</div>
-                    </div>
-                    <div className="wiki-url-card-actions">
-                      <button
-                        type="button"
-                        className="wiki-url-card-btn"
-                        onClick={handleOpenWikiInput}
-                        title="Change"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="wiki-url-card-btn wiki-url-card-btn-remove"
-                        onClick={handleRemoveWikiUrl}
-                        title="Remove"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="sources-edit-section">
-                <button type="button" className="rp-note-header sources-collapse-btn" onClick={() => setIsSourcesCollapsed(v => !v)}>
-                  <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
-                  <span className="sources-collapse-right">
-                    {Array.isArray(formData.sources) && formData.sources.length > 0 && (
-                      <span className="rp-note-meta">{formData.sources.length}</span>
-                    )}
-                    <ChevronDown size={14} style={{transform: isSourcesCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
-                  </span>
-                </button>
-                {!isSourcesCollapsed && <div className="sources-list">
-                  {(Array.isArray(formData.sources) ? formData.sources : []).map((src, i) => (
-                    editingSourceIndex === i ? (
-                      <div key={i} className="source-add-form" style={{marginTop: 0, paddingTop: 8, borderTop: 'none'}}>
-                        <div className="source-field">
-                          <label className="source-field-label">Title</label>
-                          <input type="text" className="source-field-input" value={sourceTitle} onChange={(e) => setSourceTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} autoFocus />
-                        </div>
-                        <div className="source-field">
-                          <label className="source-field-label">URL (optional)</label>
-                          <input type="text" className="source-field-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} />
-                        </div>
-                        <div className="source-field">
-                          <label className="source-field-label">Description (optional)</label>
-                          <textarea className="source-field-input source-field-textarea" value={sourceDescription} onChange={(e) => setSourceDescription(e.target.value)} placeholder="Author, year, notes…" rows={2} onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}} />
-                        </div>
-                        <div className="source-add-actions">
-                          <button type="button" className="btn-secondary" onClick={() => { setEditingSourceIndex(null); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}>Cancel</button>
-                          <button type="button" className="btn-primary" onClick={handleSaveEditedSource}>Save</button>
-                        </div>
-                      </div>
-                    ) : (
-                    <div key={i} className="source-item">
-                      <div className="wiki-url-card-avatar">{src.title.charAt(0).toUpperCase()}</div>
-                      <div className="source-text">
-                        <span className="source-title">{src.title}</span>
-                        {(src.description || src.citation) && <span className="source-citation">{src.description || src.citation}</span>}
-                      </div>
-                      <div className="source-item-actions">
-                        {src.url && (
-                          <button
-                            type="button"
-                            className={`wiki-url-card-btn${formData.sourceLink === src.url ? ' source-link-active' : ''}`}
-                            title={formData.sourceLink === src.url ? 'Remove featured link' : 'Set as featured link'}
-                            onClick={() => {
-                              const next = { ...formData, sourceLink: formData.sourceLink === src.url ? undefined : src.url };
-                              if (!next.sourceLink) delete next.sourceLink;
-                              setFormData(next);
-                              commitDraft(next);
-                            }}
-                          ><Link size={13} /></button>
-                        )}
-                        <button type="button" className="wiki-url-card-btn" onClick={() => handleEditSource(i)} title="Edit"><Pencil size={13} /></button>
-                        <button type="button" className="wiki-url-card-btn wiki-url-card-btn-remove" onClick={() => handleRemoveSource(i)} title="Remove"><Trash2 size={13} /></button>
-                      </div>
-                    </div>
-                    )
-                  ))}
-                </div>}
-                {!isSourcesCollapsed && (isSourceFormOpen ? (
-                  <div className="source-add-form">
-                    <div className="source-field">
-                      <label className="source-field-label">Title</label>
-                      <input
-                        type="text"
-                        className="source-field-input"
-                        placeholder="Source title"
-                        value={sourceTitle}
-                        onChange={(e) => setSourceTitle(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="source-field">
-                      <label className="source-field-label">URL (optional)</label>
-                      <input
-                        type="text"
-                        className="source-field-input"
-                        placeholder="https://…"
-                        value={sourceUrl}
-                        onChange={(e) => setSourceUrl(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
-                      />
-                    </div>
-                    <div className="source-field">
-                      <label className="source-field-label">Description (optional)</label>
-                      <textarea
-                        className="source-field-input source-field-textarea"
-                        placeholder="Author, year, notes…"
-                        value={sourceDescription}
-                        onChange={(e) => setSourceDescription(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setIsSourceFormOpen(false); }}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="source-add-actions">
-                      <button type="button" className="btn-secondary" onClick={() => { setIsSourceFormOpen(false); setSourceTitle(""); setSourceUrl(""); setSourceDescription(""); }}>Cancel</button>
-                      <button type="button" className="btn-primary" onClick={handleAddSource}>Add source</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button type="button" className="source-add-btn" onClick={() => setIsSourceFormOpen(true)}>
-                    + Add source
-                  </button>
-                ))}
-              </div>
+              <WikiSection
+                wikiUrl={formData.wikiUrl}
+                useWikipedia={timelineData?.file?.useWikipedia}
+                isEditMode={true}
+                onUrlChange={handleWikiUrlChange}
+              />
+              <SourcesSection
+                sources={formData.sources}
+                sourceLink={formData.sourceLink}
+                isEditMode={true}
+                onSourcesChange={handleSourcesChange}
+              />
             </div>
 
           </form>

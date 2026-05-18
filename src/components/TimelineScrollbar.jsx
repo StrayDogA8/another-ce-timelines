@@ -4,7 +4,7 @@ import { parseTimelineInput, snapToMonthGrid, snapToDayGrid } from "../utils/dat
 import { formatYear } from "../utils/timelineUtils";
 
 /**
- * Standalone scrollbar component for plugin views.
+ * Standalone scrollbar component.
  * Computes year range from timeline data and provides a
  * play/pause slider that scrubs through years without
  * needing the full TimelineView mounted.

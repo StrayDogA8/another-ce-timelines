@@ -82,9 +82,6 @@ export async function apiDeleteTimeline(id) {
   return request('DELETE', `/api/timelines/${id}`);
 }
 
-export async function apiHealth() {
-  return request('GET', '/api/health');
-}
 
 export async function apiLogout() {
   return request('POST', '/api/auth/logout');

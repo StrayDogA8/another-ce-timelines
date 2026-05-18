@@ -1163,7 +1163,7 @@
   font-family: inherit;
   font-size: var(--text-xs);
   outline: none;
-  padding: 2px 2px;
+  padding: 2px;
   width: 120px;
   min-width: unset;
   box-sizing: content-box;

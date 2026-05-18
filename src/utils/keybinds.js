@@ -48,7 +48,7 @@ function isLegacyKeybindMap(keybinds) {
   );
 }
 
-export function serializeKeybinds(keybinds) {
+function serializeKeybinds(keybinds) {
   return Object.fromEntries(
     Object.entries(DEFAULT_KEYBINDS).map(([id, bind]) => [
       id,
@@ -59,7 +59,7 @@ export function serializeKeybinds(keybinds) {
   );
 }
 
-export function normalizeKeybinds(savedKeybinds) {
+function normalizeKeybinds(savedKeybinds) {
   const keybinds = cloneDefaultKeybinds();
   if (!savedKeybinds || typeof savedKeybinds !== "object") return keybinds;
 

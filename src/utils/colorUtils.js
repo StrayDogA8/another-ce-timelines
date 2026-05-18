@@ -1,4 +1,4 @@
-export const parseHexRGB = (hex) => {
+const parseHexRGB = (hex) => {
   if (typeof hex !== "string") return null;
   const v = hex.trim();
   const short = /^#([0-9a-f]{3})$/i.exec(v);
@@ -30,7 +30,7 @@ export const blendColors = (hex1, hex2, weight1 = 0.5) => {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 };
 
-export const isValidHexColor = (color) => /^#[0-9A-Fa-f]{6}$/.test(color);
+const isValidHexColor = (color) => /^#[0-9A-Fa-f]{6}$/.test(color);
 
 export const normalizeColor = (color) => {
   if (!color) return "#808080";

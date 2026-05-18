@@ -95,21 +95,6 @@ export function pickStep(range) {
   return niceBase * Math.pow(10, exponent);
 }
 
-const PREFERRED_LABEL_BASES = [1, 2, 5, 10, 50, 100];
-export function pickLabelStep(targetStep) {
-  if (!Number.isFinite(targetStep) || targetStep <= 0) return 1;
-  const exponent = Math.floor(Math.log10(targetStep));
-  let best = null;
-  for (let e = exponent - 2; e <= exponent + 2; e++) {
-    const scale = Math.pow(10, e);
-    for (const base of PREFERRED_LABEL_BASES) {
-      const candidate = base * scale;
-      if (candidate < targetStep) continue;
-      if (best === null || candidate < best) best = candidate;
-    }
-  }
-  return best ?? PREFERRED_LABEL_BASES[PREFERRED_LABEL_BASES.length - 1] * Math.pow(10, exponent + 1);
-}
 
 // build child -> { parentId, offset } from spans
 // Each child span declares its parent via span.parent (string ID).

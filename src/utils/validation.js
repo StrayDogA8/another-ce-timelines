@@ -94,12 +94,12 @@ export const getSpanNumericEnd = (span) => {
   return parsed.value ?? span.end;
 };
 
-export const stripInputs = (data) => {
+const stripInputs = (data) => {
   const { dateInput: _dateInput, startInput: _startInput, endInput: _endInput, ...rest } = data;
   return rest;
 };
 
-export const validateEventParents = (draft, timelineData) => {
+const validateEventParents = (draft, timelineData) => {
   const errors = [];
 
   if (draft.type === "event" && draft.parents && draft.parents.length > 0) {

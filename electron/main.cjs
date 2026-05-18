@@ -989,7 +989,7 @@ ipcMain.handle('get-app-settings', async () => {
 
 const ALLOWED_SETTINGS_KEYS = new Set([
   'timelineStorageDir', 'storageDir', 'notesStorageDir',
-  'pluginsStorageDir', 'themeKey', 'enabledPlugins',
+  'themeKey',
   'theme', 'notesSubfolder', 'notesSubfolderEnabled',
   'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration', 'startMaximized',
 ]);
