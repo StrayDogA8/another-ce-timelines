@@ -58,6 +58,7 @@ export default function RightPanel({
     handleAddExistingNote,
     handleDeleteNote,
     handleUnlinkNote,
+    handlePickLocalImage,
   } = useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate });
   const prevSelectedIdRef = useRef(null);
   const [spanParentQuery, setSpanParentQuery] = useState("");
@@ -1817,6 +1818,7 @@ export default function RightPanel({
                     onSave={handleNoteSave}
                     onUnlink={handleUnlinkNote}
                     onDelete={handleDeleteNote}
+                    onPickLocalImage={handlePickLocalImage}
                   />
                 </div>
               )}

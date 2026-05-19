@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ImagePlay } from "lucide-react";
+import { Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ImagePlay, Paperclip } from "lucide-react";
 
 const NoteEditor = forwardRef(function NoteEditor(
-  { initialContent, isNoteLoading, noteExists, onSave, onUnlink, onDelete },
+  { initialContent, isNoteLoading, noteExists, onSave, onUnlink, onDelete, onPickLocalImage },
   ref
 ) {
   const [noteContent, setNoteContent] = useState(initialContent ?? "");
@@ -78,6 +78,24 @@ const NoteEditor = forwardRef(function NoteEditor(
     });
   };
 
+  const insertLocalImage = async () => {
+    if (!onPickLocalImage) return;
+    const relativePath = await onPickLocalImage();
+    if (!relativePath) return;
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? noteContentRef.current.length;
+    const content = noteContentRef.current;
+    const before = content.slice(0, start);
+    const after = content.slice(start);
+    const token = `![](${relativePath})`;
+    setNoteContent(`${before}${token}${after}`);
+    const cursor = before.length + token.length;
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(cursor, cursor);
+    });
+  };
+
   const insertImage = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -111,6 +129,9 @@ const NoteEditor = forwardRef(function NoteEditor(
           <div className="note-toolbar-divider" />
           <button type="button" onClick={insertLink} title="Link"><Link2 size={14} /></button>
           <button type="button" onClick={insertImage} title="Embed image or video"><ImagePlay size={14} /></button>
+          {onPickLocalImage && (
+            <button type="button" onClick={insertLocalImage} title="Insert local image"><Paperclip size={14} /></button>
+          )}
         </div>
         {noteExists && (
           <div className="note-toolbar-actions">

@@ -1,7 +1,7 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
-export function sanitizeNoteHtml(html, baseUrl = "", basePath = "") {
+export function sanitizeNoteHtml(html, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "") {
   const normalizeFsPath = (inputPath) => {
     if (!inputPath) return "";
     let value = decodeURIComponent(String(inputPath)).replace(/\\/g, "/");
@@ -16,12 +16,16 @@ export function sanitizeNoteHtml(html, baseUrl = "", basePath = "") {
   };
 
   const isPathInsideBase = (candidatePath) => {
-    if (!basePath) return false;
-    const normalizedBase = normalizeFsPath(basePath).toLowerCase();
     const normalizedCandidate = normalizeFsPath(candidatePath).toLowerCase();
-    if (!normalizedBase) return false;
-    if (normalizedCandidate === normalizedBase) return true;
-    return normalizedCandidate.startsWith(`${normalizedBase}/`);
+    if (basePath) {
+      const normalizedBase = normalizeFsPath(basePath).toLowerCase();
+      if (normalizedBase && (normalizedCandidate === normalizedBase || normalizedCandidate.startsWith(`${normalizedBase}/`))) return true;
+    }
+    if (assetsBasePath) {
+      const normalizedAssets = normalizeFsPath(assetsBasePath).toLowerCase();
+      if (normalizedAssets && (normalizedCandidate === normalizedAssets || normalizedCandidate.startsWith(`${normalizedAssets}/`))) return true;
+    }
+    return false;
   };
 
   const fileUrlToPath = (fileUrl) => {
@@ -32,22 +36,42 @@ export function sanitizeNoteHtml(html, baseUrl = "", basePath = "") {
     } catch { return null; }
   };
 
+  const toAssetProtocol = (filePath) => {
+    if (!assetsBasePath) return null;
+    const normalizedCandidate = normalizeFsPath(filePath).toLowerCase();
+    const normalizedAssets = normalizeFsPath(assetsBasePath).toLowerCase();
+    if (!normalizedAssets) return null;
+    if (normalizedCandidate === normalizedAssets || normalizedCandidate.startsWith(`${normalizedAssets}/`)) {
+      return `timelines-asset://asset/${encodeURIComponent(normalizeFsPath(filePath))}`;
+    }
+    return null;
+  };
+
   const normalizeSrc = (rawValue) => {
     const value = String(rawValue || "").trim();
     if (!value) return null;
     if (/^https:\/\//i.test(value)) return value;
+    if (/^timelines-asset:\/\//i.test(value)) return value;
     if (/^file:\/\//i.test(value)) {
       const filePath = fileUrlToPath(value);
       if (!filePath || !isPathInsideBase(filePath)) return null;
-      return value;
+      return toAssetProtocol(filePath) ?? value;
     }
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) return null;
+
+    // Bare filename (no path separators) → resolve against assets timeline dir
+    if (assetsTimelineDir && !value.includes("/") && !value.includes("\\") && !value.startsWith(".")) {
+      const assetPath = normalizeFsPath(`${assetsTimelineDir}${value}`);
+      const assetProtocol = toAssetProtocol(assetPath);
+      if (assetProtocol) return assetProtocol;
+    }
+
     if (!baseUrl) return null;
     try {
       const resolved = new URL(value, baseUrl).toString();
       const resolvedPath = fileUrlToPath(resolved);
       if (!resolvedPath || !isPathInsideBase(resolvedPath)) return null;
-      return resolved;
+      return toAssetProtocol(resolvedPath) ?? resolved;
     } catch { return null; }
   };
 
@@ -129,7 +153,7 @@ export function sanitizeNoteHtml(html, baseUrl = "", basePath = "") {
   return doc.body.innerHTML;
 }
 
-export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = "") {
+export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "") {
   const raw = isLoading ? "_Loading note..._" : content || "";
 
   let frontmatterHtml = "";
@@ -183,5 +207,5 @@ export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = 
   };
 
   const html = marked.parse(withHighlight, { renderer });
-  return sanitizeNoteHtml(frontmatterHtml + html, baseUrl, basePath);
+  return sanitizeNoteHtml(frontmatterHtml + html, baseUrl, basePath, assetsBasePath, assetsTimelineDir);
 }

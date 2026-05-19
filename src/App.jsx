@@ -14,6 +14,8 @@ import {
   saveTimelineToFile,
   chooseTimelinesDir,
   chooseNotesDir,
+  chooseAssetsDir,
+  openAssetsFolder,
   listFonts,
   openFontsFolder,
   openTimelinesFolder,
@@ -172,6 +174,7 @@ function App() {
   const [appThemePreference, setAppThemePreference] = useState(defaultThemeKey);
   const [timelineStorageDir, setTimelineStorageDir] = useState("");
   const [notesStorageDir, setNotesStorageDir] = useState("");
+  const [assetsStorageDir, setAssetsStorageDir] = useState("");
   const [appFontFamily, setAppFontFamily] = useState("Inter");
   const [appFontSize, setAppFontSize] = useState(14);
   const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
@@ -1402,10 +1405,12 @@ function App() {
       setAppThemePreference(settings?.theme || defaultThemeKey);
       const storedTimelineDir = settings?.timelineStorageDir ?? settings?.storageDir ?? "";
       const storedNotesDir = settings?.notesStorageDir ?? "";
+      const storedAssetsDir = settings?.assetsStorageDir ?? "";
       const storedFontFamily = settings?.appFontFamily ?? "Inter";
       const storedFontSize = settings?.appFontSize ?? 14;
       setTimelineStorageDir(storedTimelineDir);
       setNotesStorageDir(storedNotesDir);
+      setAssetsStorageDir(storedAssetsDir);
       setAppFontFamily(storedFontFamily);
       setAppFontSize(storedFontSize);
       setHardwareAcceleration(settings?.hardwareAcceleration !== false);
@@ -1570,6 +1575,21 @@ function App() {
       theme: appThemePreference,
       timelineStorageDir,
       notesStorageDir: nextDir || "",
+      assetsStorageDir,
+      appFontFamily,
+      appFontSize,
+      hardwareAcceleration,
+      startMaximized,
+    });
+  };
+
+  const handleAssetsStorageDirChange = async (nextDir) => {
+    setAssetsStorageDir(nextDir || "");
+    await saveAppSettings({
+      theme: appThemePreference,
+      timelineStorageDir,
+      notesStorageDir,
+      assetsStorageDir: nextDir || "",
       appFontFamily,
       appFontSize,
       hardwareAcceleration,
@@ -1646,6 +1666,17 @@ function App() {
     if (result?.success && result.path) {
       await handleNotesStorageDirChange(result.path);
     }
+  };
+
+  const handlePickAssetsDir = async () => {
+    const result = await chooseAssetsDir();
+    if (result?.success && result.path) {
+      await handleAssetsStorageDirChange(result.path);
+    }
+  };
+
+  const handleOpenAssetsFolder = async () => {
+    await openAssetsFolder();
   };
 
 
@@ -1873,6 +1904,10 @@ function App() {
             onNotesStorageDirChange={handleNotesStorageDirChange}
             onPickTimelinesDir={handlePickTimelinesDir}
             onPickNotesDir={handlePickNotesDir}
+            assetsStorageDir={assetsStorageDir}
+            onAssetsStorageDirChange={handleAssetsStorageDirChange}
+            onPickAssetsDir={handlePickAssetsDir}
+            onOpenAssetsFolder={handleOpenAssetsFolder}
             onOpenFontsFolder={handleOpenFontsFolder}
             onOpenTimelinesFolder={handleOpenTimelinesFolder}
             onOpenNotesFolder={handleOpenNotesFolder}

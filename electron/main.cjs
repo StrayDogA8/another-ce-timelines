@@ -156,6 +156,23 @@ const getNotesDir = async (timelineId) => {
   return path.join(baseDir, ...safePath.split('/'));
 };
 
+const getAssetsRootDir = async () => {
+  const settings = await readAppSettings();
+  const customDir = settings?.assetsStorageDir;
+  if (customDir && typeof customDir === 'string') {
+    const trimmed = customDir.trim();
+    if (trimmed) return trimmed;
+  }
+  const notesRoot = await getNotesRootDir();
+  return path.join(path.dirname(notesRoot), '.assets');
+};
+
+const getAssetsDir = async (timelineId) => {
+  const baseDir = await getAssetsRootDir();
+  const safePath = sanitizeTimelinePath(String(timelineId || 'timeline'));
+  return path.join(baseDir, ...safePath.split('/'));
+};
+
 const getFontsDir = async () => defaultFontsDir();
 
 async function getStartupBackgroundColor() {
@@ -258,7 +275,8 @@ async function initializeUserData() {
 
 // Register custom protocol for serving local fonts
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local-font', privileges: { bypassCSP: true, supportFetchAPI: true, standard: true } }
+  { scheme: 'local-font', privileges: { bypassCSP: true, supportFetchAPI: true, standard: true } },
+  { scheme: 'timelines-asset', privileges: { bypassCSP: true, supportFetchAPI: true, standard: true, secure: true } },
 ]);
 
 // Auto-updater setup
@@ -354,6 +372,24 @@ ipcMain.handle('install-update', () => {
 
 app.whenReady().then(async () => {
   setupOsmTileRequestHeaders();
+  protocol.handle('timelines-asset', async (request) => {
+    try {
+      const url = new URL(request.url);
+      const encodedPath = url.pathname.slice(1);
+      const assetPath = decodeURIComponent(encodedPath);
+      const assetsDir = await getAssetsRootDir();
+      const normalizedAssetPath = path.normalize(assetPath);
+      const normalizedAssetsDir = path.normalize(assetsDir);
+      if (!normalizedAssetPath.startsWith(normalizedAssetsDir + path.sep)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      return net.fetch(pathToFileURL(normalizedAssetPath).toString());
+    } catch (error) {
+      console.error('Error serving asset:', error);
+      return new Response('Not found', { status: 404 });
+    }
+  });
+
   // Register protocol handler for local fonts
   protocol.handle('local-font', async (request) => {
     try {
@@ -991,7 +1027,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'timelineStorageDir', 'storageDir', 'notesStorageDir',
   'themeKey',
   'theme', 'notesSubfolder', 'notesSubfolderEnabled',
-  'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration', 'startMaximized',
+  'appFontFamily', 'appFontSize', 'keybinds', 'hardwareAcceleration', 'startMaximized', 'assetsStorageDir',
 ]);
 
 ipcMain.handle('set-app-settings', async (event, settings) => {
@@ -1167,6 +1203,29 @@ ipcMain.handle('open-timelines-folder', async () => {
   }
 });
 
+ipcMain.handle('choose-assets-dir', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (canceled || filePaths.length === 0) return { success: false, canceled: true };
+    return { success: true, path: filePaths[0] };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-assets-folder', async () => {
+  try {
+    const dir = await getAssetsRootDir();
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return { success: true, path: dir };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('open-notes-folder', async () => {
   try {
     const dir = await getNotesRootDir();
@@ -1227,6 +1286,58 @@ ipcMain.handle('get-notes-base-dir', async () => {
     return { success: true, path: dir, fileUrl };
   } catch (error) {
     console.error('Error resolving notes base dir:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-assets-base-dir', async () => {
+  try {
+    const dir = await getAssetsRootDir();
+    const fileUrl = pathToFileURL(dir).toString();
+    return { success: true, path: dir, fileUrl };
+  } catch (error) {
+    console.error('Error resolving assets base dir:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('pick-and-import-image', async (event, { timelineId }) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Image',
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths[0]) return { cancelled: true };
+
+    const imagePath = result.filePaths[0];
+    const assetsBase = await getAssetsRootDir();
+    const notesBase = await getNotesRootDir();
+    const timelineAssetsDir = await getAssetsDir(timelineId);
+    const normalizedImage = path.normalize(imagePath);
+    const normalizedAssetsBase = path.normalize(assetsBase);
+
+    let finalAssetPath;
+    if (normalizedImage.startsWith(normalizedAssetsBase + path.sep) || normalizedImage === normalizedAssetsBase) {
+      finalAssetPath = imagePath;
+    } else {
+      await fs.mkdir(timelineAssetsDir, { recursive: true });
+      let destPath = path.join(timelineAssetsDir, path.basename(imagePath));
+      let counter = 1;
+      while (true) {
+        try { await fs.access(destPath); } catch { break; }
+        const ext = path.extname(imagePath);
+        const base = path.basename(imagePath, ext);
+        destPath = path.join(timelineAssetsDir, `${base}-${counter}${ext}`);
+        counter++;
+      }
+      await fs.copyFile(imagePath, destPath);
+      finalAssetPath = destPath;
+    }
+
+    return { success: true, relativePath: path.basename(finalAssetPath) };
+  } catch (error) {
+    console.error('Error importing image:', error);
     return { success: false, error: error.message };
   }
 });

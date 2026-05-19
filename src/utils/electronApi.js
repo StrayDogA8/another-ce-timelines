@@ -174,6 +174,34 @@ export async function renameTimeline({ oldId, newId }) {
   }
 }
 
+export async function chooseAssetsDir() {
+  if (!isElectron()) return { success: false };
+  try { return await window.electron.chooseAssetsDir(); } catch (e) { return { success: false, error: e.message }; }
+}
+
+export async function openAssetsFolder() {
+  if (!isElectron()) return { success: false };
+  try { return await window.electron.openAssetsFolder(); } catch (e) { return { success: false, error: e.message }; }
+}
+
+export async function getAssetsBaseDir() {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.getAssetsBaseDir();
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function pickAndImportImage({ timelineId }) {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.pickAndImportImage({ timelineId });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getNotesBaseDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

@@ -105,13 +105,17 @@ export default function HomePage({
   onAppFontSizeChange,
   timelineStorageDir,
   notesStorageDir,
+  assetsStorageDir,
+  onAssetsStorageDirChange,
   onTimelineStorageDirChange,
   onNotesStorageDirChange,
   onPickTimelinesDir,
   onPickNotesDir,
+  onPickAssetsDir,
   onOpenFontsFolder,
   onOpenTimelinesFolder,
   onOpenNotesFolder,
+  onOpenAssetsFolder,
   hardwareAcceleration = true,
   onHardwareAccelerationChange,
   startMaximized = false,
@@ -1597,6 +1601,42 @@ export default function HomePage({
                               className="settings-folder-button"
                               type="button"
                               onClick={() => onNotesStorageDirChange?.("")}
+                            >
+                              Use Default
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-row">
+                      <div className="settings-row-left">
+                        <div className="settings-row-label">Assets Folder</div>
+                        <div
+                          className="settings-path-pill settings-path-pill-clickable"
+                          title={assetsStorageDir || "Default app storage"}
+                          onClick={() => onOpenAssetsFolder?.()}
+                        >
+                          <Folder className="settings-path-icon" size={14} />
+                          <span className="settings-path-text">
+                            {assetsStorageDir || "Default app storage"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="settings-row-right">
+                        <div className="settings-folder settings-folder-column">
+                          <div className="settings-folder-actions">
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onPickAssetsDir?.()}
+                            >
+                              Choose...
+                            </button>
+                            <button
+                              className="settings-folder-button"
+                              type="button"
+                              onClick={() => onAssetsStorageDirChange?.("")}
                             >
                               Use Default
                             </button>

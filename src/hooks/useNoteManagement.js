@@ -1,35 +1,34 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { renderNoteMarkdown } from "../utils/noteUtils";
-import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir } from "../utils/electronApi";
+import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage } from "../utils/electronApi";
 import { isSafeNoteFilename } from "../utils/validation";
 
 export function useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate }) {
+  const timelineId = timelineData?.file?.id?.replace("-timeline", "") ?? null;
   const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
   const [isNoteAddOpen, setIsNoteAddOpen] = useState(false);
   const [notesBaseUrl, setNotesBaseUrl] = useState("");
   const [notesBasePath, setNotesBasePath] = useState("");
+  const [assetsBasePath, setAssetsBasePath] = useState("");
   const noteEditorRef = useRef(null);
   const noteRenderRef = useRef(null);
 
-  // Load notes base directory once on mount
   useEffect(() => {
     let isMounted = true;
-    getNotesBaseDir().then((result) => {
+    Promise.all([getNotesBaseDir(), getAssetsBaseDir()]).then(([notesResult, assetsResult]) => {
       if (!isMounted) return;
-      if (result?.success && result.fileUrl) {
-        const normalized = result.fileUrl.endsWith("/") ? result.fileUrl : `${result.fileUrl}/`;
+      if (notesResult?.success && notesResult.fileUrl) {
+        const normalized = notesResult.fileUrl.endsWith("/") ? notesResult.fileUrl : `${notesResult.fileUrl}/`;
         setNotesBaseUrl(normalized);
       }
-      if (result?.success && result.path) {
-        setNotesBasePath(result.path);
-      }
+      if (notesResult?.success && notesResult.path) setNotesBasePath(notesResult.path);
+      if (assetsResult?.success && assetsResult.path) setAssetsBasePath(assetsResult.path);
     });
     return () => { isMounted = false; };
   }, []);
 
-  // Load note when selected element changes
   useEffect(() => {
     let isMounted = true;
     const loadNote = async () => {
@@ -84,9 +83,17 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     return noteInitialContent.trim().split(/\s+/).filter(Boolean).length;
   }, [noteInitialContent]);
 
+  const noteFileBaseUrl = notesBaseUrl && timelineId
+    ? `${notesBaseUrl}${timelineId}/`
+    : notesBaseUrl;
+
+  const assetsTimelineDir = assetsBasePath && timelineId
+    ? `${assetsBasePath.replace(/[/\\]$/, "")}/${timelineId}/`
+    : "";
+
   const renderedNoteHtml = useMemo(
-    () => renderNoteMarkdown(noteInitialContent, isNoteLoading, notesBaseUrl, notesBasePath),
-    [noteInitialContent, isNoteLoading, notesBaseUrl, notesBasePath]
+    () => renderNoteMarkdown(noteInitialContent, isNoteLoading, noteFileBaseUrl, notesBasePath, assetsBasePath, assetsTimelineDir),
+    [noteInitialContent, isNoteLoading, noteFileBaseUrl, notesBasePath, assetsBasePath, assetsTimelineDir]
   );
 
   const noteViewCallbackRef = useCallback((node) => {
@@ -170,6 +177,13 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     onUpdate?.(next);
   }, [formData, onUpdate, setFormData]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handlePickLocalImage = useCallback(async () => {
+    if (!timelineId) return null;
+    const result = await pickAndImportImage({ timelineId });
+    if (result?.cancelled || !result?.success) return null;
+    return result.relativePath;
+  }, [timelineId]);
+
   return {
     noteInitialContent,
     setNoteInitialContent,
@@ -189,5 +203,6 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     handleAddExistingNote,
     handleDeleteNote,
     handleUnlinkNote,
+    handlePickLocalImage,
   };
 }
