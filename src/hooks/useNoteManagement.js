@@ -184,6 +184,13 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     return result.relativePath;
   }, [timelineId]);
 
+  const handlePickThumbnail = useCallback(async () => {
+    if (!timelineId) return null;
+    const result = await pickAndImportImage({ timelineId });
+    if (result?.cancelled || !result?.success) return null;
+    return result.assetUrl;
+  }, [timelineId]);
+
   return {
     noteInitialContent,
     setNoteInitialContent,
@@ -204,5 +211,6 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     handleDeleteNote,
     handleUnlinkNote,
     handlePickLocalImage,
+    handlePickThumbnail,
   };
 }

@@ -2974,7 +2974,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={event.id}
                         data-id={event.id}
-                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.sourceLink ? " has-source-link" : ""}`}
+                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.sourceLink ? " has-source-link" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
                         style={{
                           left: `${event._x}px`,
                           top: `${event.top}px`,
@@ -2982,12 +2982,19 @@ const TimelineView = forwardRef(function TimelineView({
                           border: borderValue,
                           height: event._isMultiLine ? "auto" : undefined,
                           ...(eventBg && { backgroundColor: eventBg }),
+                          ...(event._squareSize && { width: `${event._squareSize}px`, height: `${event._squareSize}px`, padding: 0 }),
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleSelect(event.id);
                         }}
                       >
+                        {event.thumbnail && (event.thumbnailStyle === "square-fill" || event.thumbnailStyle === "circle-fill") ? (
+                          <img className={event.thumbnailStyle === "circle-fill" ? "event-thumbnail-circle" : "event-thumbnail-square"} src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />
+                        ) : (<>
+                        {event.thumbnail && event.thumbnailStyle !== "banner" && <img className="event-thumbnail-tile" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                        {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                        <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
                         <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
                         {event.sourceLink && (
                           <a
@@ -3026,6 +3033,8 @@ const TimelineView = forwardRef(function TimelineView({
                             );
                           })()}
                         </div>}
+                        </div>
+                        </>)}
                       </div>
                     );
                   })}
@@ -3236,20 +3245,27 @@ const TimelineView = forwardRef(function TimelineView({
               <div
                 key={event.id}
                 data-id={event.id}
-                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}`}
+                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
                 style={{
                   left: `${event._x}px`,
                   top: `${event.top}px`,
                   position: "absolute",
                   border: borderValue,
                   height: event._isMultiLine ? "auto" : undefined,
+                  ...(event._squareSize && { width: `${event._squareSize}px`, height: `${event._squareSize}px`, padding: 0 }),
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelect(event.id);
                 }}
               >
-                <div className="event-title">{event.title}</div>
+                {event.thumbnail && event.thumbnailStyle === "square-fill" ? (
+                  <img className="event-thumbnail-square" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />
+                ) : (<>
+                {event.thumbnail && event.thumbnailStyle !== "banner" && <img className="event-thumbnail-tile" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
+                <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
                 {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
                   {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}</span>}
                   {(() => {
@@ -3277,6 +3293,8 @@ const TimelineView = forwardRef(function TimelineView({
                     );
                   })()}
                 </div>}
+                </div>
+                </>)}
               </div>
             );
           })}

@@ -59,6 +59,7 @@ export default function RightPanel({
     handleDeleteNote,
     handleUnlinkNote,
     handlePickLocalImage,
+    handlePickThumbnail,
   } = useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate });
   const prevSelectedIdRef = useRef(null);
   const [spanParentQuery, setSpanParentQuery] = useState("");
@@ -76,6 +77,7 @@ export default function RightPanel({
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const tagMenuTimeoutRef = useRef(null);
   const [isNoteCollapsed, setIsNoteCollapsed] = useState(false);
+  const [thumbnailMeta, setThumbnailMeta] = useState(null);
   const panelRef = useRef(null);
   const datePickerRefs = useRef({});
   const TAG_MAX_LENGTH = 32;
@@ -1553,6 +1555,132 @@ export default function RightPanel({
                   </div>
                 </div>
               </>
+            )}
+
+            {formData.type === "event" && (
+              <div className="form-group">
+                <div className="edit-row thumbnail-edit-row">
+                  <label>thumbnail</label>
+                  <div className="edit-separator" />
+                  <div className="thumbnail-card-wrap">
+                    {formData.thumbnail ? (
+                      <>
+                        <img
+                          key={formData.thumbnail}
+                          className="thumbnail-card-img"
+                          src={formData.thumbnail}
+                          alt=""
+                          onLoad={(e) => {
+                            let ext = '';
+                            try {
+                              const decoded = decodeURIComponent(formData.thumbnail);
+                              ext = decoded.split(/[/\\]/).pop()?.split('.').pop()?.toLowerCase() ?? '';
+                            } catch {
+                              ext = formData.thumbnail.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
+                            }
+                            setThumbnailMeta({ width: e.target.naturalWidth, height: e.target.naturalHeight, ext });
+                          }}
+                        />
+                        <div className="thumbnail-card-info">
+                          <div className="thumbnail-card-name">
+                            {(() => {
+                              try {
+                                const decoded = decodeURIComponent(formData.thumbnail);
+                                const parts = decoded.split(/[/\\]/);
+                                return parts[parts.length - 1] || 'image';
+                              } catch {
+                                return formData.thumbnail.split('/').pop()?.split('?')[0] ?? 'image';
+                              }
+                            })()}
+                          </div>
+                          {thumbnailMeta && (
+                            <div className="thumbnail-card-meta">
+                              {thumbnailMeta.width}×{thumbnailMeta.height} · {thumbnailMeta.ext}
+                            </div>
+                          )}
+                          <div className="thumbnail-card-controls">
+                            <div className="thumbnail-style-btn">
+                              <span className="thumbnail-style-swatch" />
+                              <span className="thumbnail-style-label">
+                                {formData.thumbnailStyle === 'banner' ? 'Top banner' :
+                                 formData.thumbnailStyle === 'square-fill' ? 'Square fill' :
+                                 formData.thumbnailStyle === 'circle-fill' ? 'Circle fill' : 'Left strip'}
+                              </span>
+                              <ChevronDown size={9} />
+                              <select
+                                className="thumbnail-style-select"
+                                value={formData.thumbnailStyle ?? "strip"}
+                                onChange={(e) => {
+                                  const next = { ...formData, thumbnailStyle: e.target.value };
+                                  setFormData(next);
+                                  commitDraft(next);
+                                }}
+                              >
+                                <option value="strip">Left strip</option>
+                                <option value="banner">Top banner</option>
+                                <option value="square-fill">Square fill</option>
+                                <option value="circle-fill">Circle fill</option>
+                              </select>
+                            </div>
+                            <div className="thumbnail-fit-toggle">
+                              <button
+                                type="button"
+                                className={`thumbnail-fit-btn${(formData.thumbnailFit ?? "cover") === "cover" ? " is-active" : ""}`}
+                                onClick={() => { const next = { ...formData, thumbnailFit: "cover" }; setFormData(next); commitDraft(next); }}
+                                title="Fill — crop to fill the square"
+                              >Fill</button>
+                              <button
+                                type="button"
+                                className={`thumbnail-fit-btn${formData.thumbnailFit === "contain" ? " is-active" : ""}`}
+                                onClick={() => { const next = { ...formData, thumbnailFit: "contain" }; setFormData(next); commitDraft(next); }}
+                                title="Fit — show full image"
+                              >Fit</button>
+                            </div>
+                          </div>
+                          <div className="thumbnail-card-links">
+                            <button
+                              type="button"
+                              className="thumbnail-link-btn"
+                              onClick={async () => {
+                                const url = await handlePickThumbnail();
+                                if (!url) return;
+                                const next = { ...formData, thumbnail: url };
+                                setFormData(next);
+                                commitDraft(next);
+                              }}
+                            >Replace</button>
+                            <span className="thumbnail-link-sep">·</span>
+                            <button
+                              type="button"
+                              className="thumbnail-link-btn thumbnail-link-btn-remove"
+                              onClick={() => {
+                                const next = { ...formData };
+                                delete next.thumbnail;
+                                setFormData(next);
+                                commitDraft(next);
+                              }}
+                            >Remove</button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="settings-folder-button"
+                        onClick={async () => {
+                          const url = await handlePickThumbnail();
+                          if (!url) return;
+                          const next = { ...formData, thumbnail: url };
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      >
+                        Upload
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Icon */}

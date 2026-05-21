@@ -1335,7 +1335,8 @@ ipcMain.handle('pick-and-import-image', async (event, { timelineId }) => {
       finalAssetPath = destPath;
     }
 
-    return { success: true, relativePath: path.basename(finalAssetPath) };
+    const assetUrl = `timelines-asset://asset/${encodeURIComponent(path.normalize(finalAssetPath))}`;
+    return { success: true, relativePath: path.basename(finalAssetPath), assetUrl };
   } catch (error) {
     console.error('Error importing image:', error);
     return { success: false, error: error.message };

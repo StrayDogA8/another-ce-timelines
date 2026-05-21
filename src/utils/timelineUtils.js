@@ -608,22 +608,57 @@ export function layoutEvents({
   const probeYearSpan = document.createElement("span");
   probeYearSpan.className = "event-year";
   probeYearSpan.textContent = "0000";
+  const probeTags = document.createElement("span");
+  probeTags.className = "pinned-tags probe-tags";
+  let probeTextContent = null;
   probeDate.appendChild(probeYearSpan);
-  const probePinnedTagsSpan = document.createElement("span");
-  probePinnedTagsSpan.className = "pinned-tags";
-  probeDate.appendChild(probePinnedTagsSpan);
   probe.appendChild(probeTitle);
   probe.appendChild(probeDate);
 
+  const getVisiblePinnedTags = (tags) =>
+    (Array.isArray(tags) ? tags : []).filter((tag) => pinnedTags.includes(tag));
+
   const setProbeTags = (tags) => {
-    probePinnedTagsSpan.innerHTML = "";
-    const visible = (Array.isArray(tags) ? tags : []).filter((t) => pinnedTags.includes(t));
-    visible.forEach((tag) => {
+    probeTags.innerHTML = "";
+    tags.forEach((tag) => {
       const span = document.createElement("span");
-      span.className = "pinned-tag";
+      span.className = "pinned-tag probe-tag";
       span.textContent = tag;
-      probePinnedTagsSpan.appendChild(span);
+      probeTags.appendChild(span);
     });
+  };
+  const syncProbeDateRow = ({ showDateRow, showYear, visibleTags, hasThumbnailLayout = false }) => {
+    probe.classList.toggle("event-no-year", !showDateRow);
+
+    const dateParent = hasThumbnailLayout ? probeTextContent : probe;
+    if (!showDateRow) {
+      if (probeDate.parentNode) probeDate.remove();
+      return;
+    }
+
+    if (probeDate.parentNode !== dateParent) {
+      probeDate.remove();
+      dateParent.appendChild(probeDate);
+    }
+
+    if (showYear) {
+      if (probeYearSpan.parentNode !== probeDate) {
+        probeYearSpan.remove();
+        probeDate.insertBefore(probeYearSpan, probeDate.firstChild);
+      }
+    } else if (probeYearSpan.parentNode === probeDate) {
+      probeYearSpan.remove();
+    }
+
+    if (visibleTags.length > 0) {
+      setProbeTags(visibleTags);
+      if (probeTags.parentNode !== probeDate) {
+        probeTags.remove();
+        probeDate.appendChild(probeTags);
+      }
+    } else if (probeTags.parentNode === probeDate) {
+      probeTags.remove();
+    }
   };
   Object.assign(probe.style, {
     position: "absolute",
@@ -638,34 +673,120 @@ export function layoutEvents({
 
   // Measure the fixed single-line height from CSS
   probeTitle.textContent = "X";
+  syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
   const singleLineHeight = probe.offsetHeight;
+  syncProbeDateRow({ showDateRow: false, showYear: false, visibleTags: [] });
+  const noYearSingleLineHeight = probe.offsetHeight;
+  syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
 
   let measureEvent;
   if (fixedEventHeight) {
     // OverflowTags ensures tags never wrap when fixedEventHeight is on,
     // so the box is always the single-line CSS height.
-    measureEvent = () => ({ boxHeight: singleLineHeight, isMultiLine: false });
+    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears) => {
+      if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
+        const squareSize = compactEvents ? 60 : 70;
+        return { boxHeight: squareSize + VERTICAL_GAP, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
+      }
+      const visibleTags = getVisiblePinnedTags(tags);
+      const showDateRow = hideYears !== true || visibleTags.length > 0;
+      return { boxHeight: showDateRow ? singleLineHeight : noYearSingleLineHeight, isMultiLine: false, boxWidth: EVENT_WIDTH };
+    };
   } else {
     // Switch to auto-height for measuring multi-line content
     probe.classList.add("multi-lane");
     probe.style.height = "auto";
+    syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
     const baseContentHeight = probe.offsetHeight;
+    syncProbeDateRow({ showDateRow: false, showYear: false, visibleTags: [] });
+    const noYearBaseContentHeight = probe.offsetHeight;
+    syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
 
     // Reusable icon placeholder
     const probeIcon = document.createElement("span");
     probeIcon.style.cssText = "float: left; width: 10px; height: 10px; margin-right: 3px; margin-top: 1px;";
 
-    measureEvent = (title, tags, yearLabel, icon) => {
+    const probeThumbnailTile = document.createElement("div");
+    probeThumbnailTile.className = "event-thumbnail-tile";
+    // Fix the width for probe measurement since aspect-ratio:1 is based on height
+    probeThumbnailTile.style.width = `${singleLineHeight}px`;
+    probeTextContent = document.createElement("div");
+    probeTextContent.className = "event-text-content";
+
+    probe.classList.add("has-thumbnail");
+    probeTextContent.appendChild(probeTitle);
+    probeTextContent.appendChild(probeDate);
+    probe.innerHTML = "";
+    probe.appendChild(probeThumbnailTile);
+    probe.appendChild(probeTextContent);
+    probeTitle.textContent = "X";
+    syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [], hasThumbnailLayout: true });
+    const thumbnailBaseContentHeight = probe.offsetHeight;
+    syncProbeDateRow({ showDateRow: false, showYear: false, visibleTags: [], hasThumbnailLayout: true });
+    const thumbnailNoYearBaseContentHeight = probe.offsetHeight;
+
+
+    probe.classList.remove("has-thumbnail");
+    probe.innerHTML = "";
+    probe.appendChild(probeTitle);
+    probe.appendChild(probeDate);
+    syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
+
+    let lastHasThumbnail = false;
+
+    const setupProbeLayout = (hasThumbnail) => {
+      if (hasThumbnail === lastHasThumbnail) return;
+      lastHasThumbnail = hasThumbnail;
+      probe.innerHTML = "";
+      if (hasThumbnail) {
+        probe.classList.add("has-thumbnail");
+        probeTextContent.appendChild(probeTitle);
+        probeTextContent.appendChild(probeDate);
+        probe.appendChild(probeThumbnailTile);
+        probe.appendChild(probeTextContent);
+      } else {
+        probe.classList.remove("has-thumbnail");
+        probe.appendChild(probeTitle);
+        probe.appendChild(probeDate);
+      }
+    };
+
+    const BANNER_HEIGHT = compactEvents ? 36 : 48;
+
+    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears) => {
+      if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
+        const squareSize = compactEvents ? 60 : 70;
+        return { boxHeight: squareSize + VERTICAL_GAP, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
+      }
+      const isBanner = thumbnail && thumbnailStyle === "banner";
+      const visibleTags = getVisiblePinnedTags(tags);
+      const showDateRow = hideYears !== true || visibleTags.length > 0;
+      const showYear = hideYears !== true;
+      setupProbeLayout(thumbnail && !isBanner);
+      syncProbeDateRow({
+        showDateRow,
+        showYear,
+        visibleTags,
+        hasThumbnailLayout: thumbnail && !isBanner,
+      });
+      const baseline = showDateRow
+        ? ((thumbnail && !isBanner) ? thumbnailBaseContentHeight : baseContentHeight)
+        : ((thumbnail && !isBanner) ? thumbnailNoYearBaseContentHeight : noYearBaseContentHeight);
       probeTitle.innerHTML = "";
       if (icon) probeTitle.appendChild(probeIcon);
       probeTitle.appendChild(document.createTextNode(title || "X"));
-      probeYearSpan.textContent = yearLabel || "0000";
-      setProbeTags(tags);
+      if (showYear) {
+        probeYearSpan.textContent = yearLabel || "0000";
+      }
       const naturalHeight = probe.offsetHeight;
-      const isMultiLine = naturalHeight > baseContentHeight;
+      if (isBanner) {
+        return { boxHeight: naturalHeight + BANNER_HEIGHT, isMultiLine: true, boxWidth: EVENT_WIDTH };
+      }
+      const isMultiLine = naturalHeight > baseline;
       return {
-        boxHeight: isMultiLine ? naturalHeight : singleLineHeight,
+        boxHeight: isMultiLine ? naturalHeight : (showDateRow ? singleLineHeight : noYearSingleLineHeight),
         isMultiLine,
+        boxWidth: EVENT_WIDTH,
       };
     };
   }
@@ -673,16 +794,27 @@ export function layoutEvents({
   // Use continuous vertical packing instead of discrete lanes
   const VERTICAL_GAP = Math.max(0, LANE_SPACING - singleLineHeight);
   const LANE0_TOP = BASE_LINE_Y - spanBandHeight - BOX_OFFSET;
-  const placed = []; // { xEnd, top, boxHeight }
+  const placed = []; // { left, right, top, boxHeight }
 
   const finalEvents = laidOut.map((event) => {
     const x = event._x;
     const yearLabel = event.dateLabel ?? formatYear(event.date, negID, posID, useCalendar, hideDecimals);
-    const { boxHeight, isMultiLine } = measureEvent(event.title, event.tags, yearLabel, event.icon);
+    const { boxHeight, isMultiLine, squareSize, boxWidth = EVENT_WIDTH } = measureEvent(
+      event.title,
+      event.tags,
+      yearLabel,
+      event.icon,
+      event.thumbnail,
+      event.thumbnailStyle,
+      event.hideYears
+    );
 
     // Find placed events that horizontally overlap
+    const left = x - boxWidth / 2;
+    const right = x + boxWidth / 2;
+
     const conflicts = placed
-      .filter((p) => p.xEnd + EVENT_GAP > x)
+      .filter((p) => p.right + EVENT_GAP > left)
       .sort((a, b) => b.top - a.top); // closest to baseline first
 
     // Start at the closest-to-baseline position, maintaining the same gap as single-line events
@@ -695,13 +827,15 @@ export function layoutEvents({
       }
     }
 
-    placed.push({ xEnd: x + EVENT_WIDTH, top, boxHeight });
+    placed.push({ left, right, top, boxHeight });
 
     return {
       ...event,
       top,
       _boxHeight: boxHeight,
+      _boxWidth: boxWidth,
       _isMultiLine: isMultiLine,
+      ...(squareSize && { _squareSize: squareSize }),
     };
   });
 

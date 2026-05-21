@@ -1612,7 +1612,7 @@
   height: 1px;
   background: var(--active-bg);
   width: calc(100% + 32px);
-  margin: 12px -18px 8px -14px;
+  margin: 8px -18px 12px -14px;
 }
 
 .note-render h1,
