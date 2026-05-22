@@ -32,9 +32,17 @@ export const parseMediaWikiUrl = (url) => {
       hostname === "::1" ||
       hostname === "0.0.0.0"
     ) return null;
-    const pathMatch = parsed.pathname.match(/^\/wiki\/(.+)$/);
-    if (!pathMatch) return null;
-    const title = decodeURIComponent(pathMatch[1]);
+    const pathname = parsed.pathname;
+    let title = null;
+    const prefixMatch = pathname.match(/^\/(?:wiki|title)\/(.+)$/);
+    if (prefixMatch) {
+      title = decodeURIComponent(prefixMatch[1]);
+    } else if (/\/index\.php$/.test(pathname) && parsed.searchParams.get("title")) {
+      title = parsed.searchParams.get("title");
+    } else if (pathname.length > 1 && !pathname.endsWith("/")) {
+      title = decodeURIComponent(pathname.slice(1));
+    }
+    if (!title) return null;
     return { host: parsed.origin, title };
   } catch {
     return null;

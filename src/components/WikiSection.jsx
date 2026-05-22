@@ -38,7 +38,7 @@ function sanitizeWikiHtml(html, host = "https://en.wikipedia.org") {
     node.setAttribute("target", "_blank");
     node.setAttribute("rel", "noopener noreferrer");
     const href = node.getAttribute("href");
-    if (href && href.startsWith("/wiki/")) {
+    if (href && href.startsWith("/")) {
       node.setAttribute("href", `${host}${href}`);
     } else if (href && href.startsWith("./")) {
       node.setAttribute("href", `${host}/wiki/${href.slice(2)}`);
@@ -141,13 +141,47 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
     setWikiError("");
     try {
       const apiPaths = [`${parsed.host}/api.php`, `${parsed.host}/w/api.php`];
-      const query = `?action=parse&page=${encodeURIComponent(parsed.title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
+      const titleCandidates = [parsed.title];
+      if (parsed.title.includes("/")) {
+        const lastSegment = parsed.title.split("/").pop();
+        if (lastSegment) titleCandidates.push(lastSegment);
+      }
+      const tryApi = async (base, title) => {
+        const q = `?action=parse&page=${encodeURIComponent(title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
+        const result = await fetchWikipedia({ url: base + q });
+        if (!result?.success) return null;
+        const j = JSON.parse(result.html);
+        let text = j?.parse?.text;
+        if (text && typeof text === "object") text = text["*"] ?? null;
+        return text ? { parse: { ...j.parse, text } } : null;
+      };
       let data = null;
-      for (const base of apiPaths) {
-        const result = await fetchWikipedia({ url: base + query });
-        if (!result?.success) continue;
-        const parsed2 = JSON.parse(result.html);
-        if (parsed2?.parse?.text) { data = parsed2; break; }
+      outer: for (const title of titleCandidates) {
+        for (const base of apiPaths) {
+          data = await tryApi(base, title);
+          if (data) break outer;
+        }
+      }
+      if (!data) {
+        const pageResult = await fetchWikipedia({ url });
+        if (pageResult?.success) {
+          const pageDoc = new DOMParser().parseFromString(pageResult.html, "text/html");
+          const editUri = pageDoc.querySelector('link[rel="EditURI"]')?.getAttribute("href");
+          const apiBase = editUri?.replace(/\?.*$/, "");
+          const pageTitleMatch = pageResult.html.match(/"wgPageName":"([^"]+)"/);
+          const discoveredTitle = pageTitleMatch?.[1];
+          const apiOriginOk = (() => { try { return new URL(apiBase).origin === parsed.host; } catch { return false; } })();
+          if (apiBase && apiOriginOk) {
+            const discoveryTitles = [...new Set([
+              ...(discoveredTitle ? [discoveredTitle] : []),
+              ...titleCandidates,
+            ])];
+            for (const title of discoveryTitles) {
+              data = await tryApi(apiBase, title);
+              if (data) break;
+            }
+          }
+        }
       }
       if (!data) throw new Error("No content returned");
       const sanitized = sanitizeWikiHtml(data.parse.text, parsed.host);
