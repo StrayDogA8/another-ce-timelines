@@ -3078,6 +3078,11 @@
   display: none !important;
 }
 
+.wiki-render .mw-collapsible.mw-collapsed .mw-collapsible-content,
+.wiki-render .mw-collapsible.mw-made-collapsible.mw-collapsed .mw-collapsible-content {
+  display: none !important;
+}
+
 /* Thumb / image containers */
 .wiki-render .thumb,
 .wiki-render .tmulti {

@@ -877,6 +877,7 @@ export default function RightPanel({
             )}
 
             <WikiSection
+              key={`wiki-${selectedElement?.id}`}
               wikiUrl={formData.wikiUrl}
               useWikipedia={timelineData?.file?.useWikipedia}
               isEditMode={false}
@@ -884,6 +885,7 @@ export default function RightPanel({
             />
 
             <SourcesSection
+              key={`sources-${selectedElement?.id}`}
               sources={formData.sources}
               sourceLink={formData.sourceLink}
               isEditMode={false}
@@ -1689,6 +1691,7 @@ export default function RightPanel({
                 <label>Icon</label>
                 <div className="edit-separator" />
                 <IconPicker
+                  key={`icon-${selectedElement?.id}`}
                   value={formData.icon ?? null}
                   onChange={(name) => {
                     const next = { ...formData };
@@ -1951,12 +1954,14 @@ export default function RightPanel({
                 </div>
               )}
               <WikiSection
+                key={`wiki-${selectedElement?.id}`}
                 wikiUrl={formData.wikiUrl}
                 useWikipedia={timelineData?.file?.useWikipedia}
                 isEditMode={true}
                 onUrlChange={handleWikiUrlChange}
               />
               <SourcesSection
+                key={`sources-${selectedElement?.id}`}
                 sources={formData.sources}
                 sourceLink={formData.sourceLink}
                 isEditMode={true}

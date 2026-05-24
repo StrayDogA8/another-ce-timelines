@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import { parseMediaWikiUrl } from "../utils/validation";
 import { fetchWikipedia } from "../utils/electronApi";
 
-const WIKI_SANITIZE_VERSION = "collapsible-1";
+const WIKI_SANITIZE_VERSION = "collapsible-2";
 
 function sanitizeWikiHtml(html, host = "https://en.wikipedia.org") {
   const preDoc = new DOMParser().parseFromString(html, "text/html");
@@ -91,13 +91,11 @@ function sanitizeWikiHtml(html, host = "https://en.wikipedia.org") {
   });
 
   doc.body.querySelectorAll(".mw-collapsible").forEach((collapsible) => {
-    const isOpen = !collapsible.classList.contains("mw-collapsed");
     const titleEl = collapsible.querySelector(".sidebar-list-title");
     const contentEl = collapsible.querySelector(".mw-collapsible-content");
     if (!titleEl || !contentEl) return;
     collapsible.querySelectorAll(".mw-collapsible-text").forEach((el) => el.remove());
     const details = doc.createElement("details");
-    if (isOpen) details.open = true;
     details.className = "wiki-sidebar-section";
     const summary = doc.createElement("summary");
     summary.className = "wiki-sidebar-summary";
@@ -122,11 +120,14 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
   const wikiCacheRef = useRef(new Map());
   const wikiRenderRef = useRef(null);
   const wikiUrlInputRef = useRef(null);
+  const activeUrlRef = useRef(null);
 
   const fetchWikiContent = async (url) => {
     if (!url) return;
+    activeUrlRef.current = url;
     const cacheKey = `${WIKI_SANITIZE_VERSION}:${url}`;
     if (wikiCacheRef.current.has(cacheKey)) {
+      if (activeUrlRef.current !== url) return;
       setWikiContent(wikiCacheRef.current.get(cacheKey));
       setWikiError("");
       return;
@@ -185,18 +186,21 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
       }
       if (!data) throw new Error("No content returned");
       const sanitized = sanitizeWikiHtml(data.parse.text, parsed.host);
+      if (activeUrlRef.current !== url) return;
       wikiCacheRef.current.set(cacheKey, sanitized);
       setWikiContent(sanitized);
     } catch (err) {
+      if (activeUrlRef.current !== url) return;
       setWikiError(`Failed to load wiki article: ${err.message}`);
       setWikiContent("");
     } finally {
-      setIsWikiLoading(false);
+      if (activeUrlRef.current === url) setIsWikiLoading(false);
     }
   };
 
   useEffect(() => {
     if (!wikiUrl) {
+      activeUrlRef.current = null;
       setWikiContent("");
       setWikiError("");
       return;
