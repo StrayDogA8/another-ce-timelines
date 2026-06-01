@@ -62,7 +62,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     return () => { isMounted = false; };
   }, [selectedElement?.id, selectedElement?.noteFile, timelineData?.file?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hide broken images in rendered note
+  // Hide broken images and videos in rendered note
   useEffect(() => {
     if (!noteRenderRef.current) return;
     const imgs = noteRenderRef.current.querySelectorAll("img");
@@ -75,6 +75,13 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
           this.style.minHeight = "0";
         }, { once: true });
       }
+    });
+    const videos = noteRenderRef.current.querySelectorAll("video");
+    videos.forEach((video) => {
+      video.addEventListener("error", function () {
+        this.style.display = "none";
+        this.style.minHeight = "0";
+      }, { once: true });
     });
   }, [noteInitialContent]);
 
