@@ -42,12 +42,12 @@ export default function SourcesSection({ sources, sourceLink, isEditMode, onSour
 
   const handleRemove = (index) => {
     const next = srcList.filter((_, i) => i !== index);
-    const nextLink = sourceLink && srcList[index]?.url === sourceLink ? undefined : sourceLink;
+    const nextLink = sourceLink && srcList[index]?.url === sourceLink ? null : sourceLink;
     onSourcesChange(next, nextLink);
   };
 
   const handleToggleSourceLink = (src) => {
-    const nextLink = sourceLink === src.url ? undefined : src.url;
+    const nextLink = sourceLink === src.url ? null : src.url;
     onSourcesChange(srcList, nextLink);
   };
 
