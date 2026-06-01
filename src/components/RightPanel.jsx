@@ -55,6 +55,8 @@ export default function RightPanel({
   const [validationErrors, setValidationErrors] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isThumbnailUrlMode, setIsThumbnailUrlMode] = useState(false);
+  const [thumbnailUrlInput, setThumbnailUrlInput] = useState("");
   const [isDetailsOpen, setIsDetailsOpen] = useState(true);
   const [isDisplayOpen, setIsDisplayOpen] = useState(true);
   const [isNotesOpen, setIsNotesOpen] = useState(true);
@@ -257,6 +259,8 @@ export default function RightPanel({
       setValidationErrors([]);
       if (prevId !== selectedElement.id) {
         setSpanRelationType(selectedElement.extendFrom ? "extend" : "branch");
+        setIsThumbnailUrlMode(false);
+        setThumbnailUrlInput("");
         if (!shouldPreserveEditMode) {
           setIsEditMode(false);
           setSpanParentQuery("");
@@ -1782,37 +1786,86 @@ export default function RightPanel({
                 </div>
               </div>}
               {!formData.thumbnail && (
-                <button
-                  type="button"
-                  className={`thumbnail-dropzone${isDragOver ? " is-drag-over" : ""}`}
-                  onClick={async () => {
-                    const url = await handlePickThumbnail();
-                    if (!url) return;
-                    const next = { ...formData, thumbnail: url };
-                    setFormData(next);
-                    commitDraft(next);
-                  }}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                  onDragLeave={() => setIsDragOver(false)}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    setIsDragOver(false);
-                    const file = e.dataTransfer.files[0];
-                    if (!file) return;
-                    const ext = file.name.split('.').pop().toLowerCase();
-                    if (!['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return;
-                    const filePath = window.electron?.getPathForFile?.(file) ?? file.path;
-                    const url = await handleDropThumbnail(filePath);
-                    if (!url) return;
-                    const next = { ...formData, thumbnail: url };
-                    setFormData(next);
-                    commitDraft(next);
-                  }}
-                >
-                  <ImagePlus size={28} strokeWidth={1.5} className="thumbnail-dropzone-icon" />
-                  <span className="thumbnail-dropzone-title">Drop image or click to upload</span>
-                  <span className="thumbnail-dropzone-subtitle">PNG · JPG · SVG · up to 10 MB</span>
-                </button>
+                <div className="thumbnail-dropzone-wrap">
+                  <button
+                    type="button"
+                    className={`thumbnail-dropzone${isDragOver ? " is-drag-over" : ""}`}
+                    onClick={async () => {
+                      setIsThumbnailUrlMode(false);
+                      setThumbnailUrlInput("");
+                      const url = await handlePickThumbnail();
+                      if (!url) return;
+                      const next = { ...formData, thumbnail: url };
+                      setFormData(next);
+                      commitDraft(next);
+                    }}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const file = e.dataTransfer.files[0];
+                      if (!file) return;
+                      const ext = file.name.split('.').pop().toLowerCase();
+                      if (!['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return;
+                      const filePath = window.electron?.getPathForFile?.(file) ?? file.path;
+                      const url = await handleDropThumbnail(filePath);
+                      if (!url) return;
+                      const next = { ...formData, thumbnail: url };
+                      setFormData(next);
+                      commitDraft(next);
+                    }}
+                  >
+                    <ImagePlus size={28} strokeWidth={1.5} className="thumbnail-dropzone-icon" />
+                    <span className="thumbnail-dropzone-title">Drop image or click to upload</span>
+                    <span className="thumbnail-dropzone-subtitle">PNG · JPG · SVG · up to 10 MB</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`thumbnail-url-icon-btn${isThumbnailUrlMode ? " is-active" : ""}`}
+                    title="Paste image URL"
+                    onClick={() => { setIsThumbnailUrlMode(v => !v); setThumbnailUrlInput(""); }}
+                  >
+                    <Link size={12} />
+                  </button>
+                  {isThumbnailUrlMode && (
+                    <div className="thumbnail-url-row">
+                      <input
+                        type="url"
+                        className="thumbnail-url-input"
+                        placeholder="https://..."
+                        value={thumbnailUrlInput}
+                        autoFocus
+                        onChange={(e) => setThumbnailUrlInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { setIsThumbnailUrlMode(false); setThumbnailUrlInput(""); return; }
+                          if (e.key === 'Enter') {
+                            const trimmed = thumbnailUrlInput.trim();
+                            if (!trimmed.startsWith('https://')) return;
+                            const next = { ...formData, thumbnail: trimmed };
+                            setFormData(next);
+                            commitDraft(next);
+                            setIsThumbnailUrlMode(false);
+                            setThumbnailUrlInput("");
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="thumbnail-url-add"
+                        onClick={() => {
+                          const trimmed = thumbnailUrlInput.trim();
+                          if (!trimmed.startsWith('https://')) return;
+                          const next = { ...formData, thumbnail: trimmed };
+                          setFormData(next);
+                          commitDraft(next);
+                          setIsThumbnailUrlMode(false);
+                          setThumbnailUrlInput("");
+                        }}
+                      >Add</button>
+                    </div>
+                  )}
+                </div>
               )}
               </>
             )}
