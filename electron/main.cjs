@@ -457,7 +457,8 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
     const safePath = sanitizeTimelinePath(filename);
     const filePath = path.join(dataDir, `${safePath}.timeline`);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    const dataToSave = { ...data, elements: stripThumbnails(data.elements) };
+    await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf8');
     return { success: true, message: 'Timeline saved successfully', path: filePath };
   } catch (error) {
     console.error('Error saving timeline:', error);
@@ -506,8 +507,10 @@ ipcMain.handle('load-timeline', async (event, filename) => {
     const filePath = path.join(userDataDir, `${safePath}.timeline`);
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
+    const timelineId = data.file?.id?.replace('-timeline', '');
+    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, timelineId) };
     console.log(`Loaded timeline: ${filename}`);
-    return data;
+    return resolvedData;
   } catch (error) {
     console.error('Error loading timeline:', error);
     throw error;
@@ -606,7 +609,8 @@ ipcMain.handle('export-timeline', async (event, { data, suggestedName }) => {
       return { success: false, canceled: true };
     }
 
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    const dataToExport = { ...data, elements: stripThumbnails(data.elements) };
+    await fs.writeFile(filePath, JSON.stringify(dataToExport, null, 2), 'utf8');
 
     return {
       success: true,
@@ -637,10 +641,12 @@ ipcMain.handle('import-timeline', async () => {
 
     const content = await fs.readFile(filePaths[0], 'utf8');
     const data = JSON.parse(content);
+    const timelineId = data.file?.id?.replace('-timeline', '');
+    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, timelineId) };
 
     return {
       success: true,
-      data,
+      data: resolvedData,
       filename: path.basename(filePaths[0]),
     };
   } catch (error) {
@@ -1300,6 +1306,46 @@ ipcMain.handle('get-assets-base-dir', async () => {
     return { success: false, error: error.message };
   }
 });
+
+function extractThumbnailFilename(thumbnail) {
+  if (!thumbnail || typeof thumbnail !== 'string') return null;
+  if (thumbnail.startsWith('timelines-asset://')) {
+    try {
+      const url = new URL(thumbnail);
+      return path.basename(decodeURIComponent(url.pathname.slice(1)));
+    } catch { return null; }
+  }
+  if (!thumbnail.includes('://')) return thumbnail; // already a bare filename
+  return null; // external URL — don't touch
+}
+
+async function resolveThumbnailUrl(filename, timelineId) {
+  if (!filename || !timelineId) return null;
+  try {
+    const dir = await getAssetsDir(timelineId);
+    return `timelines-asset://asset/${encodeURIComponent(path.normalize(path.join(dir, filename)))}`;
+  } catch { return null; }
+}
+
+function stripThumbnails(elements) {
+  if (!Array.isArray(elements)) return elements;
+  return elements.map(el => {
+    if (!el.thumbnail) return el;
+    const filename = extractThumbnailFilename(el.thumbnail);
+    return filename ? { ...el, thumbnail: filename } : el;
+  });
+}
+
+async function resolveThumbnails(elements, timelineId) {
+  if (!Array.isArray(elements) || !timelineId) return elements;
+  return Promise.all(elements.map(async el => {
+    if (!el.thumbnail) return el;
+    const filename = extractThumbnailFilename(el.thumbnail);
+    if (!filename) return el;
+    const url = await resolveThumbnailUrl(filename, timelineId);
+    return url ? { ...el, thumbnail: url } : el;
+  }));
+}
 
 async function importImageByPath(imagePath, timelineId) {
   const assetsBase = await getAssetsRootDir();
