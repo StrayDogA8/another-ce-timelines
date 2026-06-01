@@ -709,7 +709,7 @@ export function layoutEvents({
     const probeThumbnailTile = document.createElement("div");
     probeThumbnailTile.className = "event-thumbnail-tile";
     // Fix the width for probe measurement since aspect-ratio:1 is based on height
-    probeThumbnailTile.style.width = `${singleLineHeight}px`;
+    probeThumbnailTile.style.width = `${compactEvents ? 23 : 29}px`;
     probeTextContent = document.createElement("div");
     probeTextContent.className = "event-text-content";
 
@@ -780,7 +780,10 @@ export function layoutEvents({
       }
       const naturalHeight = probe.offsetHeight;
       if (isBanner) {
-        return { boxHeight: naturalHeight + BANNER_HEIGHT, isMultiLine: true, boxWidth: EVENT_WIDTH };
+        probe.classList.remove("multi-lane");
+        const bannerNaturalHeight = probe.offsetHeight;
+        probe.classList.add("multi-lane");
+        return { boxHeight: bannerNaturalHeight + BANNER_HEIGHT, isMultiLine: true, boxWidth: EVENT_WIDTH };
       }
       const isMultiLine = naturalHeight > baseline;
       return {

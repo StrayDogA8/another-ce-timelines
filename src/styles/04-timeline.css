@@ -428,6 +428,16 @@
   display: flex;
   flex-direction: row;
   overflow: hidden;
+  height: auto;
+  min-height: 25px;
+}
+
+.event.has-thumbnail.event-compact {
+  min-height: 21px;
+}
+
+.event.has-thumbnail .event-title {
+  white-space: normal;
 }
 
 .event.has-thumbnail-square {

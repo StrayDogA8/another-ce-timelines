@@ -37,24 +37,26 @@ export default function IconPicker({ value, onChange }) {
 
   return (
     <div className="icon-picker-wrap">
-      <button
-        type="button"
-        className={`icon-picker-trigger${value ? " has-icon" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-        title={value ? `Icon: ${value}` : "Add icon"}
-      >
-        {CurrentIcon ? <CurrentIcon size={14} /> : <span className="icon-picker-placeholder">No icon</span>}
-      </button>
-      {value && (
+      <>
         <button
           type="button"
-          className="icon-picker-clear"
-          onClick={() => onChange(null)}
-          title="Remove icon"
+          className={`icon-picker-trigger${value ? " has-icon" : ""}`}
+          onClick={() => setOpen((v) => !v)}
+          title={value ? `Icon: ${value}` : "Add icon"}
         >
-          <X size={10} />
+          {CurrentIcon ? <CurrentIcon size={14} /> : <span className="icon-picker-placeholder">No icon</span>}
         </button>
-      )}
+        {value && (
+          <button
+            type="button"
+            className="icon-picker-clear"
+            onClick={() => onChange(null)}
+            title="Remove icon"
+          >
+            <X size={10} />
+          </button>
+        )}
+      </>
       {open && (
         <div className="icon-picker-popover" ref={popoverRef}>
           <div className="icon-picker-search-wrap">

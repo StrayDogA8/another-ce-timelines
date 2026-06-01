@@ -106,6 +106,11 @@ function App() {
         next.groupId = parentGroupId ?? defaultGroupId;
       }
 
+      // Strip stale default color auto-set on every new event by an older version.
+      if (next.type === "event" && next.color === "#EDE6DA") {
+        delete next.color;
+      }
+
       if (next.type !== "span") return next;
 
       const { branches: _b, forks: _f, merges: _m, ...rest } = next;
@@ -813,7 +818,6 @@ function App() {
       parents: [],
       eventLineStyle: "solid",
       eventBorderStyle: "solid",
-      color: "#EDE6DA",
     };
     if (Number.isFinite(clickCoords?.lat) && Number.isFinite(clickCoords?.lng)) {
       newEvent.lat = clickCoords.lat;
@@ -1024,6 +1028,7 @@ function App() {
     fixedEventHeight,
     compactEvents,
     thinConnectors,
+    hideSpanConnectors,
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
@@ -1078,6 +1083,7 @@ function App() {
         fixedEventHeight,
         compactEvents,
         thinConnectors,
+        hideSpanConnectors,
         eventLinesToGroupBottom,
         hideDecimals,
         showGrid,

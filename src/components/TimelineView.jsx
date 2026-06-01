@@ -2163,13 +2163,15 @@ const TimelineView = forwardRef(function TimelineView({
     const { maxX, range } = getPanBounds(container);
 
     if (range <= 0) {
-      queueSliderValue(0);
+      if (Math.abs(sliderValueRef.current) >= 0.001) queueSliderValue(0);
       return;
     }
 
     // Calculate current pan percentage (translateRef.x is negative when panned right)
-    const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
-    queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
+    const panPercentage = Math.min(100, Math.max(0, ((maxX - translateRef.current.x) / range) * 100));
+    if (Math.abs(panPercentage - sliderValueRef.current) >= 0.001) {
+      queueSliderValue(panPercentage);
+    }
   }, [currentScale, isPlaying, timelineWidth]);
 
   // Trigger PNG download when requested from outside (e.g., Sidebar)
@@ -2570,7 +2572,7 @@ const TimelineView = forwardRef(function TimelineView({
 
         {/* Connectors layer - behind everything */}
         <div className="connectors-layer">
-          {finalSpans.map((span) => {
+          {!file?.hideSpanConnectors && finalSpans.map((span) => {
             const spanH = span.spanHeight ?? 20;
             const placement = spanChildPlacement[span.id];
             const isChild = !!placement && placement.mode !== "extend";
@@ -2719,7 +2721,7 @@ const TimelineView = forwardRef(function TimelineView({
             );
           })}
           {/* Merge connectors - at the END of child spans, flipped horizontally */}
-          {finalSpans.map((span) => {
+          {!file?.hideSpanConnectors && finalSpans.map((span) => {
             const mergePlacement = spanMergePlacement[span.id];
             if (!mergePlacement) return null;
 
@@ -2958,7 +2960,7 @@ const TimelineView = forwardRef(function TimelineView({
                     const eventBorderStyle = event.eventBorderStyle || "solid";
                     const groupBlendBase = groupColor || resolvedActiveBg;
                     const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
-                    const borderColor = parentColor || (
+                    const borderColor = event.color || parentColor || (
                       file?.eventLinesToGroupBottom === true
                         ? mixedGroupColor
                         : "var(--element-bg)"
@@ -2967,8 +2969,9 @@ const TimelineView = forwardRef(function TimelineView({
                       eventBorderStyle === "none"
                         ? "none"
                         : `2px ${eventBorderStyle} ${borderColor}`;
-                    const eventBg = file?.spanColorEvents && parentColor
-                      ? blendColors(parentColor, resolvedSecondaryBg, 0.2)
+                    const effectiveParentColor = event.color || parentColor;
+                    const eventBg = file?.spanColorEvents && effectiveParentColor
+                      ? blendColors(effectiveParentColor, resolvedSecondaryBg, 0.2)
                       : undefined;
                     return (
                       <div
@@ -3151,7 +3154,8 @@ const TimelineView = forwardRef(function TimelineView({
               : fallbackTargetY;
 
             const hasPinnedTags = (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t));
-            const effectiveBoxHeight = event.hideYears === true && !hasPinnedTags
+            const isBannerEvent = event.thumbnail && event.thumbnailStyle === "banner";
+            const effectiveBoxHeight = event.hideYears === true && !hasPinnedTags && !isBannerEvent
               ? (file?.compactEvents ? 14 : 16)
               : (event._boxHeight || 29);
             const eventBottom = event.top + effectiveBoxHeight;
@@ -3161,7 +3165,7 @@ const TimelineView = forwardRef(function TimelineView({
             const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
             const groupBlendBase = groupColor || resolvedActiveBg;
             const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
-            const lineColor = parentColor || (
+            const lineColor = event.color || parentColor || (
               file?.eventLinesToGroupBottom === true
                 ? mixedGroupColor
                 : resolvedElementBg
@@ -3232,7 +3236,7 @@ const TimelineView = forwardRef(function TimelineView({
             const eventBorderStyle = event.eventBorderStyle || "solid";
             const groupBlendBase = groupColor || resolvedActiveBg;
             const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
-            const borderColor = parentColor || (
+            const borderColor = event.color || parentColor || (
               file?.eventLinesToGroupBottom === true
                 ? mixedGroupColor
                 : resolvedElementBg

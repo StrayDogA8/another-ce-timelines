@@ -52,6 +52,7 @@ export default function SettingsModal({
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
   const [compactEvents, setCompactEvents] = useState(false);
   const [thinConnectors, setThinConnectors] = useState(false);
+  const [hideSpanConnectors, setHideSpanConnectors] = useState(false);
   const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
   const [hideDecimals, setHideDecimals] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
@@ -189,6 +190,7 @@ export default function SettingsModal({
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
         setCompactEvents(Boolean(timelineData.file.compactEvents));
         setThinConnectors(Boolean(timelineData.file.thinConnectors));
+        setHideSpanConnectors(Boolean(timelineData.file.hideSpanConnectors));
         setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
         setHideDecimals(Boolean(timelineData.file.hideDecimals));
         setShowGrid(Boolean(timelineData.file.showGrid));
@@ -290,6 +292,7 @@ export default function SettingsModal({
           fixedEventHeight,
           compactEvents,
           thinConnectors,
+          hideSpanConnectors,
           eventLinesToGroupBottom,
           hideDecimals,
           showGrid,
@@ -333,6 +336,7 @@ export default function SettingsModal({
     fixedEventHeight,
     compactEvents,
     thinConnectors,
+    hideSpanConnectors,
     eventLinesToGroupBottom,
     hideDecimals,
     showGrid,
@@ -980,6 +984,24 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Hide Span Connectors */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Hide Span Connectors</div>
+                  <div className="settings-row-description">Hide branch and merge connectors between spans. Data is preserved — re-enabling this will restore them.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={hideSpanConnectors}
+                      onChange={(e) => setHideSpanConnectors(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
               {/* Use Calendar */}
               <div className="settings-row">
                 <div className="settings-row-left">
@@ -1115,6 +1137,7 @@ export default function SettingsModal({
                   </label>
                 </div>
               </div>
+
 
             </>
           )}

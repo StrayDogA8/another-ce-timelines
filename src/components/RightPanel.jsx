@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText, BookOpen } from "lucide-react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText, BookOpen, ImagePlus, RotateCcw } from "lucide-react";
 import NoteEditor from "./NoteEditor";
 import WikiSection from "./WikiSection";
 import SourcesSection from "./SourcesSection";
@@ -12,6 +12,18 @@ import { isValidIdValue, isValidTagValue, normalizeTagValue, buildValidatedUpdat
 import { normalizeColor } from "../utils/colorUtils";
 
 
+
+function SectionHeader({ title, isOpen, onToggle, summary }) {
+  return (
+    <button type="button" className="edit-section-header" onClick={onToggle}>
+      <ChevronDown size={15} className={`edit-section-header-chevron${isOpen ? "" : " is-collapsed"}`} />
+      <span className="edit-section-header-title">{title}</span>
+      {!isOpen && summary && (
+        <span className="edit-section-header-summary">{summary}</span>
+      )}
+    </button>
+  );
+}
 
 const EVENT_STROKE_STYLE_OPTIONS = [
   { value: "solid", label: "Solid" },
@@ -42,6 +54,10 @@ export default function RightPanel({
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
+  const [isDisplayOpen, setIsDisplayOpen] = useState(true);
+  const [isNotesOpen, setIsNotesOpen] = useState(true);
 
   const {
     noteInitialContent,
@@ -62,6 +78,22 @@ export default function RightPanel({
     handlePickThumbnail,
   } = useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate });
   const prevSelectedIdRef = useRef(null);
+  const titleTextareaRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = titleTextareaRef.current;
+    if (!el) return;
+    const syncHeight = () => {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    };
+    syncHeight();
+    const parent = el.parentElement;
+    if (!parent) return;
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [formData?.title, isEditMode]);
   const [spanParentQuery, setSpanParentQuery] = useState("");
   const [isSpanParentMenuOpen, setIsSpanParentMenuOpen] = useState(false);
   const spanParentMenuTimeoutRef = useRef(null);
@@ -345,6 +377,21 @@ export default function RightPanel({
       (span.title || "").toLowerCase().includes(needle)
     );
   }, [parentCandidates, parentQuery]);
+
+  const eventParentSpan = useMemo(() => {
+    if (formData?.type !== "event") return null;
+    const parentId = formData?.parents?.[0];
+    if (!parentId) return null;
+    return timelineData?.elements?.find(el => el.id === parentId && el.type === "span") ?? null;
+  }, [formData?.type, formData?.parents, timelineData?.elements]);
+
+  const resolvedDefaultBorderColor = useMemo(() => {
+    try {
+      return getComputedStyle(document.documentElement).getPropertyValue('--element-bg').trim() || '#888888';
+    } catch {
+      return '#888888';
+    }
+  }, []);
 
   // Span parent candidates: spans whose time range contains this span's START
   const spanParentCandidates = useMemo(() => {
@@ -910,21 +957,29 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Details */}
+            <SectionHeader
+              title="Details"
+              isOpen={isDetailsOpen}
+              onToggle={() => setIsDetailsOpen(v => !v)}
+              summary={formData.title || ""}
+            />
+
+            {isDetailsOpen && <>
 
             {/* Title */}
             <div className="form-group">
-              <div className="edit-row">
+              <div className="edit-row edit-row-title">
                 <label htmlFor="title">Name</label>
                 <div className="edit-separator" />
-                <input
+                <textarea
+                  ref={titleTextareaRef}
                   id="title"
-                  type="text"
                   value={formData.title}
                   onChange={(e) => handleChange("title", e.target.value)}
                   onBlur={(e) => commitDraft({ ...formData, title: e.target.value })}
-                  className="edit-input"
+                  className="edit-input edit-input-multiline"
                   maxLength={200}
+                  rows={1}
                 />
               </div>
             </div>
@@ -1389,8 +1444,78 @@ export default function RightPanel({
               </div>
             )}
 
-            {/* Style */}
-            <div className="edit-section-divider" />
+            </>}
+
+            <SectionHeader
+              title="Display"
+              isOpen={isDisplayOpen}
+              onToggle={() => setIsDisplayOpen(v => !v)}
+              summary={[
+                formData.thumbnail && "Image",
+                formData.icon && "Icon",
+                (formData.color || formData.spanSize || formData.eraSize || formData.eventLineStyle || formData.eventBorderStyle || formData.hideYears || formData.hideDetails) && "Styles",
+              ].filter(Boolean).join(" · ") || "No display set"}
+            />
+
+            {isDisplayOpen && <>
+
+            {/* Color (events) — default / inherited from parent span / custom override */}
+            {formData.type === "event" && (() => {
+              const inheritedColor = eventParentSpan?.color;
+              const isCustom = !!formData.color;
+              const effectiveBase = inheritedColor || resolvedDefaultBorderColor;
+              const swatchColor = formData.color || effectiveBase;
+              return (
+                <div className="form-group">
+                  <div className="edit-row">
+                    <label>color</label>
+                    <div className="edit-separator" />
+                    <div className="event-color-wrap">
+                      {isCustom ? (
+                        <button
+                          type="button"
+                          className="event-color-revert"
+                          title="Revert to inherited"
+                          onClick={() => {
+                            const next = { ...formData };
+                            delete next.color;
+                            setFormData(next);
+                            commitDraft(next);
+                          }}
+                        ><RotateCcw size={11} /></button>
+                      ) : (
+                        <Link size={11} className="event-color-chain" />
+                      )}
+                      <input
+                        type="color"
+                        className="edit-color-picker"
+                        value={swatchColor}
+                        onChange={(e) => {
+                          if (e.target.value === effectiveBase) return;
+                          const next = { ...formData, color: e.target.value };
+                          setFormData(next);
+                          commitDraft(next);
+                        }}
+                      />
+                      {isCustom ? (
+                        <span className="event-color-text">
+                          <span className="event-color-status">Custom</span>
+                          <span className="event-color-hex">{formData.color}</span>
+                        </span>
+                      ) : inheritedColor ? (
+                        <span className="event-color-text">
+                          <span className="event-color-status">Inherited</span>
+                        </span>
+                      ) : (
+                        <span className="event-color-text">
+                          <span className="event-color-status">Default</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Color (spans and eras only) */}
             {formData.type !== "event" && (
@@ -1560,129 +1685,122 @@ export default function RightPanel({
             )}
 
             {formData.type === "event" && (
-              <div className="form-group">
-                <div className="edit-row thumbnail-edit-row">
-                  <label>thumbnail</label>
-                  <div className="edit-separator" />
-                  <div className="thumbnail-card-wrap">
-                    {formData.thumbnail ? (
-                      <>
-                        <img
-                          key={formData.thumbnail}
-                          className="thumbnail-card-img"
-                          src={formData.thumbnail}
-                          alt=""
-                          onLoad={(e) => {
-                            let ext = '';
-                            try {
-                              const decoded = decodeURIComponent(formData.thumbnail);
-                              ext = decoded.split(/[/\\]/).pop()?.split('.').pop()?.toLowerCase() ?? '';
-                            } catch {
-                              ext = formData.thumbnail.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
-                            }
-                            setThumbnailMeta({ width: e.target.naturalWidth, height: e.target.naturalHeight, ext });
-                          }}
-                        />
-                        <div className="thumbnail-card-info">
-                          <div className="thumbnail-card-name">
-                            {(() => {
-                              try {
-                                const decoded = decodeURIComponent(formData.thumbnail);
-                                const parts = decoded.split(/[/\\]/);
-                                return parts[parts.length - 1] || 'image';
-                              } catch {
-                                return formData.thumbnail.split('/').pop()?.split('?')[0] ?? 'image';
-                              }
-                            })()}
-                          </div>
-                          {thumbnailMeta && (
-                            <div className="thumbnail-card-meta">
-                              {thumbnailMeta.width}×{thumbnailMeta.height} · {thumbnailMeta.ext}
-                            </div>
-                          )}
-                          <div className="thumbnail-card-controls">
-                            <div className="thumbnail-style-btn">
-                              <span className="thumbnail-style-swatch" />
-                              <span className="thumbnail-style-label">
-                                {formData.thumbnailStyle === 'banner' ? 'Top banner' :
-                                 formData.thumbnailStyle === 'square-fill' ? 'Square fill' :
-                                 formData.thumbnailStyle === 'circle-fill' ? 'Circle fill' : 'Left strip'}
-                              </span>
-                              <ChevronDown size={9} />
-                              <select
-                                className="thumbnail-style-select"
-                                value={formData.thumbnailStyle ?? "strip"}
-                                onChange={(e) => {
-                                  const next = { ...formData, thumbnailStyle: e.target.value };
-                                  setFormData(next);
-                                  commitDraft(next);
-                                }}
-                              >
-                                <option value="strip">Left strip</option>
-                                <option value="banner">Top banner</option>
-                                <option value="square-fill">Square fill</option>
-                                <option value="circle-fill">Circle fill</option>
-                              </select>
-                            </div>
-                            <div className="thumbnail-fit-toggle">
-                              <button
-                                type="button"
-                                className={`thumbnail-fit-btn${(formData.thumbnailFit ?? "cover") === "cover" ? " is-active" : ""}`}
-                                onClick={() => { const next = { ...formData, thumbnailFit: "cover" }; setFormData(next); commitDraft(next); }}
-                                title="Fill — crop to fill the square"
-                              >Fill</button>
-                              <button
-                                type="button"
-                                className={`thumbnail-fit-btn${formData.thumbnailFit === "contain" ? " is-active" : ""}`}
-                                onClick={() => { const next = { ...formData, thumbnailFit: "contain" }; setFormData(next); commitDraft(next); }}
-                                title="Fit — show full image"
-                              >Fit</button>
-                            </div>
-                          </div>
-                          <div className="thumbnail-card-links">
-                            <button
-                              type="button"
-                              className="thumbnail-link-btn"
-                              onClick={async () => {
-                                const url = await handlePickThumbnail();
-                                if (!url) return;
-                                const next = { ...formData, thumbnail: url };
-                                setFormData(next);
-                                commitDraft(next);
-                              }}
-                            >Replace</button>
-                            <span className="thumbnail-link-sep">·</span>
-                            <button
-                              type="button"
-                              className="thumbnail-link-btn thumbnail-link-btn-remove"
-                              onClick={() => {
-                                const next = { ...formData };
-                                delete next.thumbnail;
-                                setFormData(next);
-                                commitDraft(next);
-                              }}
-                            >Remove</button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="settings-folder-button"
-                        onClick={async () => {
-                          const url = await handlePickThumbnail();
-                          if (!url) return;
-                          const next = { ...formData, thumbnail: url };
-                          setFormData(next);
-                          commitDraft(next);
-                        }}
-                      >
-                        Upload
-                      </button>
-                    )}
+              <>
+              <div className="thumbnail-full-header">
+                <span className="thumbnail-full-label">thumbnail</span>
+                {formData.thumbnail && <span className="thumbnail-full-meta">
+                  {(() => {
+                    try {
+                      const decoded = decodeURIComponent(formData.thumbnail);
+                      const parts = decoded.split(/[/\\]/);
+                      return parts[parts.length - 1] || 'image';
+                    } catch {
+                      return formData.thumbnail.split('/').pop()?.split('?')[0] ?? 'image';
+                    }
+                  })()}
+                  {thumbnailMeta && ` · ${thumbnailMeta.width}×${thumbnailMeta.height}`}
+                </span>}
+              </div>
+              {formData.thumbnail && <div className="thumbnail-full-card">
+                <img
+                  key={formData.thumbnail}
+                  className="thumbnail-full-img"
+                  src={formData.thumbnail}
+                  alt=""
+                  onLoad={(e) => {
+                    let ext = '';
+                    try {
+                      const decoded = decodeURIComponent(formData.thumbnail);
+                      ext = decoded.split(/[/\\]/).pop()?.split('.').pop()?.toLowerCase() ?? '';
+                    } catch {
+                      ext = formData.thumbnail.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
+                    }
+                    setThumbnailMeta({ width: e.target.naturalWidth, height: e.target.naturalHeight, ext });
+                  }}
+                />
+                <div className="thumbnail-full-topbar">
+                  <div className="thumbnail-full-actions">
+                    <button
+                      type="button"
+                      className="thumbnail-full-action-btn"
+                      title="Replace"
+                      onClick={async () => {
+                        const url = await handlePickThumbnail();
+                        if (!url) return;
+                        const next = { ...formData, thumbnail: url };
+                        setFormData(next);
+                        commitDraft(next);
+                      }}
+                    ><ImagePlus size={13} /></button>
+                    <button
+                      type="button"
+                      className="thumbnail-full-action-btn"
+                      title="Remove"
+                      onClick={() => {
+                        const next = { ...formData };
+                        delete next.thumbnail;
+                        setFormData(next);
+                        commitDraft(next);
+                      }}
+                    ><Trash2 size={13} /></button>
                   </div>
                 </div>
-              </div>
+                <div className="thumbnail-full-bottombar">
+                  <div className="thumbnail-style-btn">
+                    <span className="thumbnail-style-label">
+                      {formData.thumbnailStyle === 'banner' ? 'Top banner' :
+                       formData.thumbnailStyle === 'square-fill' ? 'Square fill' :
+                       formData.thumbnailStyle === 'circle-fill' ? 'Circle fill' : 'Left strip'}
+                    </span>
+                    <ChevronDown size={9} />
+                    <select
+                      className="thumbnail-style-select"
+                      value={formData.thumbnailStyle ?? "strip"}
+                      onChange={(e) => {
+                        const next = { ...formData, thumbnailStyle: e.target.value };
+                        setFormData(next);
+                        commitDraft(next);
+                      }}
+                    >
+                      <option value="strip">Left strip</option>
+                      <option value="banner">Top banner</option>
+                      <option value="square-fill">Square fill</option>
+                      <option value="circle-fill">Circle fill</option>
+                    </select>
+                  </div>
+                  <div className="thumbnail-fit-seg" role="group" aria-label="Thumbnail fit">
+                    {[{ value: "cover", label: "Fill" }, { value: "contain", label: "Fit" }].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`thumbnail-fit-seg-btn${(formData.thumbnailFit ?? "cover") === value ? " is-active" : ""}`}
+                        onClick={() => { const next = { ...formData, thumbnailFit: value }; setFormData(next); commitDraft(next); }}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>}
+              {!formData.thumbnail && (
+                <button
+                  type="button"
+                  className={`thumbnail-dropzone${isDragOver ? " is-drag-over" : ""}`}
+                  onClick={async () => {
+                    const url = await handlePickThumbnail();
+                    if (!url) return;
+                    const next = { ...formData, thumbnail: url };
+                    setFormData(next);
+                    commitDraft(next);
+                  }}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => { e.preventDefault(); setIsDragOver(false); }}
+                >
+                  <ImagePlus size={28} strokeWidth={1.5} className="thumbnail-dropzone-icon" />
+                  <span className="thumbnail-dropzone-title">Drop image or click to upload</span>
+                  <span className="thumbnail-dropzone-subtitle">PNG · JPG · SVG · up to 10 MB</span>
+                </button>
+              )}
+              </>
             )}
 
             {/* Icon */}
@@ -1744,9 +1862,8 @@ export default function RightPanel({
               </>
             )}
 
-            <div className="edit-section-divider" />
-
             {/* Breaks */}
+
             {showLegacyBreaks && formData.type === "span" && (
                 <div className="breaks-list">
                   {Array.isArray(formData.breaks) && formData.breaks.length > 0 && (
@@ -1906,7 +2023,24 @@ export default function RightPanel({
                 </div>
             )}
 
-            <div className="form-group note-form-group">
+            </>}
+
+            <SectionHeader
+              title="Notes & Sources"
+              isOpen={isNotesOpen}
+              onToggle={() => setIsNotesOpen(v => !v)}
+              summary={(() => {
+                const sourceCount = Array.isArray(formData.sources) ? formData.sources.length : 0;
+                const parts = [
+                  formData.noteFile && "Note",
+                  formData.wikiUrl && "Wiki",
+                  sourceCount > 0 && `${sourceCount} ${sourceCount === 1 ? "source" : "sources"}`,
+                ].filter(Boolean);
+                return parts.length > 0 ? parts.join(" · ") : "No note";
+              })()}
+            />
+
+            {isNotesOpen && <div className="form-group note-form-group">
               {!formData.noteFile ? (
                 <div className="note-add-actions">
                   <div className="note-add-dropdown-wrap">
@@ -1967,7 +2101,7 @@ export default function RightPanel({
                 isEditMode={true}
                 onSourcesChange={handleSourcesChange}
               />
-            </div>
+            </div>}
 
           </form>
         )}
