@@ -383,6 +383,29 @@ app.whenReady().then(async () => {
       if (!normalizedAssetPath.startsWith(normalizedAssetsDir + path.sep)) {
         return new Response('Forbidden', { status: 403 });
       }
+      const rangeHeader = request.headers.get('Range');
+      if (rangeHeader) {
+        const stat = await fs.stat(normalizedAssetPath);
+        const fileSize = stat.size;
+        const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+        if (!match) return new Response('Range Not Satisfiable', { status: 416 });
+        const start = match[1] ? parseInt(match[1], 10) : 0;
+        const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+        if (start > end || end >= fileSize) return new Response('Range Not Satisfiable', { status: 416 });
+        const chunkSize = end - start + 1;
+        const fileHandle = await fs.open(normalizedAssetPath, 'r');
+        const buffer = Buffer.alloc(chunkSize);
+        await fileHandle.read(buffer, 0, chunkSize, start);
+        await fileHandle.close();
+        return new Response(buffer, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(chunkSize),
+          },
+        });
+      }
       return net.fetch(pathToFileURL(normalizedAssetPath).toString());
     } catch (error) {
       console.error('Error serving asset:', error);
