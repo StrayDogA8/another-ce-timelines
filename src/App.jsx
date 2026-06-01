@@ -1286,7 +1286,7 @@ function App() {
         id: `${timelineId}-timeline`,
         type: "timeline",
         title: timelineConfig.title,
-        appVersion: "0.4.0-alpha.4",
+        appVersion: "0.5.0-alpha.1",
         start: timelineConfig.start,
         end: timelineConfig.end,
         detailLevel: timelineConfig.detailLevel,
@@ -1893,7 +1893,7 @@ function App() {
   if (!timelineData) {
     return (
       <>
-        <TopBar title="Timelines" />
+        <TopBar title="Timelines" version="v0.5.0-alpha.1" />
         <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
           <HomePage
             onSelectTimeline={handleLoadTimeline}

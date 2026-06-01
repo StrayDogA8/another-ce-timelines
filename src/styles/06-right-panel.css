@@ -2010,6 +2010,8 @@
 
 .view-group-title p {
   font-weight: 700;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .color-display {

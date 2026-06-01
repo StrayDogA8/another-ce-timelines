@@ -38,6 +38,13 @@
   color: inherit;
 }
 
+.title-bar-version {
+  margin-left: 6px;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  opacity: 0.45;
+}
+
 .title-bar-controls {
   display: flex;
   height: 100%;

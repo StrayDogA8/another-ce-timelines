@@ -2,6 +2,7 @@ import { Minus, Square, X, PanelLeft, PanelRight } from "lucide-react";
 
 export default function TopBar({
   title = "Timelines",
+  version,
   isLeftCollapsed,
   onToggleLeft,
   showRightToggle,
@@ -46,7 +47,10 @@ export default function TopBar({
             fill="currentColor"
           />
         </svg>
-        <span className="title-bar-title">{title}</span>
+        <span className="title-bar-title">
+          {title}
+          {version && <span className="title-bar-version">{version}</span>}
+        </span>
       </div>
       <div className="title-bar-controls">
         {onToggleLeft && (
