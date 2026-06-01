@@ -2995,7 +2995,7 @@ const TimelineView = forwardRef(function TimelineView({
                         {event.thumbnail && (event.thumbnailStyle === "square-fill" || event.thumbnailStyle === "circle-fill") ? (
                           <img className={event.thumbnailStyle === "circle-fill" ? "event-thumbnail-circle" : "event-thumbnail-square"} src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />
                         ) : (<>
-                        {event.thumbnail && event.thumbnailStyle !== "banner" && <img className="event-thumbnail-tile" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                        {event.thumbnail && event.thumbnailStyle !== "banner" && <div className="event-thumbnail-tile" style={{ backgroundImage: `url("${event.thumbnail}")`, backgroundSize: event.thumbnailFit || "cover" }} />}
                         {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
                         <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
                         <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
@@ -3266,7 +3266,7 @@ const TimelineView = forwardRef(function TimelineView({
                 {event.thumbnail && event.thumbnailStyle === "square-fill" ? (
                   <img className="event-thumbnail-square" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />
                 ) : (<>
-                {event.thumbnail && event.thumbnailStyle !== "banner" && <img className="event-thumbnail-tile" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
+                {event.thumbnail && event.thumbnailStyle !== "banner" && <div className="event-thumbnail-tile" style={{ backgroundImage: `url("${event.thumbnail}")`, backgroundSize: event.thumbnailFit || "cover" }} />}
                 {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
                 <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
                 <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>

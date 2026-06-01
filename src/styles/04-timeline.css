@@ -488,7 +488,8 @@
   width: 29px;
   flex-shrink: 0;
   align-self: stretch;
-  object-fit: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   margin-left: -8px;
   margin-top: -2px;
   margin-bottom: -2px;
