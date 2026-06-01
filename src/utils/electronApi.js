@@ -202,6 +202,15 @@ export async function pickAndImportImage({ timelineId }) {
   }
 }
 
+export async function importImageFromPath({ timelineId, filePath }) {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.importImageFromPath({ timelineId, filePath });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getNotesBaseDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

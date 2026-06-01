@@ -2877,10 +2877,14 @@
   box-sizing: border-box;
 }
 
-.thumbnail-dropzone:hover,
-.thumbnail-dropzone.is-drag-over {
+.thumbnail-dropzone:hover {
   background: color-mix(in srgb, var(--active-bg), var(--secondary-bg) 55%);
   border-color: var(--element-bg);
+}
+
+.thumbnail-dropzone.is-drag-over {
+  background: color-mix(in srgb, var(--active-bg), var(--secondary-bg) 55%);
+  border-color: var(--link-blue);
 }
 
 .thumbnail-dropzone-icon {

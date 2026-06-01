@@ -76,6 +76,7 @@ export default function RightPanel({
     handleUnlinkNote,
     handlePickLocalImage,
     handlePickThumbnail,
+    handleDropThumbnail,
   } = useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate });
   const prevSelectedIdRef = useRef(null);
   const titleTextareaRef = useRef(null);
@@ -1793,7 +1794,20 @@ export default function RightPanel({
                   }}
                   onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                   onDragLeave={() => setIsDragOver(false)}
-                  onDrop={(e) => { e.preventDefault(); setIsDragOver(false); }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    const file = e.dataTransfer.files[0];
+                    if (!file) return;
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    if (!['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return;
+                    const filePath = window.electron?.getPathForFile?.(file) ?? file.path;
+                    const url = await handleDropThumbnail(filePath);
+                    if (!url) return;
+                    const next = { ...formData, thumbnail: url };
+                    setFormData(next);
+                    commitDraft(next);
+                  }}
                 >
                   <ImagePlus size={28} strokeWidth={1.5} className="thumbnail-dropzone-icon" />
                   <span className="thumbnail-dropzone-title">Drop image or click to upload</span>

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
   saveTimeline: (data, filename) => ipcRenderer.invoke('save-timeline', { data, filename }),
@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('electron', {
   getNotesBaseDir: () => ipcRenderer.invoke('get-notes-base-dir'),
   getAssetsBaseDir: () => ipcRenderer.invoke('get-assets-base-dir'),
   pickAndImportImage: (payload) => ipcRenderer.invoke('pick-and-import-image', payload),
+  importImageFromPath: (payload) => ipcRenderer.invoke('import-image-from-path', payload),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   chooseAssetsDir: () => ipcRenderer.invoke('choose-assets-dir'),
   openAssetsFolder: () => ipcRenderer.invoke('open-assets-folder'),
   listThemes: () => ipcRenderer.invoke('list-themes'),

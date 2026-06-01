@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { renderNoteMarkdown } from "../utils/noteUtils";
-import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage } from "../utils/electronApi";
+import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage, importImageFromPath } from "../utils/electronApi";
 import { isSafeNoteFilename } from "../utils/validation";
 
 export function useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate }) {
@@ -191,6 +191,13 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     return result.assetUrl;
   }, [timelineId]);
 
+  const handleDropThumbnail = useCallback(async (filePath) => {
+    if (!timelineId || !filePath) return null;
+    const result = await importImageFromPath({ timelineId, filePath });
+    if (!result?.success) return null;
+    return result.assetUrl;
+  }, [timelineId]);
+
   return {
     noteInitialContent,
     setNoteInitialContent,
@@ -212,5 +219,6 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     handleUnlinkNote,
     handlePickLocalImage,
     handlePickThumbnail,
+    handleDropThumbnail,
   };
 }

@@ -1301,6 +1301,34 @@ ipcMain.handle('get-assets-base-dir', async () => {
   }
 });
 
+async function importImageByPath(imagePath, timelineId) {
+  const assetsBase = await getAssetsRootDir();
+  const timelineAssetsDir = await getAssetsDir(timelineId);
+  const normalizedImage = path.normalize(imagePath);
+  const normalizedAssetsBase = path.normalize(assetsBase);
+
+  let finalAssetPath;
+  if (normalizedImage.startsWith(normalizedAssetsBase + path.sep) || normalizedImage === normalizedAssetsBase) {
+    finalAssetPath = imagePath;
+  } else {
+    await fs.mkdir(timelineAssetsDir, { recursive: true });
+    let destPath = path.join(timelineAssetsDir, path.basename(imagePath));
+    let counter = 1;
+    while (true) {
+      try { await fs.access(destPath); } catch { break; }
+      const ext = path.extname(imagePath);
+      const base = path.basename(imagePath, ext);
+      destPath = path.join(timelineAssetsDir, `${base}-${counter}${ext}`);
+      counter++;
+    }
+    await fs.copyFile(imagePath, destPath);
+    finalAssetPath = destPath;
+  }
+
+  const assetUrl = `timelines-asset://asset/${encodeURIComponent(path.normalize(finalAssetPath))}`;
+  return { success: true, relativePath: path.basename(finalAssetPath), assetUrl };
+}
+
 ipcMain.handle('pick-and-import-image', async (event, { timelineId }) => {
   try {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -1309,36 +1337,18 @@ ipcMain.handle('pick-and-import-image', async (event, { timelineId }) => {
       properties: ['openFile'],
     });
     if (result.canceled || !result.filePaths[0]) return { cancelled: true };
-
-    const imagePath = result.filePaths[0];
-    const assetsBase = await getAssetsRootDir();
-    const notesBase = await getNotesRootDir();
-    const timelineAssetsDir = await getAssetsDir(timelineId);
-    const normalizedImage = path.normalize(imagePath);
-    const normalizedAssetsBase = path.normalize(assetsBase);
-
-    let finalAssetPath;
-    if (normalizedImage.startsWith(normalizedAssetsBase + path.sep) || normalizedImage === normalizedAssetsBase) {
-      finalAssetPath = imagePath;
-    } else {
-      await fs.mkdir(timelineAssetsDir, { recursive: true });
-      let destPath = path.join(timelineAssetsDir, path.basename(imagePath));
-      let counter = 1;
-      while (true) {
-        try { await fs.access(destPath); } catch { break; }
-        const ext = path.extname(imagePath);
-        const base = path.basename(imagePath, ext);
-        destPath = path.join(timelineAssetsDir, `${base}-${counter}${ext}`);
-        counter++;
-      }
-      await fs.copyFile(imagePath, destPath);
-      finalAssetPath = destPath;
-    }
-
-    const assetUrl = `timelines-asset://asset/${encodeURIComponent(path.normalize(finalAssetPath))}`;
-    return { success: true, relativePath: path.basename(finalAssetPath), assetUrl };
+    return await importImageByPath(result.filePaths[0], timelineId);
   } catch (error) {
     console.error('Error importing image:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('import-image-from-path', async (event, { timelineId, filePath }) => {
+  try {
+    return await importImageByPath(filePath, timelineId);
+  } catch (error) {
+    console.error('Error importing dropped image:', error);
     return { success: false, error: error.message };
   }
 });
