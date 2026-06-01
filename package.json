@@ -16,7 +16,7 @@
   "build": {
     "appId": "com.timelines.app",
     "productName": "Timelines",
-    "artifactName": "Timelines-0.4.0-alpha.4-Setup.${ext}",
+    "artifactName": "Timelines-${version}-Setup.${ext}",
     "directories": {
       "output": "release"
     },
