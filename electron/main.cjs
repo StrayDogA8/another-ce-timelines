@@ -375,9 +375,21 @@ app.whenReady().then(async () => {
   protocol.handle('timelines-asset', async (request) => {
     try {
       const url = new URL(request.url);
-      const encodedPath = url.pathname.slice(1);
-      const assetPath = decodeURIComponent(encodedPath);
       const assetsDir = await getAssetsRootDir();
+      // New format: timelines-asset://asset?p=<encodedAbsPath>
+      // Legacy format: timelines-asset://asset/<encodedAbsPath>
+      // On Mac, Chromium's standard-scheme normalization strips the leading %2F (encoded /)
+      // from legacy URLs, making the path relative. Detect and restore it.
+      const pParam = url.searchParams.get('p');
+      let assetPath;
+      if (pParam !== null) {
+        assetPath = pParam;
+      } else {
+        assetPath = decodeURIComponent(url.pathname.slice(1));
+        if (process.platform !== 'win32' && assetPath && !path.isAbsolute(assetPath)) {
+          assetPath = '/' + assetPath;
+        }
+      }
       const normalizedAssetPath = path.normalize(assetPath);
       const normalizedAssetsDir = path.normalize(assetsDir);
       if (!normalizedAssetPath.startsWith(normalizedAssetsDir + path.sep)) {
@@ -1335,7 +1347,9 @@ function extractThumbnailFilename(thumbnail) {
   if (thumbnail.startsWith('timelines-asset://')) {
     try {
       const url = new URL(thumbnail);
-      return path.basename(decodeURIComponent(url.pathname.slice(1)));
+      const p = url.searchParams.get('p');
+      const decoded = p !== null ? p : decodeURIComponent(url.pathname.slice(1));
+      return path.basename(decoded);
     } catch { return null; }
   }
   if (!thumbnail.includes('://')) return thumbnail; // already a bare filename
@@ -1346,7 +1360,7 @@ async function resolveThumbnailUrl(filename, timelineId) {
   if (!filename || !timelineId) return null;
   try {
     const dir = await getAssetsDir(timelineId);
-    return `timelines-asset://asset/${encodeURIComponent(path.normalize(path.join(dir, filename)))}`;
+    return `timelines-asset://asset?p=${encodeURIComponent(path.normalize(path.join(dir, filename)))}`;
   } catch { return null; }
 }
 
@@ -1394,7 +1408,7 @@ async function importImageByPath(imagePath, timelineId) {
     finalAssetPath = destPath;
   }
 
-  const assetUrl = `timelines-asset://asset/${encodeURIComponent(path.normalize(finalAssetPath))}`;
+  const assetUrl = `timelines-asset://asset?p=${encodeURIComponent(path.normalize(finalAssetPath))}`;
   return { success: true, relativePath: path.basename(finalAssetPath), assetUrl };
 }
 
