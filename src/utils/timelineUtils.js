@@ -786,8 +786,9 @@ export function layoutEvents({
         return { boxHeight: bannerNaturalHeight + BANNER_HEIGHT, isMultiLine: true, boxWidth: EVENT_WIDTH };
       }
       const isMultiLine = naturalHeight > baseline;
+      const canonicalHeight = showDateRow ? singleLineHeight : noYearSingleLineHeight;
       return {
-        boxHeight: isMultiLine ? naturalHeight : (showDateRow ? singleLineHeight : noYearSingleLineHeight),
+        boxHeight: isMultiLine ? naturalHeight : Math.max(naturalHeight, canonicalHeight),
         isMultiLine,
         boxWidth: EVENT_WIDTH,
       };
