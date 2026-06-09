@@ -2080,6 +2080,10 @@ function App() {
           onNotesStorageDirChange={handleNotesStorageDirChange}
           onPickTimelinesDir={handlePickTimelinesDir}
           onPickNotesDir={handlePickNotesDir}
+          assetsStorageDir={assetsStorageDir}
+          onAssetsStorageDirChange={handleAssetsStorageDirChange}
+          onPickAssetsDir={handlePickAssetsDir}
+          onOpenAssetsFolder={handleOpenAssetsFolder}
           onOpenFontsFolder={handleOpenFontsFolder}
           onOpenTimelinesFolder={handleOpenTimelinesFolder}
           onOpenNotesFolder={handleOpenNotesFolder}
