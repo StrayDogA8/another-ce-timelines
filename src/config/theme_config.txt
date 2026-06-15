@@ -1,17 +1,27 @@
-
-"text-primary": Primary text, icons, timeline line, and primary borders/fills
-"ui-muted": Muted/secondary icons, section labels, subtle borders and fills
-"accent-color": General borders, dividers, and accent backgrounds (buttons, panels, hovers)
-"surface-active": Active/selected state backgrounds (tabs, pills, toggles, primary buttons)
-"surface": Panels, cards, context menus, and secondary backgrounds
-"inset-bg": Tertiary/inset backgrounds (wiki tables, export background option, homepage base)
-"app-bg": App/timeline view background, inputs, and modal backgrounds
-"text-muted": Muted text (event dates, descriptions, subtle titles)
-"text-subtle": Secondary/placeholder text, muted labels
-"era-label": Era item label text color
-"selection-color": Selection outlines and highlight rings
-"link-color": Link text and underline color
-"highlight-color": Markdown highlight background (==highlight==)
-"light-bg": Default era background color (fallback when an era has no custom color)
-"border-color": General borders (search bar, cards, pills, buttons)
-"secondary-text": Default span fill/background color (fallback when a span has no custom color)
+{
+  "name": "Theme name shown in theme pickers",
+  "type": "light | dark, used to pick readable contrast defaults",
+  "collection": "Group name for the theme. 'bundled' ships with the app, but users can set any name to group their own related/variant themes",
+  "font": {
+    "family": "Optional font family applied when this theme is active",
+    "cssUrl": "Optional @font-face / Google Fonts stylesheet URL for the family"
+  },
+  "colors": {
+    "text-primary": "Primary text, icons, timeline line, and primary borders/fills",
+    "ui-muted": "Muted/secondary icons, section labels, subtle borders and fills",
+    "accent-color": "General borders, dividers, and accent backgrounds (buttons, panels, hovers)",
+    "surface-active": "Active/selected state backgrounds (tabs, pills, toggles, primary buttons)",
+    "surface": "Panels, cards, context menus, and secondary backgrounds",
+    "inset-bg": "Tertiary/inset backgrounds (wiki tables, export background option, homepage base)",
+    "app-bg": "App/timeline view background, inputs, and modal backgrounds",
+    "text-muted": "Muted text (event dates, descriptions, subtle titles)",
+    "text-subtle": "Secondary/placeholder text, muted labels",
+    "era-label": "Era item label text color",
+    "selection-color": "Selection outlines and highlight rings",
+    "link-color": "Link text and underline color",
+    "highlight-color": "Markdown highlight background (==highlight==)",
+    "light-bg": "Default era background color (fallback when an era has no custom color)",
+    "border-color": "General borders (search bar, cards, pills, buttons)",
+    "secondary-text": "Default span fill/background color (fallback when a span has no custom color)"
+  }
+}
