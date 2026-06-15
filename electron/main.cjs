@@ -3,6 +3,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const http = require('http');
 const { autoUpdater } = require('electron-updater');
 const DEFAULT_THEME_KEY = 'parchment';
 

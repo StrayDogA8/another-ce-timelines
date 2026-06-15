@@ -199,7 +199,7 @@ export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = 
   const originalImage = renderer.image.bind(renderer);
   renderer.image = (href, title, text) => {
     const youtubeId = extractYouTubeId(href);
-    if (youtubeId) return `<iframe class="video-embed" src="https://www.youtube-nocookie.com/embed/${youtubeId}" width="560" height="315" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+    if (youtubeId) return `<iframe class="video-embed" src="https://www.youtube-nocookie.com/embed/${youtubeId}" width="560" height="315" frameborder="0" referrerpolicy="origin-when-cross-origin" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
     const vimeoId = extractVimeoId(href);
     if (vimeoId) return `<iframe class="video-embed" src="https://player.vimeo.com/video/${vimeoId}" width="560" height="315" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>`;
     if (/^https:\/\//i.test(href) && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(href)) return `<video class="video-embed" src="${href}" controls></video>`;
