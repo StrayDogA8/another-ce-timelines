@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, HardDrive, LayoutGrid, List, MoreVertical, Cloud, RefreshCw, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
-import { login, logout, getCurrentUser, onAuthStateChange, refreshCurrentUser } from "../lib/auth.js";
-import { apiCreateTimeline, apiListTimelines, apiDeleteTimeline, apiGetTimelineById, apiUpdateTimeline } from "../lib/api.js";
-import { saveCloudCache, loadCloudCache, updateCloudMeta, deleteCloudCache, listCloudMetas, saveTimelineToFile, createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
+import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
   const [dest, setDest] = useState(null);
@@ -101,6 +99,8 @@ export default function HomePage({
   fonts,
   themes,
   onAppThemeChange,
+  oldFormatThemeCount = 0,
+  onMigrateOldThemes,
   onAppFontChange,
   onAppFontSizeChange,
   timelineStorageDir,
@@ -122,13 +122,11 @@ export default function HomePage({
   onStartMaximizedChange,
   onRefreshThemes,
   openSettingsSignal = 0,
-  openCloudSettingsSignal = 0,
   onAppSettingsClosed,
   keybinds = cloneDefaultKeybinds(),
   onKeybindsChange,
 }) {
   const [timelineFiles, setTimelineFiles] = useState([]);
-  const [cloudTimelineFiles, setCloudTimelineFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
@@ -148,14 +146,6 @@ export default function HomePage({
   const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
   const [moveFolderTarget, setMoveFolderTarget] = useState(null);
   const [showAllFolders, setShowAllFolders] = useState(false);
-  const [filter, setFilter] = useState("all");
-  const [cloudUser, setCloudUser] = useState(() => getCurrentUser());
-  const [cloudEmail, setCloudEmail] = useState("");
-  const [cloudPassword, setCloudPassword] = useState("");
-  const [cloudError, setCloudError] = useState("");
-  const [cloudLoading, setCloudLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [cloudActionError, setCloudActionError] = useState("");
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [marketplaceThemes, setMarketplaceThemes] = useState([]);
   const [marketplaceError, setMarketplaceError] = useState("");
@@ -165,14 +155,13 @@ export default function HomePage({
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
-  const [storeLocallyDialogFile, setStoreLocallyDialogFile] = useState(null);
   const [settingsSection, setSettingsSection] = useState("general");
   const [updateStatus, setUpdateStatus] = useState(null); // null | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'dev'
+  const [themeMigrationStatus, setThemeMigrationStatus] = useState(null); // null | 'migrating' | { count }
   const [recordingKey, setRecordingKey] = useState(null);
   const recordingKeyRef = useRef(null);
   const previousViewRef = useRef("home");
   const menuRef = useRef(null);
-  const syncingRef = useRef(false);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
   const bundledThemes = useMemo(() => loadThemeConfig().themes, []);
   const bundledKeys = useMemo(
@@ -322,13 +311,6 @@ export default function HomePage({
     }
   }, [settingsOnly]);
 
-  useEffect(() => {
-    if (openCloudSettingsSignal > 0) {
-      setView("settings");
-      setSettingsSection("cloud");
-    }
-  }, [openCloudSettingsSignal]);
-
   useEffect(() => { recordingKeyRef.current = recordingKey; }, [recordingKey]);
 
   useEffect(() => {
@@ -387,236 +369,6 @@ export default function HomePage({
     setCurrentFolder("");
     setShowAllFolders(false);
   }, [timelineStorageDir]);
-
-  // Sync auth state and refresh user data (including plan) when logged in
-  useEffect(() => {
-    const unsub = onAuthStateChange((user) => setCloudUser(user));
-    if (getCurrentUser()) refreshCurrentUser();
-    return unsub;
-  }, []);
-
-// Fetch cloud timelines when user has a qualifying plan, or show cached when logged out
-  useEffect(() => {
-    if (!cloudUser || !["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase())) {
-      listCloudMetas().then(async (metas) => {
-        if (!metas || Object.keys(metas).length === 0) {
-          setCloudTimelineFiles([]);
-          return;
-        }
-        const entries = await Promise.all(
-          Object.entries(metas).map(async ([backendId, meta]) => {
-            const cached = await loadCloudCache(backendId);
-            const name = cached?.data?.file?.title ?? `Cloud Timeline ${backendId}`;
-            return {
-              id: `cloud:${backendId}`,
-              name,
-              modifiedAt: meta.localUpdatedAt ? new Date(meta.localUpdatedAt).getTime() : null,
-              storageType: 'cloud',
-              syncStatus: 'unsynced',
-            };
-          })
-        );
-        setCloudTimelineFiles(entries);
-      });
-      return;
-    }
-    Promise.all([apiListTimelines(), listCloudMetas()]).then(([result, metas]) => {
-      if (result.success && Array.isArray(result.data)) {
-        setCloudTimelineFiles(result.data.map(t => {
-          const backendId = String(t._backendId || t.id);
-          const meta = metas?.[backendId];
-          return {
-            id: `cloud:${backendId}`,
-            name: t.title,
-            modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
-            storageType: 'cloud',
-            syncStatus: meta?.syncStatus ?? 'synced',
-          };
-        }));
-      }
-    });
-  }, [cloudUser]);
-
-  const handleCloudSubmit = async (e) => {
-    e.preventDefault();
-    setCloudError("");
-    setCloudLoading(true);
-    const result = await login({ email: cloudEmail, password: cloudPassword });
-    if (result.success) {
-      setCloudEmail("");
-      setCloudPassword("");
-    } else {
-      setCloudError(result.error || "Something went wrong.");
-    }
-    setCloudLoading(false);
-  };
-
-  const handleCloudLogout = async () => {
-    await logout();
-    setCloudUser(null);
-  };
-
-  const canUseCloud = cloudUser && ["DEV", "PRO"].includes(cloudUser.plan?.toUpperCase());
-
-  const showCloudError = (msg) => {
-    setCloudActionError(msg);
-    setTimeout(() => setCloudActionError(""), 4000);
-  };
-
-  const handleSync = async () => {
-    if (!canUseCloud || syncingRef.current) return;
-    syncingRef.current = true;
-    setSyncing(true);
-    let conflictsFound = 0;
-    try {
-      const [localResult, cloudResult, metas] = await Promise.all([
-        window.electron?.listTimelines?.() ?? [],
-        apiListTimelines(),
-        listCloudMetas(),
-      ]);
-
-      if (!cloudResult.success) {
-        showCloudError(`Sync failed: ${cloudResult.error || 'Unknown error'}`);
-        return;
-      }
-
-      // Retry unsynced timelines and detect conflicts
-      const updatedMetas = { ...metas };
-      await Promise.all(
-        Object.entries(metas)
-          .filter(([, m]) => m.syncStatus === 'unsynced')
-          .map(async ([backendId, meta]) => {
-            const cached = await loadCloudCache(backendId);
-            if (!cached.data) return;
-
-            const serverResult = await apiGetTimelineById(backendId);
-            if (!serverResult.success) return; // still offline
-
-            const serverUpdatedAt = serverResult.data?.updatedAt;
-            // No conflict if either timestamp is absent (can't compare) or they refer to the same instant.
-            // Use getTime() to normalize precision differences (e.g. nanoseconds vs microseconds from server).
-            const noConflict = !meta.lastServerUpdatedAt || !serverUpdatedAt ||
-              new Date(meta.lastServerUpdatedAt).getTime() === new Date(serverUpdatedAt).getTime();
-            if (noConflict) {
-              // No conflict — upload cached version
-              const uploadResult = await apiUpdateTimeline(backendId, {
-                title: cached.data.file?.title,
-                slug: backendId,
-                description: cached.data.file?.description ?? '',
-                isPublic: cached.data.file?.isPublic ?? false,
-                contentJson: JSON.stringify(cached.data),
-              });
-              if (uploadResult.success) {
-                // Clean up any previously created conflict file for this timeline
-                if (meta.conflictFileId && window.electron?.deleteTimeline) {
-                  await window.electron.deleteTimeline({ id: meta.conflictFileId, deleteAssets: false }).catch(() => {});
-                }
-                const syncedMeta = { ...meta, lastServerUpdatedAt: uploadResult.data?.updatedAt ?? serverUpdatedAt, syncStatus: 'synced', conflictFileId: null };
-                await updateCloudMeta(backendId, syncedMeta);
-                updatedMetas[backendId] = syncedMeta;
-              }
-            } else {
-              // Conflict — save local version as a conflict copy, keep server version in cache
-              const conflictTitle = `${meta.title ?? 'Timeline'} (Conflict ${new Date().toLocaleDateString()})`;
-              const conflictId = conflictTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-              await saveTimelineToFile(cached.data, conflictId);
-
-              const serverContentJson = serverResult.data?.contentJson ?? serverResult.data?.data;
-              const serverData = typeof serverContentJson === 'string' ? JSON.parse(serverContentJson) : serverContentJson;
-              const conflictMeta = { ...meta, lastServerUpdatedAt: serverUpdatedAt, localUpdatedAt: serverUpdatedAt, syncStatus: 'conflict', conflictFileId: conflictId };
-              await saveCloudCache(backendId, serverData ?? cached.data, conflictMeta);
-              updatedMetas[backendId] = conflictMeta;
-              conflictsFound++;
-            }
-          })
-      );
-
-      // Refresh local file list from disk (picks up any newly created conflict files, no duplicates)
-      const freshLocal = await window.electron?.listTimelines?.() ?? localResult ?? [];
-      setTimelineFiles(freshLocal.map(f => ({ ...f, storageType: 'local' })));
-
-      // Rebuild cloud list with updated sync statuses
-      setCloudTimelineFiles((Array.isArray(cloudResult.data) ? cloudResult.data : []).map(t => {
-        const backendId = String(t._backendId || t.id);
-        const meta = updatedMetas[backendId];
-        return {
-          id: `cloud:${backendId}`,
-          name: t.title,
-          modifiedAt: t.updatedAt ? new Date(t.updatedAt).getTime() : null,
-          storageType: 'cloud',
-          syncStatus: meta?.syncStatus ?? 'synced',
-        };
-      }));
-
-      if (conflictsFound > 0) {
-        showCloudError(`${conflictsFound} conflict${conflictsFound > 1 ? 's' : ''} detected — local copies saved.`);
-      }
-    } catch (err) {
-      showCloudError(`Sync failed: ${err.message}`);
-    } finally {
-      syncingRef.current = false;
-      setSyncing(false);
-    }
-  };
-
-  const handleStoreInCloud = async (file) => {
-    try {
-      const data = await window.electron.loadTimeline(file.id);
-      const slug = file.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const result = await apiCreateTimeline({ title: file.name, slug, contentJson: JSON.stringify(data) });
-      if (!result.success) throw new Error(result.error || 'Failed to store in cloud.');
-
-      const backendId = result.data?.id ?? result.data?._backendId;
-      if (backendId) {
-        await window.electron.deleteTimeline({ id: file.id, deleteAssets: false });
-        setTimelineFiles(prev => prev.filter(f => f.id !== file.id));
-        setCloudTimelineFiles(prev => [...prev, {
-          id: `cloud:${backendId}`,
-          name: file.name,
-          modifiedAt: Date.now(),
-          storageType: 'cloud',
-          syncStatus: 'synced',
-        }]);
-      }
-    } catch (err) {
-      showCloudError(`Could not store in cloud: ${err.message}`);
-    }
-  };
-
-  const handleConfirmStoreLocally = async () => {
-    const file = storeLocallyDialogFile;
-    setStoreLocallyDialogFile(null);
-    if (file) await handleStoreLocally(file);
-  };
-
-  const handleStoreLocally = async (file) => {
-    try {
-      const backendId = file.id.slice('cloud:'.length);
-      const result = await apiGetTimelineById(backendId);
-      if (!result.success) throw new Error(result.error || 'Failed to fetch from cloud.');
-      const contentJson = result.data?.contentJson ?? result.data?.data;
-      if (!contentJson) throw new Error('This cloud timeline has no content.');
-      const data = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
-
-      const localId = file.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      await window.electron.saveTimeline(data, localId);
-
-      await Promise.all([
-        apiDeleteTimeline(backendId),
-        deleteCloudCache(backendId),
-      ]);
-
-      setCloudTimelineFiles(prev => prev.filter(f => f.id !== file.id));
-      setTimelineFiles(prev => [...prev, {
-        id: localId,
-        name: file.name,
-        modifiedAt: Date.now(),
-        storageType: 'local',
-      }]);
-    } catch (err) {
-      showCloudError(`Could not store locally: ${err.message}`);
-    }
-  };
 
   // Close context menus when clicking outside
   useEffect(() => {
@@ -694,6 +446,14 @@ export default function HomePage({
     }
   };
 
+  const handleMigrateOldThemes = async () => {
+    if (!onMigrateOldThemes) return;
+    setThemeMigrationStatus("migrating");
+    const count = await onMigrateOldThemes();
+    setThemeMigrationStatus({ count });
+    setTimeout(() => setThemeMigrationStatus(null), 3000);
+  };
+
   const handleDeleteTheme = async (theme) => {
     if (!theme?.id) return;
     setMarketplaceBusyId(theme.id);
@@ -718,17 +478,7 @@ export default function HomePage({
         throw new Error("Duplicate is only available in the desktop app.");
       }
       // Load the original timeline
-      let originalData;
-      if (file.storageType === 'cloud') {
-        const backendId = file.id.slice('cloud:'.length);
-        const result = await apiGetTimelineById(backendId);
-        if (!result.success) throw new Error(result.error || 'Failed to load cloud timeline.');
-        const contentJson = result.data?.contentJson ?? result.data?.data;
-        if (!contentJson) throw new Error('This cloud timeline has no content yet.');
-        originalData = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
-      } else {
-        originalData = await window.electron.loadTimeline(file.id);
-      }
+      const originalData = await window.electron.loadTimeline(file.id);
 
       // Create duplicate with new name
       const duplicateName = `${file.name} Copy`;
@@ -833,11 +583,7 @@ export default function HomePage({
     if (!file) return;
 
     try {
-      if (file.storageType === 'cloud') {
-        const backendId = file.id.slice('cloud:'.length);
-        await apiDeleteTimeline(backendId);
-        setCloudTimelineFiles(prev => prev.filter(f => f.id !== file.id));
-      } else if (window.electron?.deleteTimeline) {
+      if (window.electron?.deleteTimeline) {
         await window.electron.deleteTimeline({
           id: file.id,
           deleteAssets: deleteDialogWithAssets,
@@ -858,7 +604,7 @@ export default function HomePage({
   };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const allTimelines = [...timelineFiles, ...cloudTimelineFiles];
+  const allTimelines = timelineFiles;
 
   const visibleSubfolders = useMemo(() => {
     if (normalizedQuery) return [];
@@ -880,14 +626,13 @@ export default function HomePage({
   const filteredTimelines = allTimelines
     .filter((file) => {
       const matchesSearch = !normalizedQuery || file.name.toLowerCase().includes(normalizedQuery);
-      const matchesFilter = filter === "all" || file.storageType === filter;
       const fileFolder = file.folder ?? '';
       const matchesFolder = currentFolder
         ? fileFolder === currentFolder || fileFolder.startsWith(currentFolder + '/')
         : normalizedQuery
           ? true
           : fileFolder === '';
-      return matchesSearch && matchesFilter && matchesFolder;
+      return matchesSearch && matchesFolder;
     })
     .sort((a, b) =>
       sortMode === "name" ? a.name.localeCompare(b.name)
@@ -977,31 +722,7 @@ export default function HomePage({
             </button>
           </div>
           <div className="timeline-toolbar-right">
-            {cloudTimelineFiles.length > 0 && (
-              <div className="timeline-filter-tabs">
-                {["all", "local", "cloud"].map((tab) => (
-                  <button
-                    key={tab}
-                    className={`timeline-filter-tab${filter === tab ? " active" : ""}`}
-                    onClick={() => setFilter(tab)}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-            )}
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              {canUseCloud && (
-                <button
-                  className="timeline-view-toggle"
-                  onClick={handleSync}
-                  aria-label="Sync timelines"
-                  title="Sync"
-                  disabled={syncing}
-                >
-                  <RefreshCw size={15} className={syncing ? "spin" : ""} />
-                </button>
-              )}
               <button
                 className="timeline-view-toggle timeline-sort-btn"
                 onClick={() => setSortMode(s => s === "date" ? "name" : s === "name" ? "name-desc" : "date")}
@@ -1046,10 +767,6 @@ export default function HomePage({
               );
             })}
           </div>
-        )}
-
-        {cloudActionError && (
-          <div className="cloud-action-error">{cloudActionError}</div>
         )}
 
         {currentFolder && (() => {
@@ -1130,12 +847,6 @@ export default function HomePage({
                   {file.modifiedAt && (
                     <span className="timeline-item-meta">{relativeTime(file.modifiedAt)}</span>
                   )}
-                  {cloudTimelineFiles.length > 0 && (
-                    <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
-                      {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                      {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
-                    </span>
-                  )}
                   <button
                     className="timeline-item-dots"
                     onClick={(e) => { e.stopPropagation(); handleContextMenu(e, file); }}
@@ -1171,12 +882,6 @@ export default function HomePage({
                   )}
                   <span className="timeline-item-meta">{file.modifiedAt ? `Edited ${relativeTime(file.modifiedAt)}` : ""}</span>
                 </div>
-                {cloudTimelineFiles.length > 0 && (
-                  <span className={`timeline-item-badge${file.storageType === 'cloud' ? ` cloud ${file.syncStatus ?? 'synced'}` : ''}`}>
-                    {file.storageType === 'cloud' ? <Cloud size={10} strokeWidth={2} /> : <HardDrive size={10} strokeWidth={2} />}
-                    {file.storageType === 'cloud' ? ({ synced: 'Cloud', unsynced: 'Unsynced', offline: 'Offline', conflict: 'Conflict' }[file.syncStatus] ?? 'Cloud') : 'Local'}
-                  </span>
-                )}
               </div>
             ))}
           </div>
@@ -1373,6 +1078,25 @@ export default function HomePage({
                               ))}
                             </select>
                           </div>
+                          {themeMigrationStatus?.count != null ? (
+                            <div className="theme-migration-notice">
+                              {themeMigrationStatus.count} theme{themeMigrationStatus.count === 1 ? "" : "s"} updated.
+                            </div>
+                          ) : oldFormatThemeCount > 0 ? (
+                            <div className="theme-migration-notice">
+                              <span>
+                                {oldFormatThemeCount} theme{oldFormatThemeCount === 1 ? "" : "s"} are using an older format. Update all?
+                              </span>
+                              <button
+                                type="button"
+                                className="theme-migration-button"
+                                onClick={handleMigrateOldThemes}
+                                disabled={themeMigrationStatus === "migrating"}
+                              >
+                                {themeMigrationStatus === "migrating" ? "Updating..." : "Update All"}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1647,65 +1371,6 @@ export default function HomePage({
                   </>
                 )}
 
-                {settingsSection === "cloud" && (
-                  <>
-                    {cloudUser ? (
-                      <div className="settings-row">
-                        <div className="settings-row-left">
-                          <div className="settings-row-label">Account</div>
-                          <div className="settings-row-description">{cloudUser.email}</div>
-                          {cloudUser.verified === false && (
-                            <div className="settings-path-error">Email not verified — please verify at our website.</div>
-                          )}
-                          {cloudUser.plan && (
-                            <div className="settings-row-description">{cloudUser.plan} Plan</div>
-                          )}
-                        </div>
-                        <div className="settings-row-right">
-                          <button className="settings-folder-button" type="button" onClick={handleCloudLogout}>
-                            Log Out
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="settings-row">
-                        <div className="settings-row-left">
-                          <div className="settings-row-label">Log In</div>
-                          <div className="settings-row-description">Sign in to sync your timelines to the cloud.</div>
-                          {cloudError && (
-                            <div className="settings-path-error">{cloudError}</div>
-                          )}
-                        </div>
-                        <div className="settings-row-right">
-                          <form className="settings-cloud-form" onSubmit={handleCloudSubmit}>
-                            <input
-                              className="settings-input"
-                              type="email"
-                              placeholder="Email"
-                              value={cloudEmail}
-                              onChange={(e) => setCloudEmail(e.target.value)}
-                              required
-                            />
-                            <input
-                              className="settings-input"
-                              type="password"
-                              placeholder="Password"
-                              value={cloudPassword}
-                              onChange={(e) => setCloudPassword(e.target.value)}
-                              required
-                            />
-                            <div className="settings-folder-actions">
-                              <button className="settings-folder-button" type="submit" disabled={cloudLoading}>
-                                {cloudLoading ? "..." : "Log In"}
-                              </button>
-                            </div>
-                          </form>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
               </div>
             </div>
           </div>
@@ -1765,48 +1430,6 @@ export default function HomePage({
         </div>
       )}
 
-      {storeLocallyDialogFile && (
-        <div
-          className="settings-backdrop"
-          onClick={() => setStoreLocallyDialogFile(null)}
-        >
-          <div
-            className="settings-modal confirm-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="settings-header">
-              <h2 className="settings-title">STORE LOCALLY</h2>
-              <button
-                className="settings-back-button"
-                onClick={() => setStoreLocallyDialogFile(null)}
-                aria-label="Close dialog"
-              >
-                <X size={18} strokeWidth={2} />
-              </button>
-            </div>
-            <div className="confirm-content">
-              <p className="confirm-text">
-                "{storeLocallyDialogFile.name}" will be saved to your device and removed from the cloud. This cannot be undone.
-              </p>
-            </div>
-            <div className="confirm-actions">
-              <button
-                className="settings-folder-button"
-                onClick={() => setStoreLocallyDialogFile(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="settings-folder-button confirm-delete-button"
-                onClick={handleConfirmStoreLocally}
-              >
-                Store Locally
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {contextMenu && (
         <div
           ref={menuRef}
@@ -1835,47 +1458,20 @@ export default function HomePage({
             <span>Duplicate</span>
           </button>
 
-          {canUseCloud && (
-            <>
-              <div className="context-menu-separator" />
-              {contextMenu.file.storageType === 'cloud' ? (
-                <button
-                  className="context-menu-item"
-                  onClick={() => handleMenuAction(() => setStoreLocallyDialogFile(contextMenu.file))}
-                >
-                  <HardDrive size={16} />
-                  <span>Store Locally</span>
-                </button>
-              ) : (
-                <button
-                  className="context-menu-item"
-                  onClick={() => handleMenuAction(() => handleStoreInCloud(contextMenu.file))}
-                >
-                  <Cloud size={16} />
-                  <span>Store in Cloud</span>
-                </button>
-              )}
-            </>
-          )}
-
-          {contextMenu?.file?.storageType !== 'cloud' && (
-            <>
-              <button
-                className="context-menu-item"
-                onClick={() => handleMenuAction(() => { setRenameTarget({ type: 'timeline', id: contextMenu.file.id, currentName: contextMenu.file.name }); setRenameName(contextMenu.file.name); })}
-              >
-                <Pencil size={16} />
-                <span>Rename</span>
-              </button>
-              <button
-                className="context-menu-item"
-                onClick={() => handleMenuAction(() => handleOpenMoveDialog(contextMenu.file))}
-              >
-                <Folder size={16} />
-                <span>Move to Folder</span>
-              </button>
-            </>
-          )}
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => { setRenameTarget({ type: 'timeline', id: contextMenu.file.id, currentName: contextMenu.file.name }); setRenameName(contextMenu.file.name); })}
+          >
+            <Pencil size={16} />
+            <span>Rename</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => handleOpenMoveDialog(contextMenu.file))}
+          >
+            <Folder size={16} />
+            <span>Move to Folder</span>
+          </button>
 
           <div className="context-menu-separator" />
 

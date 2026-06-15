@@ -392,7 +392,7 @@ export default function RightPanel({
 
   const resolvedDefaultBorderColor = useMemo(() => {
     try {
-      return getComputedStyle(document.documentElement).getPropertyValue('--element-bg').trim() || '#888888';
+      return getComputedStyle(document.documentElement).getPropertyValue('--ui-muted').trim() || '#888888';
     } catch {
       return '#888888';
     }
@@ -873,7 +873,7 @@ export default function RightPanel({
                           }
                         }}
                       >
-                        <span className="tag-chip-dot" style={{ background: tagColor || "var(--element-bg)" }} />
+                        <span className="tag-chip-dot" style={{ background: tagColor || "var(--ui-muted)" }} />
                         {tag}
                       </button>
                     );
@@ -910,7 +910,7 @@ export default function RightPanel({
                   <span className="rp-note-label rp-note-label-note">Note</span>
                   <span className="sources-collapse-right">
                     {noteWordCount > 0 && <span className="rp-note-meta">markdown · {noteWordCount} words</span>}
-                    <ChevronDown size={14} style={{transform: isNoteCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--element-bg)'}} />
+                    <ChevronDown size={14} style={{transform: isNoteCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s ease', color: 'var(--ui-muted)'}} />
                   </span>
                 </button>
                 {!isNoteCollapsed && (

@@ -28,6 +28,8 @@ export default function SettingsModal({
   themes,
   fonts,
   onThemeChange,
+  oldFormatThemeCount = 0,
+  onMigrateOldThemes,
   layoutOptions = [],
 }) {
   const [title, setTitle] = useState("");
@@ -73,6 +75,7 @@ export default function SettingsModal({
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [scaleSectionErrors, setScaleSectionErrors] = useState([]);
+  const [themeMigrationStatus, setThemeMigrationStatus] = useState(null); // null | 'migrating' | { count }
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
   const tickDensitySliderRef = useRef(null);
@@ -106,6 +109,14 @@ export default function SettingsModal({
     });
     setScaleSectionErrors(errors);
     return out;
+  };
+
+  const handleMigrateOldThemes = async () => {
+    if (!onMigrateOldThemes) return;
+    setThemeMigrationStatus("migrating");
+    const count = await onMigrateOldThemes();
+    setThemeMigrationStatus({ count });
+    setTimeout(() => setThemeMigrationStatus(null), 3000);
   };
 
   const addScaleSection = () => {
@@ -770,21 +781,42 @@ export default function SettingsModal({
                   <div className="settings-row-description">Choose a color theme for the timeline.</div>
                 </div>
                 <div className="settings-row-right">
-                  <select
-                    className="settings-select"
-                    value={theme || themeKey || ""}
-                    onChange={(e) => {
-                      setTheme(e.target.value);
-                      onThemeChange?.(e.target.value);
-                    }}
-                  >
-                    <option value="default">Default (App Theme)</option>
-                    {Object.entries(themes || {}).map(([key, theme]) => (
-                      <option key={key} value={key}>
-                        {theme?.name || key}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="settings-folder settings-folder-column">
+                    <select
+                      className="settings-select"
+                      value={theme || themeKey || ""}
+                      onChange={(e) => {
+                        setTheme(e.target.value);
+                        onThemeChange?.(e.target.value);
+                      }}
+                    >
+                      <option value="default">Default (App Theme)</option>
+                      {Object.entries(themes || {}).map(([key, theme]) => (
+                        <option key={key} value={key}>
+                          {theme?.name || key}
+                        </option>
+                      ))}
+                    </select>
+                    {themeMigrationStatus?.count != null ? (
+                      <div className="theme-migration-notice">
+                        {themeMigrationStatus.count} theme{themeMigrationStatus.count === 1 ? "" : "s"} updated.
+                      </div>
+                    ) : oldFormatThemeCount > 0 ? (
+                      <div className="theme-migration-notice">
+                        <span>
+                          {oldFormatThemeCount} theme{oldFormatThemeCount === 1 ? "" : "s"} are using an older format. Update all?
+                        </span>
+                        <button
+                          type="button"
+                          className="theme-migration-button"
+                          onClick={handleMigrateOldThemes}
+                          disabled={themeMigrationStatus === "migrating"}
+                        >
+                          {themeMigrationStatus === "migrating" ? "Updating..." : "Update All"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 

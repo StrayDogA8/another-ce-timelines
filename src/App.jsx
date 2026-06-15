@@ -22,17 +22,13 @@ import {
   openNotesFolder,
   deleteNote,
   renameTimeline,
-  saveCloudCache,
-  loadCloudCache,
-  updateCloudMeta,
 } from "./utils/electronApi";
 import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
+import { countOldFormatThemes, isOldFormatTheme, migrateThemeColors } from "./utils/themeMigration";
 import { getAppSettings, saveAppSettings } from "./utils/appSettings";
 import { cloneDefaultKeybinds, loadKeybinds, matchesKeybind } from "./utils/keybinds";
-import { apiGetTimelineById, apiUpdateTimeline } from "./lib/api.js";
-import { onAuthStateChange } from "./lib/auth.js";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid } from "./utils/dateUtils";
 import "./styles/index.css";
 
@@ -133,19 +129,8 @@ function App() {
     };
   }, []);
 
-  const [sessionExpired, setSessionExpired] = useState(false);
-
-  useEffect(() => {
-    const handler = () => setSessionExpired(true);
-    window.addEventListener('auth:session-expired', handler);
-    return () => window.removeEventListener('auth:session-expired', handler);
-  }, []);
-
-  useEffect(() => {
-    return onAuthStateChange((user) => { if (user) setSessionExpired(false); });
-  }, []);
-
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
+  const [oldFormatThemeCount, setOldFormatThemeCount] = useState(0);
   const MIN_WIDTH = 220;
   const MAX_WIDTH = 600;
   const COLLAPSED_WIDTH = 44;
@@ -167,7 +152,6 @@ function App() {
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const currentTimelineIdRef = useRef(null);
-  const cloudMetaRef = useRef(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
   const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
   const [exportPngOptions, setExportPngOptions] = useState(null);
@@ -196,7 +180,6 @@ function App() {
     });
   }, []);
   const [homeSettingsSignal, setHomeSettingsSignal] = useState(0);
-  const [openCloudSettingsSignal, setOpenCloudSettingsSignal] = useState(0);
   const [isAppSettingsOverlayOpen, setIsAppSettingsOverlayOpen] = useState(false);
   const [returnToProjectSettings, setReturnToProjectSettings] = useState(false);
   const [isProjectSettingsCovered, setIsProjectSettingsCovered] = useState(false);
@@ -353,8 +336,28 @@ function App() {
           ...(userThemes || {}),
         },
       }));
+      setOldFormatThemeCount(countOldFormatThemes(userThemes));
     } catch (error) {
       console.error('Failed to load user themes:', error);
+    }
+  };
+
+  const handleMigrateOldThemes = async () => {
+    if (!window.electron?.listThemes || !window.electron?.saveUserTheme) return 0;
+    try {
+      const userThemes = await window.electron.listThemes();
+      const oldEntries = Object.entries(userThemes || {}).filter(([, theme]) => isOldFormatTheme(theme));
+
+      for (const [key, theme] of oldEntries) {
+        const migrated = migrateThemeColors(theme);
+        await window.electron.saveUserTheme({ id: key, content: JSON.stringify(migrated, null, 2) });
+      }
+
+      await refreshUserThemes();
+      return oldEntries.length;
+    } catch (error) {
+      console.error('Failed to migrate themes:', error);
+      return 0;
     }
   };
 
@@ -417,36 +420,6 @@ function App() {
 
   const saveTimeline = async (data, localId) => {
     const id = currentTimelineIdRef.current;
-    if (id?.startsWith('cloud:')) {
-      const backendId = id.slice('cloud:'.length);
-      const now = new Date().toISOString();
-      const currentMeta = cloudMetaRef.current ?? { backendId, lastServerUpdatedAt: null };
-
-      // 1. Always write to cache first
-      const unsyncedMeta = { ...currentMeta, localUpdatedAt: now, syncStatus: 'unsynced' };
-      await saveCloudCache(backendId, data, unsyncedMeta);
-      cloudMetaRef.current = unsyncedMeta;
-
-      // 2. Try to push to backend
-      try {
-        const result = await apiUpdateTimeline(backendId, {
-          title: data.file?.title,
-          slug: localId,
-          description: data.file?.description ?? '',
-          isPublic: data.file?.isPublic ?? false,
-          contentJson: JSON.stringify(data),
-        });
-        if (result.success) {
-          const serverUpdatedAt = result.data?.updatedAt ?? now;
-          const syncedMeta = { ...unsyncedMeta, lastServerUpdatedAt: serverUpdatedAt, syncStatus: 'synced' };
-          await updateCloudMeta(backendId, syncedMeta);
-          cloudMetaRef.current = syncedMeta;
-        }
-      } catch {
-        // remains unsynced — already written to cache
-      }
-      return;
-    }
     return saveTimelineToFile(data, id || localId);
   };
 
@@ -1195,60 +1168,10 @@ function App() {
 
   const handleLoadTimeline = async (timelineId) => {
     try {
-      let loadedTimeline;
-
-      if (timelineId.startsWith('cloud:')) {
-        const backendId = timelineId.slice('cloud:'.length);
-        let serverData = null;
-        let serverUpdatedAt = null;
-
-        try {
-          const result = await apiGetTimelineById(backendId);
-          if (result.success) {
-            const contentJson = result.data?.contentJson ?? result.data?.data;
-            if (contentJson) {
-              serverData = typeof contentJson === 'string' ? JSON.parse(contentJson) : contentJson;
-              serverUpdatedAt = result.data?.updatedAt ?? null;
-            }
-          }
-        } catch { /* offline */ }
-
-        if (serverData) {
-          // Don't overwrite unsynced local changes with server data — the user's
-          // edits would be silently lost if they reopen the timeline before syncing.
-          const existingCached = await loadCloudCache(backendId);
-          const existingMeta = existingCached?.meta;
-          if (existingMeta?.syncStatus === 'unsynced' && existingCached.data) {
-            cloudMetaRef.current = existingMeta;
-            loadedTimeline = existingCached.data;
-          } else {
-            const meta = {
-              backendId,
-              title: serverData.file?.title,
-              lastServerUpdatedAt: serverUpdatedAt,
-              localUpdatedAt: serverUpdatedAt,
-              syncStatus: 'synced',
-              conflictFileId: existingMeta?.conflictFileId ?? null,
-            };
-            await saveCloudCache(backendId, serverData, meta);
-            cloudMetaRef.current = meta;
-            loadedTimeline = serverData;
-          }
-        } else {
-          // Offline fallback
-          const cached = await loadCloudCache(backendId);
-          if (!cached.data) throw new Error('Offline and no cached version available.');
-          const offlineMeta = { ...(cached.meta ?? { backendId }), syncStatus: 'offline' };
-          await updateCloudMeta(backendId, offlineMeta);
-          cloudMetaRef.current = offlineMeta;
-          loadedTimeline = cached.data;
-        }
-      } else {
-        if (!window.electron?.loadTimeline) {
-          throw new Error("Timeline loading is only available in the desktop app.");
-        }
-        loadedTimeline = await window.electron.loadTimeline(timelineId);
+      if (!window.electron?.loadTimeline) {
+        throw new Error("Timeline loading is only available in the desktop app.");
       }
+      const loadedTimeline = await window.electron.loadTimeline(timelineId);
 
       setTimelineData(normalizeTimelineData(loadedTimeline));
       setPinnedTags(Array.isArray(loadedTimeline.file?.pinnedTags) ? loadedTimeline.file.pinnedTags : []);
@@ -1547,19 +1470,11 @@ function App() {
     setHomeSettingsSignal((value) => value + 1);
   };
 
-  const handleOpenCloudSettings = () => {
-    if (timelineData) {
-      setIsAppSettingsOverlayOpen(true);
-    }
-    setOpenCloudSettingsSignal((v) => v + 1);
-  };
-
   const handleAppSettingsClosedFromHome = () => {
     setIsProjectSettingsCovered(false);
     setIsAppSettingsOverlayOpen(false);
     setIsSettingsOpen(returnToProjectSettings);
     setReturnToProjectSettings(false);
-    setOpenCloudSettingsSignal(0);
   };
 
   const handleTimelineStorageDirChange = async (nextDir) => {
@@ -1901,6 +1816,8 @@ function App() {
             appThemeKey={appThemeKey}
             themes={themeConfig.themes}
             onAppThemeChange={handleAppThemeChange}
+            oldFormatThemeCount={oldFormatThemeCount}
+            onMigrateOldThemes={handleMigrateOldThemes}
             appFontFamily={appFontFamily}
             appFontSize={appFontSize}
             fonts={availableFonts}
@@ -1925,18 +1842,11 @@ function App() {
             onStartMaximizedChange={handleStartMaximizedChange}
             onRefreshThemes={refreshUserThemes}
             openSettingsSignal={homeSettingsSignal}
-            openCloudSettingsSignal={openCloudSettingsSignal}
             onAppSettingsClosed={handleAppSettingsClosedFromHome}
             keybinds={keybinds}
             onKeybindsChange={setKeybinds}
           />
         </div>
-        {sessionExpired && (
-          <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
-            <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
-            <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
-          </div>
-        )}
       </>
     );
   }
@@ -2060,6 +1970,8 @@ function App() {
         themes={themeConfig.themes}
         fonts={availableFonts}
         onThemeChange={setThemeKey}
+        oldFormatThemeCount={oldFormatThemeCount}
+        onMigrateOldThemes={handleMigrateOldThemes}
       />
 
       {isAppSettingsOverlayOpen && (
@@ -2071,6 +1983,8 @@ function App() {
           appThemeKey={appThemeKey}
           themes={themeConfig.themes}
           onAppThemeChange={handleAppThemeChange}
+          oldFormatThemeCount={oldFormatThemeCount}
+          onMigrateOldThemes={handleMigrateOldThemes}
           appFontFamily={appFontFamily}
           appFontSize={appFontSize}
           fonts={availableFonts}
@@ -2095,7 +2009,6 @@ function App() {
           onStartMaximizedChange={handleStartMaximizedChange}
           onRefreshThemes={refreshUserThemes}
           openSettingsSignal={homeSettingsSignal}
-          openCloudSettingsSignal={openCloudSettingsSignal}
           onAppSettingsClosed={handleAppSettingsClosedFromHome}
           keybinds={keybinds}
           onKeybindsChange={setKeybinds}
@@ -2256,12 +2169,6 @@ function App() {
       {screenshotToast && (
         <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#1a7a4a', borderRadius: '8px', padding: '8px 14px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', pointerEvents: 'none' }}>
           Screenshot saved
-        </div>
-      )}
-      {sessionExpired && (
-        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#c0392b', border: '1px solid #e74c3c', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
-          <span>Session expired. <button onClick={handleOpenCloudSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#fff', textDecoration: 'underline', fontSize: 'inherit' }}>Log back in</button> to sync.</span>
-          <button onClick={() => setSessionExpired(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#fff', opacity: 0.7 }}>✕</button>
         </div>
       )}
     </>

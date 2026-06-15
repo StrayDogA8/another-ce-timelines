@@ -40,13 +40,13 @@ const normalizeColorForInput = (value) => normalizeHexColor(value) || rgbToHex(v
 
 const resolveThemeGroupColor = () => {
   if (typeof window === "undefined") return null;
-  const computed = getComputedStyle(document.documentElement).getPropertyValue("--active-bg");
+  const computed = getComputedStyle(document.documentElement).getPropertyValue("--accent-color");
   return normalizeColorForInput(computed);
 };
 
 const resolveSecondaryBg = () => {
   if (typeof window === "undefined") return null;
-  const computed = getComputedStyle(document.documentElement).getPropertyValue("--secondary-bg");
+  const computed = getComputedStyle(document.documentElement).getPropertyValue("--surface");
   return normalizeColorForInput(computed);
 };
 
@@ -139,8 +139,8 @@ function ElementRow({ element, selectedId, onSelect, listRef, lastScrollTopRef, 
     ? spanById?.get(element.parents[0])?.color
     : null;
   const glyphColor = isEra || isSpan
-    ? (element.color || tagColor || "var(--element-bg)")
-    : (parentSpanColor || tagColor || "var(--element-bg)");
+    ? (element.color || tagColor || "var(--ui-muted)")
+    : (parentSpanColor || tagColor || "var(--ui-muted)");
   const dateText = (isSpan || isEra)
     ? `${element.startLabel ?? fmtYear(element.start)}–${element.endLabel ?? fmtYear(element.end)}`
     : (element.dateLabel ?? fmtYear(element.date));
@@ -160,11 +160,11 @@ function ElementRow({ element, selectedId, onSelect, listRef, lastScrollTopRef, 
         setElementMenu({ x: e.clientX, y: e.clientY, element });
       }}
     >
-      <span className="sb-el-glyph" style={{ color: isSelected ? "var(--dark-bg)" : glyphColor }}>
+      <span className="sb-el-glyph" style={{ color: isSelected ? "var(--text-primary)" : glyphColor }}>
         {isSpan
-          ? <span className="sb-el-glyph-span-bar" style={{ background: isSelected ? "var(--dark-bg)" : glyphColor }} />
+          ? <span className="sb-el-glyph-span-bar" style={{ background: isSelected ? "var(--text-primary)" : glyphColor }} />
           : isEra
-            ? <span className="sb-el-glyph-era-box" style={{ borderColor: isSelected ? "var(--dark-bg)" : glyphColor }} />
+            ? <span className="sb-el-glyph-era-box" style={{ borderColor: isSelected ? "var(--text-primary)" : glyphColor }} />
             : "●"}
       </span>
       <span className="sb-el-name">{element.title || element.id}</span>
@@ -891,7 +891,7 @@ export default function Sidebar({
   const renderEraTreeNode = (node, depth) => {
     const { era, items, children, barLeft, barWidth } = node;
     const isOpen = searchActive || openEraGroups[era.id] !== false;
-    const eraColor = era.color || "var(--element-bg)";
+    const eraColor = era.color || "var(--ui-muted)";
     const totalCount = countEraTreeItems(node);
     if (depth === 0) {
       return (
@@ -973,7 +973,7 @@ export default function Sidebar({
             <ChevronDown
               className="sidebar-menu"
               size={16}
-              color="var(--dark-bg)"
+              color="var(--text-primary)"
               strokeWidth={2}
               onClick={handleTimelineMenuClick}
               style={{ cursor: 'pointer' }}
@@ -987,9 +987,9 @@ export default function Sidebar({
           title={isCollapsed ? "Expand" : "Collapse"}
         >
           {isCollapsed ? (
-            <PanelRight size={18} color="var(--dark-bg)" strokeWidth={2} />
+            <PanelRight size={18} color="var(--text-primary)" strokeWidth={2} />
           ) : (
-            <PanelLeft size={18} color="var(--dark-bg)" strokeWidth={2} />
+            <PanelLeft size={18} color="var(--text-primary)" strokeWidth={2} />
           )}
         </button>
       </div>
@@ -1195,7 +1195,7 @@ export default function Sidebar({
                   onClick={() => onToggleTag?.(tag)}
                   title={tag}
                 >
-                  <span className="sb-tag-strip-dot" style={{ background: color || "var(--element-bg)" }} />
+                  <span className="sb-tag-strip-dot" style={{ background: color || "var(--ui-muted)" }} />
                   {tag}
                 </button>
               );
@@ -1344,7 +1344,7 @@ export default function Sidebar({
             : null}
           {!file?.nestEraSubGroups && visibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
             const isOpen = searchActive || openEraGroups[era.id] !== false;
-            const eraColor = era.color || "var(--element-bg)";
+            const eraColor = era.color || "var(--ui-muted)";
             const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
             return (
               <div key={era.id} className="sb-era-group">
@@ -1490,7 +1490,7 @@ export default function Sidebar({
                     <button
                       type="button"
                       className="sb-tag-swatch"
-                      style={{ background: tagColor || "var(--active-bg)" }}
+                      style={{ background: tagColor || "var(--accent-color)" }}
                       onClick={(e) => { e.stopPropagation(); openTagColorPicker(tag); }}
                       title="Set tag color"
                     >

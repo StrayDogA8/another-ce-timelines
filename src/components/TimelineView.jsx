@@ -1711,17 +1711,17 @@ const TimelineView = forwardRef(function TimelineView({
       const currentTransformOrigin = timelineEl.style.transformOrigin;
 
       const root = document.documentElement;
-      const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--primary-bg').trim();
+      const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--app-bg').trim();
 
       // Temporarily remove transform
       timelineEl.style.transform = 'none';
       timelineEl.style.transformOrigin = '';
 
-      // Set --primary-bg to transparent or custom color if requested
+      // Set --app-bg to transparent or custom color if requested
       if (exportPngOptions?.transparentBg) {
-        root.style.setProperty('--primary-bg', 'transparent');
+        root.style.setProperty('--app-bg', 'transparent');
       } else if (exportPngOptions?.customBg) {
-        root.style.setProperty('--primary-bg', exportPngOptions.customBg);
+        root.style.setProperty('--app-bg', exportPngOptions.customBg);
       }
 
       const requestedStartYear = Number(exportPngOptions?.exportStartYear);
@@ -1768,7 +1768,7 @@ const TimelineView = forwardRef(function TimelineView({
       });
 
       if (exportPngOptions?.transparentBg || exportPngOptions?.customBg) {
-        root.style.setProperty('--primary-bg', originalPrimaryBg);
+        root.style.setProperty('--app-bg', originalPrimaryBg);
       }
 
       timelineEl.style.transform = currentTransform;
@@ -1861,7 +1861,7 @@ const TimelineView = forwardRef(function TimelineView({
         const padding = Math.round(fontSize * 1.5);
         const computedStyle = getComputedStyle(document.documentElement);
         const themeFont = computedStyle.getPropertyValue('--app-font-family').trim() || 'Inter, system-ui, sans-serif';
-        const themeColor = computedStyle.getPropertyValue('--dark-bg').trim() || '#888';
+        const themeColor = computedStyle.getPropertyValue('--text-primary').trim() || '#888';
         ctx.font = `700 ${fontSize}px ${themeFont}`;
         ctx.fillStyle = themeColor;
 
@@ -2194,17 +2194,17 @@ const TimelineView = forwardRef(function TimelineView({
         const currentTransform = timelineEl.style.transform;
         const currentTransformOrigin = timelineEl.style.transformOrigin;
 
-        // Store original --primary-bg and set to transparent if needed
+        // Store original --app-bg and set to transparent if needed
         const root = document.documentElement;
-        const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--primary-bg').trim();
+        const originalPrimaryBg = getComputedStyle(root).getPropertyValue('--app-bg').trim();
 
         timelineEl.style.transform = 'none';
         timelineEl.style.transformOrigin = '';
 
         if (options?.transparentBg) {
-          root.style.setProperty('--primary-bg', 'transparent');
+          root.style.setProperty('--app-bg', 'transparent');
         } else if (options?.customBg) {
-          root.style.setProperty('--primary-bg', options.customBg);
+          root.style.setProperty('--app-bg', options.customBg);
         }
 
         const elWidth = timelineEl.scrollWidth;
@@ -2228,9 +2228,9 @@ const TimelineView = forwardRef(function TimelineView({
           windowHeight: elHeight,
         });
 
-        // Restore original --primary-bg
+        // Restore original --app-bg
         if (options?.transparentBg || options?.customBg) {
-          root.style.setProperty('--primary-bg', originalPrimaryBg);
+          root.style.setProperty('--app-bg', originalPrimaryBg);
         }
 
         timelineEl.style.transform = currentTransform;
@@ -2377,20 +2377,20 @@ const TimelineView = forwardRef(function TimelineView({
 
     return { zeroScaleBreaks, axisBreakMarkers };
   }, [normalizedScaleSections, yearToPx, file.negID, file.posID, file.hideDecimals]);
-  const timelineBreakMaskBg = file?.useSecondaryBg ? "var(--secondary-bg)" : "var(--primary-bg)";
+  const timelineBreakMaskBg = file?.useSecondaryBg ? "var(--surface)" : "var(--app-bg)";
 
   // Resolve CSS variables to hex for inline styles (avoids color-mix / color() which html2canvas can't parse)
   const rootStyles = getComputedStyle(document.documentElement);
-  const resolvedActiveBg = rootStyles.getPropertyValue('--active-bg').trim();
-  const resolvedElementBg = rootStyles.getPropertyValue('--element-bg').trim();
-  const resolvedSecondaryBg = rootStyles.getPropertyValue('--secondary-bg').trim();
+  const resolvedActiveBg = rootStyles.getPropertyValue('--accent-color').trim();
+  const resolvedElementBg = rootStyles.getPropertyValue('--ui-muted').trim();
+  const resolvedSecondaryBg = rootStyles.getPropertyValue('--surface').trim();
 
   return (
     <>
     <div
       ref={containerRef}
       className={`timeline-scroll${file?.fixedEventHeight ? ' fixed-event-height' : ''}`}
-      style={file?.useSecondaryBg ? { backgroundColor: "var(--secondary-bg)" } : undefined}
+      style={file?.useSecondaryBg ? { backgroundColor: "var(--surface)" } : undefined}
       onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
       onContextMenu={handleContextMenu}
     >
@@ -2476,7 +2476,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <svg viewBox="0 0 20 10" preserveAspectRatio="none">
                         <path
                           d="M0,5 L4,5 L7,1 L10,9 L13,1 L16,5 L20,5"
-                          stroke="var(--dark-bg)"
+                          stroke="var(--text-primary)"
                           strokeWidth="2.5"
                           strokeLinecap="square"
                           strokeLinejoin="miter"
@@ -2520,7 +2520,7 @@ const TimelineView = forwardRef(function TimelineView({
             >
               <path
                 d="M3,10 L7,2 M9,10 L13,2"
-                stroke="var(--dark-bg)"
+                stroke="var(--text-primary)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="miter"
@@ -2533,7 +2533,7 @@ const TimelineView = forwardRef(function TimelineView({
         <div className="eras-layer">
           {finalEras.map((era) => {
             const isSelected = selectedId === era.id;
-            const eraTextColor = getReadableTextColor(era.color || "var(--tertiary-bg)");
+            const eraTextColor = getReadableTextColor(era.color || "var(--light-bg)");
             return (
               <div
                 key={era.id}
@@ -2544,7 +2544,7 @@ const TimelineView = forwardRef(function TimelineView({
                   width: `${era.width}px`,
                   height: `${era.height}px`,
                   top: `${era.top}px`,
-                  background: `${era.color || "var(--tertiary-bg)"}`,
+                  background: `${era.color || "var(--light-bg)"}`,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -2653,7 +2653,7 @@ const TimelineView = forwardRef(function TimelineView({
                   <div
                     className="span-connector-top"
                     style={{
-                      backgroundColor: span.color || "var(--element-bg)",
+                      backgroundColor: span.color || "var(--secondary-text)",
                       paddingTop: connectorHeight,
                       transform: connectorTransform,
                       width: `${connectorThicknessBase}px`,
@@ -2665,7 +2665,7 @@ const TimelineView = forwardRef(function TimelineView({
                   <div
                     className="span-connector-bottom"
                     style={{
-                      backgroundColor: span.color || "var(--element-bg)",
+                      backgroundColor: span.color || "var(--secondary-text)",
                       paddingTop: connectorHeight,
                       transform: connectorTransform,
                       width: `${connectorThicknessBase}px`,
@@ -2699,7 +2699,7 @@ const TimelineView = forwardRef(function TimelineView({
               ? 3
               : Math.max(3, Math.min(7, Math.round(Math.min(spanH, parentH) * 0.28)));
             const connectorLeft = span.left - Math.floor(connectorWidth / 2);
-            const connectorColor = span.color || parentSpan.color || "var(--element-bg)";
+            const connectorColor = span.color || parentSpan.color || "var(--secondary-text)";
             const proximityPenalty = Math.min(2000, Math.abs(Math.round(centerDelta)));
             const connectorZIndex = 5000 - proximityPenalty * 2 - connectorWidth * 10;
 
@@ -2798,7 +2798,7 @@ const TimelineView = forwardRef(function TimelineView({
                   <div
                     className="span-connector-merge-top"
                     style={{
-                      backgroundColor: span.color || "var(--element-bg)",
+                      backgroundColor: span.color || "var(--secondary-text)",
                       paddingTop: mergeConnectorHeight,
                       width: `${mergeConnectorWidth}px`,
                       transform: mergeConnectorOffset
@@ -2812,7 +2812,7 @@ const TimelineView = forwardRef(function TimelineView({
                   <div
                     className="span-connector-merge-bottom"
                     style={{
-                      backgroundColor: span.color || "var(--element-bg)",
+                      backgroundColor: span.color || "var(--secondary-text)",
                       paddingTop: mergeConnectorHeight,
                       width: `${mergeConnectorWidth}px`,
                       transform: mergeConnectorOffset
@@ -2866,7 +2866,7 @@ const TimelineView = forwardRef(function TimelineView({
                   {groupSpans.map((span) => {
                     if (span.width <= 0) return null;
                     const isSelected = selectedId === span.id;
-                    const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
+                    const spanTextColor = getReadableTextColor(span.color || "var(--secondary-text)");
                     const mergePlacement = spanMergePlacement[span.id];
                     const placement = spanChildPlacement[span.id];
                     const isExtension = placement?.mode === "extend";
@@ -2902,12 +2902,12 @@ const TimelineView = forwardRef(function TimelineView({
                         data-id={span.id}
                         className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}${span.sourceLink ? " has-source-link" : ""}`}
                         style={{
-                          "--span-fill": span.color || "var(--element-bg)",
+                          "--span-fill": span.color || "var(--secondary-text)",
                           left: `${span.left - childInset + neckLeft}px`,
                           width: `${span.width + childInset + mergeInset - neckLeft - neckRight}px`,
                           top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                           height: `${span.spanHeight ?? 20}px`,
-                          background: span.color || "var(--element-bg)",
+                          background: span.color || "var(--secondary-text)",
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2963,7 +2963,7 @@ const TimelineView = forwardRef(function TimelineView({
                     const borderColor = event.color || parentColor || (
                       file?.eventLinesToGroupBottom === true
                         ? mixedGroupColor
-                        : "var(--element-bg)"
+                        : "var(--secondary-text)"
                     );
                     const borderValue =
                       eventBorderStyle === "none"
@@ -3050,7 +3050,7 @@ const TimelineView = forwardRef(function TimelineView({
           {finalSpans.map((span) => {
             if (span.width <= 0) return null;
             const isSelected = selectedId === span.id;
-            const spanTextColor = getReadableTextColor(span.color || "var(--element-bg)");
+            const spanTextColor = getReadableTextColor(span.color || "var(--secondary-text)");
 
             const mergePlacement = spanMergePlacement[span.id];
             const placement = spanChildPlacement[span.id];
@@ -3087,12 +3087,12 @@ const TimelineView = forwardRef(function TimelineView({
                 data-id={span.id}
                 className={`span-item ${isSelected ? "is-selected" : ""}${span.spanSize === "thin" ? " span-thin" : ""}${span.spanSize === "thick" ? " span-thick" : ""}${isExtension ? " span-extension" : ""}${extensionChildLarger ? " span-extension-child-larger" : ""}${extensionParentLarger ? " span-extension-parent-larger" : ""}${thinConnectorChild ? " span-thin-connector-child" : ""}${thinConnectorMergeOut ? " span-thin-connector-merge-out" : ""}`}
                 style={{
-                  "--span-fill": span.color || "var(--element-bg)",
+                  "--span-fill": span.color || "var(--secondary-text)",
                   left: `${span.left - childInset + neckLeft}px`,
                   width: `${span.width + childInset + mergeInset - neckLeft - neckRight}px`,
                   top: `${spanRenderTopById.get(span.id) ?? span.top}px`,
                   height: `${span.spanHeight ?? 20}px`,
-                  background: span.color || "var(--element-bg)",
+                  background: span.color || "var(--secondary-text)",
                 }}
                 onClick={(e) => {
                   e.stopPropagation();

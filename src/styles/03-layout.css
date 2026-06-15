@@ -6,19 +6,19 @@
   height: 100%;
   gap: 8px;
   padding: 24px;
-  background-color: var(--secondary-bg);
+  background-color: var(--surface);
   text-align: center;
 }
 
 .error-boundary-fallback__title {
   font-size: var(--text-lg);
   font-weight: 600;
-  color: var(--gray-1);
+  color: var(--text-muted);
 }
 
 .error-boundary-fallback__message {
   font-size: var(--text-xs);
-  color: var(--gray-2);
+  color: var(--text-subtle);
   max-width: 280px;
   word-break: break-word;
 }
@@ -36,7 +36,7 @@
 }
 
 .app-content {
-  background: var(--primary-bg);
+  background: var(--app-bg);
   overflow: hidden;
   grid-column: 1 / -1;
   width: 100%;
@@ -44,7 +44,7 @@
 }
 
 .app-right {
-  border-left: 1px solid var(--element-bg);
+  border-left: 1px solid var(--ui-muted);
 }
 
 .overlay-sidebar,
@@ -52,20 +52,20 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: var(--secondary-bg);
+  background: var(--surface);
   z-index: 30;
   overflow: visible;
 }
 
 .overlay-sidebar {
   left: 0;
-  border-right: 1px solid var(--active-bg);
+  border-right: 1px solid var(--accent-color);
   z-index: 40;
 }
 
 .overlay-right {
   right: 0;
-  border-left: 1px solid var(--active-bg);
+  border-left: 1px solid var(--accent-color);
 }
 
 .overlay-right::-webkit-scrollbar {
@@ -73,7 +73,7 @@
 }
 
 .overlay-right::-webkit-scrollbar-thumb {
-  background-color: var(--active-bg);
+  background-color: var(--accent-color);
   border-radius: 3px;
 }
 

@@ -25,7 +25,7 @@ function resolveElementColor(el, spanById) {
 
 function makeColoredIcon(color, selected, markerType = DEFAULT_MARKER_TYPE) {
   const stroke = selected
-    ? getComputedStyle(document.documentElement).getPropertyValue("--info-bg").trim() || "#5282DB"
+    ? getComputedStyle(document.documentElement).getPropertyValue("--selection-color").trim() || "#5282DB"
     : "white";
   const strokeWidth = selected ? 4 : 1.5;
   let svg = "";

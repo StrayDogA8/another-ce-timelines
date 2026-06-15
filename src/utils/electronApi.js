@@ -331,36 +331,6 @@ export async function saveUserTheme({ id, content }) {
   }
 }
 
-export async function saveCloudCache(backendId, data, meta) {
-  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
-  try { return await window.electron.saveCloudCache({ backendId, data, meta }); }
-  catch (error) { return { success: false, error: error.message }; }
-}
-
-export async function loadCloudCache(backendId) {
-  if (!isElectron()) return { data: null, meta: null };
-  try { return await window.electron.loadCloudCache(backendId); }
-  catch { return { data: null, meta: null }; }
-}
-
-export async function updateCloudMeta(backendId, meta) {
-  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
-  try { return await window.electron.updateCloudMeta({ backendId, meta }); }
-  catch (error) { return { success: false, error: error.message }; }
-}
-
-export async function deleteCloudCache(backendId) {
-  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
-  try { return await window.electron.deleteCloudCache(backendId); }
-  catch (error) { return { success: false, error: error.message }; }
-}
-
-export async function listCloudMetas() {
-  if (!isElectron()) return {};
-  try { return await window.electron.listCloudMetas() ?? {}; }
-  catch { return {}; }
-}
-
 export async function deleteUserTheme({ id }) {
   if (!isElectron()) {
     console.warn('Not running in Electron');

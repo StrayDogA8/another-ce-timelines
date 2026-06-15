@@ -100,7 +100,7 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
         if (bgOption === 'transparent') {
           previewOpts.transparentBg = true;
         } else if (bgOption === 'secondary' || bgOption === 'tertiary') {
-          const varName = bgOption === 'secondary' ? '--secondary-bg' : '--tertiary-bg';
+          const varName = bgOption === 'secondary' ? '--surface' : '--inset-bg';
           previewOpts.customBg = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
         }
         const data = await timelineViewRef.current.generatePreview(previewOpts);
@@ -224,10 +224,10 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
 
       let bgColor = null;
       if (bgOption === 'secondary' || bgOption === 'tertiary') {
-        const varName = bgOption === 'secondary' ? '--secondary-bg' : '--tertiary-bg';
+        const varName = bgOption === 'secondary' ? '--surface' : '--inset-bg';
         bgColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
       } else if (bgOption !== 'transparent') {
-        bgColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-bg').trim();
+        bgColor = getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim();
       }
 
       const titleStyleValue = titleStyle || 'title-logo';
@@ -246,7 +246,7 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
         const padding = Math.round(fontSize * 1.5);
         const computedStyle = getComputedStyle(document.documentElement);
         const themeFont = computedStyle.getPropertyValue('--app-font-family').trim() || 'Inter, system-ui, sans-serif';
-        const themeColor = computedStyle.getPropertyValue('--dark-bg').trim() || '#888';
+        const themeColor = computedStyle.getPropertyValue('--text-primary').trim() || '#888';
         wmCtx.font = `700 ${fontSize}px ${themeFont}`;
         wmCtx.fillStyle = themeColor;
 
@@ -419,10 +419,10 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
 
   const outputDims = getOutputDimensions();
   const previewBgColor = bgOption === 'secondary'
-    ? 'var(--secondary-bg)'
+    ? 'var(--surface)'
     : bgOption === 'tertiary'
-      ? 'var(--tertiary-bg)'
-      : 'var(--primary-bg)';
+      ? 'var(--inset-bg)'
+      : 'var(--app-bg)';
   const previewMetrics = (() => {
     if (!previewData || !outputDims) return null;
     const sourceFullWidth = previewData.canvasWidth || previewData.elementWidth || 1;
@@ -519,7 +519,7 @@ export default function ExportVideoModal({ isOpen, onClose, timelineData, timeli
                   </div>
                 )}
                 <div className="export-preview-bounds" style={{
-                  border: '1px dashed var(--element-bg)',
+                  border: '1px dashed var(--ui-muted)',
                   position: 'absolute',
                   inset: 0,
                   pointerEvents: 'none',

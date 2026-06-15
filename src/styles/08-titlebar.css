@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: space-between;
   height: 32px;
-  background: var(--secondary-bg);
-  color: var(--dark-bg);
+  background: var(--surface);
+  color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
   position: fixed;
@@ -12,7 +12,7 @@
   left: 0;
   right: 0;
   z-index: 1000;
-  border-bottom: 1px solid var(--active-bg);
+  border-bottom: 1px solid var(--accent-color);
 }
 
 .title-bar-drag-region {
@@ -28,7 +28,7 @@
 .title-bar-icon {
   width: 20px;
   height: 20px;
-  color: var(--dark-bg);
+  color: var(--text-primary);
   -webkit-app-region: no-drag;
 }
 
@@ -65,7 +65,7 @@
 }
 
 .title-bar-button:hover {
-  background: var(--active-bg);
+  background: var(--accent-color);
 }
 
 .title-bar-close:hover {
@@ -84,7 +84,7 @@
 .title-bar-separator {
   width: 1px;
   height: 16px;
-  background: var(--active-bg);
+  background: var(--accent-color);
   align-self: center;
 }
 

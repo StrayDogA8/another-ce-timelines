@@ -107,7 +107,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
         if (bgOption === 'transparent') {
           previewOpts.transparentBg = true;
         } else if (bgOption === 'secondary' || bgOption === 'tertiary') {
-          const varName = bgOption === 'secondary' ? '--secondary-bg' : '--tertiary-bg';
+          const varName = bgOption === 'secondary' ? '--surface' : '--inset-bg';
           previewOpts.customBg = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
         }
         const data = await timelineViewRef.current.generatePreview(previewOpts);
@@ -220,7 +220,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
     if (bgOption === 'transparent') {
       exportBgOpts.transparentBg = true;
     } else if (bgOption === 'secondary' || bgOption === 'tertiary') {
-      const varName = bgOption === 'secondary' ? '--secondary-bg' : '--tertiary-bg';
+      const varName = bgOption === 'secondary' ? '--surface' : '--inset-bg';
       exportBgOpts.customBg = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
     }
 
@@ -307,8 +307,8 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
   };
 
   const outputAspectRatio = getOutputAspectRatio();
-  const previewBgColor = bgOption === 'secondary' ? 'var(--secondary-bg)'
-    : bgOption === 'tertiary' ? 'var(--tertiary-bg)'
+  const previewBgColor = bgOption === 'secondary' ? 'var(--surface)'
+    : bgOption === 'tertiary' ? 'var(--inset-bg)'
     : undefined;
   const file = timelineData?.file;
   const displayYear = (value) => {
@@ -411,7 +411,7 @@ export default function ExportPngModal({ isOpen, onClose, onExport, timelineData
                   draggable={false}
                 />
                 <div className="export-preview-bounds" style={{
-                  border: '1px dashed var(--element-bg)',
+                  border: '1px dashed var(--ui-muted)',
                   position: 'absolute',
                   inset: 0,
                   pointerEvents: 'none',

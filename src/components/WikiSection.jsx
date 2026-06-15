@@ -303,7 +303,7 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
                 Open article
               </a>
             )}
-            <ChevronDown size={14} style={{ transform: isWikiCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--element-bg)" }} />
+            <ChevronDown size={14} style={{ transform: isWikiCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--ui-muted)" }} />
           </span>
         </button>
         {!isWikiCollapsed && (isWikiLoading ? (

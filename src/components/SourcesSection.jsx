@@ -62,7 +62,7 @@ export default function SourcesSection({ sources, sourceLink, isEditMode, onSour
           <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
           <span className="sources-collapse-right">
             <span className="rp-note-meta">{srcList.length}</span>
-            <ChevronDown size={14} style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--element-bg)" }} />
+            <ChevronDown size={14} style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--ui-muted)" }} />
           </span>
         </button>
         {!isCollapsed && (
@@ -90,7 +90,7 @@ export default function SourcesSection({ sources, sourceLink, isEditMode, onSour
         <span className="rp-sources-label"><Link size={12} strokeWidth={2} />Sources</span>
         <span className="sources-collapse-right">
           {srcList.length > 0 && <span className="rp-note-meta">{srcList.length}</span>}
-          <ChevronDown size={14} style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--element-bg)" }} />
+          <ChevronDown size={14} style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--ui-muted)" }} />
         </span>
       </button>
       {!isCollapsed && (
