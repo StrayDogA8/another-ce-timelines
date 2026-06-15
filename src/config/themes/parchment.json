@@ -2,6 +2,7 @@
   "name": "Parchment",
   "type": "light",
   "collection": "bundled",
+  "author": "sreegjl",
   "colors": {
     "text-primary": "#6C5F55",
     "ui-muted": "#A6977E",

@@ -2,6 +2,7 @@
   "name": "Light",
   "type": "light",
   "collection": "bundled",
+  "author": "sreegjl",
   "colors": {
     "text-primary": "#1A1A1A",
     "ui-muted": "#919191",

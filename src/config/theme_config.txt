@@ -2,6 +2,7 @@
   "name": "Theme name shown in theme pickers",
   "type": "light | dark, used to pick readable contrast defaults",
   "collection": "Group name for the theme. 'bundled' ships with the app, but users can set any name to group their own related/variant themes",
+  "author": "Your name or username",
   "font": {
     "family": "Optional font family applied when this theme is active",
     "cssUrl": "Optional @font-face / Google Fonts stylesheet URL for the family"

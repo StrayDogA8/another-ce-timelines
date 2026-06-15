@@ -2,6 +2,7 @@
   "name": "Parchment v2",
   "type": "light",
   "collection": "bundled",
+  "author": "sreegjl",
   "font": {
     "family": "Lexend",
     "cssUrl": "https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&display=swap"

@@ -2,6 +2,7 @@
   "name": "Dark",
   "type": "dark",
   "collection": "bundled",
+  "author": "sreegjl",
   "colors": {
     "text-primary": "#F5F5F5",
     "ui-muted": "#666666",
