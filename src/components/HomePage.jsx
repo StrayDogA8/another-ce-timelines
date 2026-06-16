@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Moon, Sun } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
@@ -153,6 +153,8 @@ export default function HomePage({
   const [marketplaceBusyId, setMarketplaceBusyId] = useState("");
   const [installedThemeIds, setInstalledThemeIds] = useState(new Set());
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
+  const [marketplaceCollection, setMarketplaceCollection] = useState(null);
+  const [marketplaceDarkLight, setMarketplaceDarkLight] = useState("all");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
@@ -411,6 +413,8 @@ export default function HomePage({
   const handleOpenMarketplace = () => {
     setIsMarketplaceOpen(true);
     setMarketplaceSearch("");
+    setMarketplaceCollection(null);
+    setMarketplaceDarkLight("all");
     loadMarketplace();
     loadInstalledThemes();
   };
@@ -1485,129 +1489,197 @@ export default function HomePage({
         </div>
       )}
 
-      {isMarketplaceOpen && (
-        <div className="settings-backdrop" onClick={handleCloseMarketplace}>
-          <div className="marketplace-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="marketplace-header">
-              <button
-                className="settings-back-button"
-                onClick={handleCloseMarketplace}
-                aria-label="Close marketplace"
-              >
-                <ArrowLeft size={18} strokeWidth={2} />
-              </button>
-              <h2 className="settings-title">MARKETPLACE</h2>
-            </div>
+      {isMarketplaceOpen && (() => {
+        const collectionCounts = {};
+        marketplaceThemes.forEach((t) => {
+          const c = t.collection || "other";
+          collectionCounts[c] = (collectionCounts[c] || 0) + 1;
+        });
+        const allCollections = Object.entries(collectionCounts)
+          .sort(([, a], [, b]) => b - a)
+          .map(([collection, count]) => ({ collection, count }));
 
-            <div className="marketplace-search-row">
-              <input
-                className="marketplace-search"
-                type="text"
-                placeholder="Search themes..."
-                value={marketplaceSearch}
-                onChange={(e) => setMarketplaceSearch(e.target.value)}
-                aria-label="Search marketplace themes"
-              />
-            </div>
+        const filteredThemes = marketplaceThemes.filter((theme) => {
+          const query = marketplaceSearch.trim().toLowerCase();
+          if (query) {
+            const haystack = [theme?.name, theme?.id, theme?.author, theme?.description]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+            if (!haystack.includes(query)) return false;
+          }
+          if (marketplaceCollection !== null && theme.collection !== marketplaceCollection) return false;
+          if (marketplaceDarkLight !== "all" && theme.type !== marketplaceDarkLight) return false;
+          return true;
+        });
 
-            {marketplaceError && (
-              <div className="marketplace-error">{marketplaceError}</div>
-            )}
+        const installedCount = marketplaceThemes.filter(
+          (t) =>
+            installedThemeIds.has(String(t.id).toLowerCase()) ||
+            userThemeIds.has(String(t.id).toLowerCase())
+        ).length;
 
-            {marketplaceLoading ? (
-              <div className="marketplace-loading">Loading themes...</div>
-            ) : (
-              <div className="marketplace-grid">
-                {marketplaceThemes
-                  .filter((theme) => {
-                    const query = marketplaceSearch.trim().toLowerCase();
-                    if (!query) return true;
-                    const haystack = [
-                      theme?.name,
-                      theme?.id,
-                      theme?.author,
-                      theme?.description,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")
-                      .toLowerCase();
-                    return haystack.includes(query);
-                  })
-                  .map((theme) => {
-                  const themeId = String(theme.id || "").toLowerCase();
-                  const isInstalled =
-                    installedThemeIds.has(themeId) || userThemeIds.has(themeId);
-                  const isActive =
-                    String(appThemeKey || "").toLowerCase() === themeId;
-                  const isBusy = marketplaceBusyId === theme.id;
-                  const thumbnailUrl = theme?.paths?.thumbnail
-                    ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}`
-                    : "";
-                  return (
-                    <div key={theme.id} className="marketplace-card">
-                      <div className="marketplace-thumbnail">
-                        {thumbnailUrl ? (
-                          <img src={thumbnailUrl} alt={`${theme.name} preview`} />
-                        ) : (
-                          <div className="marketplace-thumbnail-empty">No preview</div>
-                        )}
-                      </div>
-                      <div className="marketplace-card-body">
-                        <div className="marketplace-card-title">
-                          {theme.name || theme.id}
+        return (
+          <div key="marketplace" className="settings-backdrop" onClick={handleCloseMarketplace}>
+            <div className="marketplace-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="marketplace-header">
+                <button
+                  className="settings-back-button"
+                  onClick={handleCloseMarketplace}
+                  aria-label="Close marketplace"
+                >
+                  <ArrowLeft size={18} strokeWidth={2} />
+                </button>
+                <div className="marketplace-header-title">
+                  <h2 className="marketplace-title">Marketplace</h2>
+                </div>
+                {installedCount > 0 && (
+                  <span className="marketplace-installed-count">{installedCount} installed</span>
+                )}
+              </div>
+
+              <div className="marketplace-search-row">
+                <Search size={14} className="marketplace-search-icon" />
+                <input
+                  className="marketplace-search"
+                  type="text"
+                  placeholder="Search themes..."
+                  value={marketplaceSearch}
+                  onChange={(e) => setMarketplaceSearch(e.target.value)}
+                  aria-label="Search marketplace themes"
+                />
+              </div>
+
+              <div className="marketplace-controls">
+                <div className="marketplace-collection-pills">
+                  <button
+                    className={`marketplace-pill${marketplaceCollection === null ? " marketplace-pill-active" : ""}`}
+                    onClick={() => setMarketplaceCollection(null)}
+                  >
+                    All themes <span className="marketplace-pill-count">{marketplaceThemes.length}</span>
+                  </button>
+                  {allCollections.map(({ collection, count }) => (
+                    <button
+                      key={collection}
+                      className={`marketplace-pill${marketplaceCollection === collection ? " marketplace-pill-active" : ""}`}
+                      onClick={() => setMarketplaceCollection(collection)}
+                    >
+                      {collection.charAt(0).toUpperCase() + collection.slice(1)}{" "}
+                      <span className="marketplace-pill-count">{count}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="marketplace-type-toggle">
+                  <button
+                    className={`marketplace-type-btn${marketplaceDarkLight === "all" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceDarkLight("all")}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`marketplace-type-btn${marketplaceDarkLight === "dark" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceDarkLight("dark")}
+                  >
+                    <Moon size={11} /> Dark
+                  </button>
+                  <button
+                    className={`marketplace-type-btn${marketplaceDarkLight === "light" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceDarkLight("light")}
+                  >
+                    <Sun size={11} /> Light
+                  </button>
+                </div>
+              </div>
+
+              {marketplaceError && (
+                <div className="marketplace-error">{marketplaceError}</div>
+              )}
+
+              {marketplaceLoading ? (
+                <div className="marketplace-loading">Loading themes...</div>
+              ) : filteredThemes.length === 0 ? (
+                <div className="marketplace-empty">No themes match</div>
+              ) : (
+                <div className="marketplace-grid">
+                  {filteredThemes.map((theme) => {
+                    const themeId = String(theme.id || "").toLowerCase();
+                    const isInstalled =
+                      installedThemeIds.has(themeId) || userThemeIds.has(themeId);
+                    const isActive =
+                      String(appThemeKey || "").toLowerCase() === themeId;
+                    const isBusy = marketplaceBusyId === theme.id;
+                    const thumbnailUrl = theme?.paths?.thumbnail
+                      ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}`
+                      : "";
+                    return (
+                      <div key={theme.id} className="marketplace-card">
+                        <div className="marketplace-thumbnail">
+                          {thumbnailUrl ? (
+                            <img src={thumbnailUrl} alt={`${theme.name} preview`} />
+                          ) : (
+                            <div className="marketplace-thumbnail-empty">No preview</div>
+                          )}
                         </div>
-                        <div className="marketplace-card-author">
-                          {theme.author ? `by ${theme.author}` : ""}
+                        <div className="marketplace-card-body">
+                          <div className="marketplace-card-title-row">
+                            <div className="marketplace-card-title">{theme.name || theme.id}</div>
+                            {theme.type && (
+                              <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>
+                                {theme.type}
+                              </span>
+                            )}
+                          </div>
+                          <div className="marketplace-card-author">
+                            {theme.author ? `by ${theme.author}` : ""}
+                          </div>
+                          <div className="marketplace-card-description">{theme.description}</div>
                         </div>
-                        <div className="marketplace-card-description">
-                          {theme.description}
-                        </div>
-                      </div>
-                      <div className="marketplace-card-actions">
-                        {isInstalled ? (
-                          <>
+                        <div className="marketplace-card-actions">
+                          {isInstalled ? (
+                            <>
+                              <button
+                                className="marketplace-button"
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() =>
+                                  onAppThemeChange?.(
+                                    isActive ? defaultThemeKey || "parchment" : theme.id
+                                  )
+                                }
+                              >
+                                {isActive ? "Disable" : "Enable"}
+                              </button>
+                              <button
+                                className="marketplace-icon-button marketplace-button-danger"
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => handleDeleteTheme(theme)}
+                                aria-label="Delete theme"
+                                title="Delete theme"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          ) : (
                             <button
                               className="marketplace-button"
                               type="button"
                               disabled={isBusy}
-                              onClick={() =>
-                                onAppThemeChange?.(
-                                  isActive ? defaultThemeKey || "parchment" : theme.id
-                                )
-                              }
+                              onClick={() => handleDownloadTheme(theme)}
                             >
-                              {isActive ? "Disable" : "Enable"}
+                              {isBusy ? "Downloading..." : "Download"}
                             </button>
-                            <button
-                              className="marketplace-icon-button marketplace-button-danger"
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleDeleteTheme(theme)}
-                              aria-label="Delete theme"
-                              title="Delete theme"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className="marketplace-button"
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => handleDownloadTheme(theme)}
-                          >
-                            {isBusy ? "Downloading..." : "Download"}
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {folderContextMenu && (
         <div
           ref={menuRef}
