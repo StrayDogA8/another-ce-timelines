@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
-import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed, ArrowUpDown, Check } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import { ICON_MAP as iconMap } from "../config/elementIcons";
 import "../styles/07-modals-menus.css";
@@ -207,6 +207,7 @@ export default function Sidebar({
   onDelete,
   onDuplicateElement,
   onEditElement,
+  onPatchFile,
   keybinds = {},
 }) {
   const isMac = navigator.userAgent?.includes("Mac");
@@ -229,6 +230,10 @@ export default function Sidebar({
   const [openEraGroups, setOpenEraGroups] = useState({});
   const [openSpanGroups, setOpenSpanGroups] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("year");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef(null);
   const [timelineMenu, setTimelineMenu] = useState(null);
@@ -599,6 +604,15 @@ export default function Sidebar({
     loadTimelineList();
   }, []);
 
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+    const handler = (e) => {
+      if (!sortMenuRef.current?.contains(e.target)) setSortMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [sortMenuOpen]);
+
   // Close menu when clicking outside or pressing Escape
   useEffect(() => {
     if (!timelineMenu && !openSubmenu) return;
@@ -793,9 +807,37 @@ export default function Sidebar({
       ? "Search tags..."
       : "Search groups...";
 
-  const visibleEras = searchActive ? eraRoots.filter((e) => matchesSearch(e.title || e.id)) : eraRoots;
-  const visibleSpans = searchActive ? spanRows.filter((s) => matchesSearch(s.title || s.id)) : spanRows;
-  const visibleEvents = searchActive ? eventRows.filter((ev) => matchesSearch(ev.title || ev.id)) : eventRows;
+  const applySidebarSort = (items, dateField) => {
+    const sorted = [...items].sort((a, b) =>
+      sortField === "name"
+        ? (a.title || a.id || "").localeCompare(b.title || b.id || "")
+        : ((dateField != null ? a[dateField] : undefined) ?? a.date ?? a.start ?? 0) -
+          ((dateField != null ? b[dateField] : undefined) ?? b.date ?? b.start ?? 0)
+    );
+    return sortOrder === "desc" ? sorted.reverse() : sorted;
+  };
+
+  const sortByHeader = (groups, key) => {
+    const sorted = [...groups].sort((a, b) =>
+      sortField === "name"
+        ? (a[key].title || a[key].id || "").localeCompare(b[key].title || b[key].id || "")
+        : (a[key].start ?? 0) - (b[key].start ?? 0)
+    );
+    return sortOrder === "desc" ? sorted.reverse() : sorted;
+  };
+
+  const visibleEras = applySidebarSort(
+    searchActive ? eraRoots.filter((e) => matchesSearch(e.title || e.id)) : eraRoots,
+    "start"
+  );
+  const visibleSpans = applySidebarSort(
+    searchActive ? spanRows.filter((s) => matchesSearch(s.title || s.id)) : spanRows,
+    "start"
+  );
+  const visibleEvents = applySidebarSort(
+    searchActive ? eventRows.filter((ev) => matchesSearch(ev.title || ev.id)) : eventRows,
+    "date"
+  );
 
   const visibleGroups = searchActive
     ? eraGroups.groups
@@ -862,6 +904,27 @@ export default function Sidebar({
   const visibleSpanUngrouped = searchActive
     ? spanGroups.ungrouped.filter((el) => matchesSearch(el.title || el.id))
     : spanGroups.ungrouped;
+
+  const sortedVisibleGroups = sortByHeader(visibleGroups, "era").map((g) => ({
+    ...g,
+    items: applySidebarSort(g.items, null),
+    subGroups: (g.subGroups || []).map((sg) => ({ ...sg, items: applySidebarSort(sg.items, null) })),
+  }));
+  const sortedVisibleUngrouped = applySidebarSort(visibleUngrouped, null);
+  const applyEraTreeSort = (nodes) =>
+    sortByHeader(nodes, "era").map((node) => ({
+      ...node,
+      items: applySidebarSort(node.items, null),
+      children: applyEraTreeSort(node.children || []),
+    }));
+  const sortedVisibleEraTree = applyEraTreeSort(visibleEraTree);
+  const sortedVisibleSpanGroups = sortByHeader(visibleSpanGroups, "span").map((g) => ({
+    ...g,
+    items: applySidebarSort(g.items, null),
+    subGroups: (g.subGroups || []).map((sg) => ({ ...sg, items: applySidebarSort(sg.items, null) })),
+  }));
+  const sortedVisibleSpanUngrouped = applySidebarSort(visibleSpanUngrouped, null);
+
   const visibleTags = searchActive
     ? allTags.filter((tag) => matchesSearch(tag))
     : allTags;
@@ -1162,6 +1225,7 @@ export default function Sidebar({
           </div>
         </div>
 
+        <div className="sb-search-and-sort">
         <div className="sb-search-row">
           <Search size={12} strokeWidth={2} className="sb-search-icon" />
           <input
@@ -1171,6 +1235,65 @@ export default function Sidebar({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+          {sidebarTab === "timeline" && (
+            <div className="sb-sort-wrap" ref={sortMenuRef}>
+              <button
+                className={`sb-sort-btn${sortMenuOpen ? " is-active" : ""}`}
+                onClick={() => setSortMenuOpen((v) => !v)}
+                title="Sort"
+                aria-label="Sort"
+              >
+                <ArrowUpDown size={14} strokeWidth={2} />
+              </button>
+              {sortMenuOpen && (
+                <div className="sb-sort-menu timeline-context-menu">
+                  <div className="sb-sort-menu-header">Sort by</div>
+                  <button className="context-menu-item" onClick={() => { setSortField("year"); setSortMenuOpen(false); }}>
+                    <span>Year</span>
+                    {sortField === "year" && <Check size={12} className="sb-sort-check" />}
+                  </button>
+                  <button className="context-menu-item" onClick={() => { setSortField("name"); setSortMenuOpen(false); }}>
+                    <span>Name</span>
+                    {sortField === "name" && <Check size={12} className="sb-sort-check" />}
+                  </button>
+                  <div className="sb-sort-divider" />
+                  <button className="context-menu-item" onClick={() => { setSortOrder("asc"); setSortMenuOpen(false); }}>
+                    <span>Ascending</span>
+                    {sortOrder === "asc" && <Check size={12} className="sb-sort-check" />}
+                  </button>
+                  <button className="context-menu-item" onClick={() => { setSortOrder("desc"); setSortMenuOpen(false); }}>
+                    <span>Descending</span>
+                    {sortOrder === "desc" && <Check size={12} className="sb-sort-check" />}
+                  </button>
+                  <div className="sb-sort-divider" />
+                  <div className="sb-sort-menu-header">Group by</div>
+                  {[["default", "Default"], ["eras", "Eras"], ["spans", "Spans"]].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className="context-menu-item"
+                      onClick={() => { onPatchFile?.({ panelGroupMode: value, nestEraSubGroups: value !== "eras" ? false : file?.nestEraSubGroups }); setSortMenuOpen(false); }}
+                    >
+                      <span>{label}</span>
+                      {(file?.panelGroupMode || "default") === value && <Check size={12} className="sb-sort-check" />}
+                    </button>
+                  ))}
+                  {(file?.panelGroupMode === "eras") && (
+                    <>
+                      <div className="sb-sort-divider" />
+                      <button
+                        className="context-menu-item"
+                        onClick={() => { onPatchFile?.({ panelGroupMode: "eras", nestEraSubGroups: !file?.nestEraSubGroups }); }}
+                      >
+                        <span>Nest Sub-Eras</span>
+                        {file?.nestEraSubGroups && <Check size={12} className="sb-sort-check" />}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {allTags.length > 0 && file?.showPopularTags !== false && (
@@ -1207,7 +1330,7 @@ export default function Sidebar({
         {sidebarTab === "timeline" ? (
         file?.panelGroupMode === "spans" ? (
         <div className="sb-era-groups">
-          {visibleSpanGroups.map(({ span, items, subGroups }) => {
+          {sortedVisibleSpanGroups.map(({ span, items, subGroups }) => {
             const isOpen = searchActive || openSpanGroups[span.id] !== false;
             const renderSpanHeader = (s, isRoot, isOpenState, onToggle) => (
               <div className={`sb-sub-era-header${isRoot ? " is-root-span" : ""}`}>
@@ -1257,7 +1380,7 @@ export default function Sidebar({
               </div>
             );
           })}
-          {visibleSpanUngrouped.length > 0 && (
+          {sortedVisibleSpanUngrouped.length > 0 && (
             <div className="sb-sub-era-group">
               {spanGroups.groups.length > 0 && (() => {
                 const isOtherOpen = searchActive || openSpanGroups["__other__"] !== false;
@@ -1271,7 +1394,7 @@ export default function Sidebar({
                     </div>
                     {isOtherOpen && (
                       <div className="sb-sub-era-items">
-                        {visibleSpanUngrouped.map((el) => (
+                        {sortedVisibleSpanUngrouped.map((el) => (
                           <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                         ))}
                       </div>
@@ -1281,7 +1404,7 @@ export default function Sidebar({
               })()}
               {spanGroups.groups.length === 0 && (
                 <div className="sb-sub-era-items">
-                  {visibleSpanUngrouped.map((el) => (
+                  {sortedVisibleSpanUngrouped.map((el) => (
                     <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                   ))}
                 </div>
@@ -1296,6 +1419,7 @@ export default function Sidebar({
                 <button className="sb-section-toggle" onClick={() => setOpenEras((v) => !v)}>
                   <ChevronDown className={`sb-caret ${openEras ? "open" : ""}`} size={16} strokeWidth={2} />
                   <span className="sb-section-label">Eras</span>
+                  <span className="sb-section-count">{visibleEras.length}</span>
                 </button>
               </div>
               {(openEras || searchActive) && (
@@ -1311,6 +1435,7 @@ export default function Sidebar({
                 <button className="sb-section-toggle" onClick={() => setOpenSpans((v) => !v)}>
                   <ChevronDown className={`sb-caret ${openSpans ? "open" : ""}`} size={16} strokeWidth={2} />
                   <span className="sb-section-label">Spans</span>
+                  <span className="sb-section-count">{visibleSpans.length}</span>
                 </button>
               </div>
               {(openSpans || searchActive) && (
@@ -1326,6 +1451,7 @@ export default function Sidebar({
                 <button className="sb-section-toggle" onClick={() => setOpenEvents((v) => !v)}>
                   <ChevronDown className={`sb-caret ${openEvents ? "open" : ""}`} size={16} strokeWidth={2} />
                   <span className="sb-section-label">Events</span>
+                  <span className="sb-section-count">{visibleEvents.length}</span>
                 </button>
               </div>
               {(openEvents || searchActive) && (
@@ -1340,9 +1466,9 @@ export default function Sidebar({
         ) : (
         <div className="sb-era-groups">
           {file?.nestEraSubGroups
-            ? visibleEraTree.map((node) => renderEraTreeNode(node, 0))
+            ? sortedVisibleEraTree.map((node) => renderEraTreeNode(node, 0))
             : null}
-          {!file?.nestEraSubGroups && visibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
+          {!file?.nestEraSubGroups && sortedVisibleGroups.map(({ era, items, subGroups, barLeft, barWidth }) => {
             const isOpen = searchActive || openEraGroups[era.id] !== false;
             const eraColor = era.color || "var(--ui-muted)";
             const totalCount = items.length + (subGroups?.reduce((s, sg) => s + sg.items.length, 0) ?? 0);
@@ -1429,7 +1555,7 @@ export default function Sidebar({
               </div>
             );
           })}
-          {visibleUngrouped.length > 0 && (
+          {sortedVisibleUngrouped.length > 0 && (
             <div className="sb-era-group">
               {eraGroups.groups.length > 0 && (() => {
                 const isOtherOpen = searchActive || openEraGroups["__other__"] !== false;
@@ -1440,11 +1566,11 @@ export default function Sidebar({
                         <ChevronDown className={`sb-caret ${isOtherOpen ? "open" : ""}`} size={11} strokeWidth={2.5} />
                       </button>
                       <span className="sb-era-name">OTHER</span>
-                      <span className="sb-era-count">{visibleUngrouped.length}</span>
+                      <span className="sb-era-count">{sortedVisibleUngrouped.length}</span>
                     </div>
                     {isOtherOpen && (
                       <div className="sb-era-items">
-                        {visibleUngrouped.map((el) => (
+                        {sortedVisibleUngrouped.map((el) => (
                           <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                         ))}
                       </div>
@@ -1454,7 +1580,7 @@ export default function Sidebar({
               })()}
               {eraGroups.groups.length === 0 && (
                 <div className="sb-era-items">
-                  {visibleUngrouped.map((el) => (
+                  {sortedVisibleUngrouped.map((el) => (
                     <ElementRow key={el.id} element={el} selectedId={selectedId} onSelect={onSelect} listRef={listRef} lastScrollTopRef={lastScrollTopRef} setElementMenu={setElementMenu} tagColors={tagColors} spanById={spanById} fmtYear={fmtYear} />
                   ))}
                 </div>

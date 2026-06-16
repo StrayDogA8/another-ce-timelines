@@ -175,8 +175,10 @@ export default function SettingsModal({
       const currentPath = timelineData.path || timelineData.file.id || timelineData.file.title;
       const isNewFile = lastFilePathRef.current !== currentPath;
 
-      // Only fully reset state when loading a different file
-      if (isNewFile) {
+      if (!isNewFile) {
+        setPanelGroupMode(timelineData.file.panelGroupMode || (timelineData.file.useEraGroupsInPanel ? "eras" : "default"));
+        setNestEraSubGroups(Boolean(timelineData.file.nestEraSubGroups));
+      } else {
         setTitle(timelineData.file.title || "");
         setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
         setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
@@ -1112,45 +1114,6 @@ export default function SettingsModal({
                   <div className="settings-row-label">Left Panel</div>
                 </div>
               </div>
-
-              {/* Panel Group Mode */}
-              <div className="settings-row">
-                <div className="settings-row-left">
-                  <div className="settings-row-label">Group By <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
-                  <div className="settings-row-description">Group elements in the left panel by era or by parent span.</div>
-                </div>
-                <div className="settings-row-right">
-                  <select
-                    className="settings-select"
-                    value={panelGroupMode}
-                    onChange={(e) => setPanelGroupMode(e.target.value)}
-                  >
-                    <option value="default">Default</option>
-                    <option value="eras">Eras</option>
-                    <option value="spans">Spans</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Nest Sub-Eras (only relevant for group by eras) */}
-              {panelGroupMode === "eras" && (
-                <div className="settings-row">
-                  <div className="settings-row-left">
-                    <div className="settings-row-label">Nest Sub-Eras <span style={{ fontSize: "0.75em", opacity: 0.6 }}>(experimental)</span></div>
-                    <div className="settings-row-description">Indent sub-eras under their parent era, with deeper nesting for sub-eras within sub-eras.</div>
-                  </div>
-                  <div className="settings-row-right">
-                    <label className="settings-toggle">
-                      <input
-                        type="checkbox"
-                        checked={nestEraSubGroups}
-                        onChange={(e) => setNestEraSubGroups(e.target.checked)}
-                      />
-                      <span className="settings-toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-              )}
 
               {/* Show Popular Tags */}
               <div className="settings-row">

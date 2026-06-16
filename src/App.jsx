@@ -1124,6 +1124,18 @@ function App() {
     });
   };
 
+  const handlePatchFile = (patch) => {
+    setTimelineData((prevData) => {
+      const nextFile = { ...prevData.file, ...patch };
+      if (!nextFile.panelGroupMode || nextFile.panelGroupMode === "default") delete nextFile.panelGroupMode;
+      if (!nextFile.nestEraSubGroups) delete nextFile.nestEraSubGroups;
+      const updatedData = { ...prevData, file: nextFile };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimeline(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
   const handleUpdateGroups = (nextGroups) => {
     setTimelineData((prevData) => {
       const updatedData = {
@@ -1913,6 +1925,7 @@ function App() {
           onDelete={handleRequestDelete}
           onDuplicateElement={handleDuplicateElement}
           onEditElement={handleEditElement}
+          onPatchFile={handlePatchFile}
           keybinds={keybinds}
         />
         </ErrorBoundary>
