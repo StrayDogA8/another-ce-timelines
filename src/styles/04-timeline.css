@@ -710,6 +710,12 @@
   line-height: 1.35;
 }
 
+.event-compact .pinned-tag {
+  font-size: 6px;
+  padding: 0 4px;
+  line-height: 1.2;
+}
+
 .span-item .pinned-tags {
   margin-left: 6px;
   display: inline-flex;

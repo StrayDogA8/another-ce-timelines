@@ -506,7 +506,7 @@ const TimelineView = forwardRef(function TimelineView({
     const compactEvents = Boolean(file?.compactEvents);
     const EVENT_WIDTH = compactEvents ? 130 : 160;
     const EVENT_GAP = 15;
-    const LANE_SPACING = 37;
+    const LANE_SPACING = compactEvents ? 29 : 37;
     const BOX_OFFSET = 50;
     const EVENT_MIN_HEIGHT = 29;
 
