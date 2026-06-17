@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
+import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
 
 const TypeDot = () => <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "currentColor", flexShrink: 0 }} />;
 const TypeBar = () => <span style={{ display: "inline-block", width: 12, height: 2, borderRadius: 1, background: "currentColor", flexShrink: 0 }} />;
@@ -42,11 +43,11 @@ export default function SearchOverlay({ isOpen, onClose, elements, onSelect, fil
   const listRef = useRef(null);
   const activeItemRef = useRef(null);
 
+  const parsedFilter = useMemo(() => parseFilterQuery(query), [query]);
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return elements.slice(0, 50);
-    return elements.filter((el) => el.title?.toLowerCase().includes(q));
-  }, [query, elements]);
+    if (!query.trim()) return elements.slice(0, 50);
+    return elements.filter((el) => matchesFilter(el, parsedFilter));
+  }, [query, elements, parsedFilter]);
 
   useEffect(() => {
     if (isOpen) {

@@ -3,6 +3,7 @@
   "type": "light",
   "collection": "bundled",
   "author": "sreegjl",
+  "thumbnail": "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/main/shipped_themes/light/thumbnail.png",
   "colors": {
     "text-primary": "#1A1A1A",
     "ui-muted": "#919191",

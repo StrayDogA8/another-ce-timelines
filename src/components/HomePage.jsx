@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Moon, Sun } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Moon, Sun, ChevronDown, Download, Check } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
@@ -155,6 +155,10 @@ export default function HomePage({
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const [marketplaceCollection, setMarketplaceCollection] = useState(null);
   const [marketplaceDarkLight, setMarketplaceDarkLight] = useState("all");
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  const [marketplaceTab, setMarketplaceTab] = useState("marketplace");
+  const [installedOriginFilter, setInstalledOriginFilter] = useState("all");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
@@ -410,11 +414,21 @@ export default function HomePage({
     if (action) action();
   };
 
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handler = (e) => { if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [moreMenuOpen]);
+
   const handleOpenMarketplace = () => {
     setIsMarketplaceOpen(true);
     setMarketplaceSearch("");
     setMarketplaceCollection(null);
     setMarketplaceDarkLight("all");
+    setMoreMenuOpen(false);
+    setMarketplaceTab("marketplace");
+    setInstalledOriginFilter("all");
     loadMarketplace();
     loadInstalledThemes();
   };
@@ -1490,52 +1504,176 @@ export default function HomePage({
       )}
 
       {isMarketplaceOpen && (() => {
+        // Collection data for marketplace tab
         const collectionCounts = {};
         marketplaceThemes.forEach((t) => {
           const c = t.collection || "other";
           collectionCounts[c] = (collectionCounts[c] || 0) + 1;
         });
         const allCollections = Object.entries(collectionCounts)
-          .sort(([, a], [, b]) => b - a)
+          .sort(([a, ca], [b, cb]) => {
+            if (a === "featured") return -1;
+            if (b === "featured") return 1;
+            return cb - ca;
+          })
           .map(([collection, count]) => ({ collection, count }));
 
-        const filteredThemes = marketplaceThemes.filter((theme) => {
-          const query = marketplaceSearch.trim().toLowerCase();
-          if (query) {
-            const haystack = [theme?.name, theme?.id, theme?.author, theme?.description]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase();
-            if (!haystack.includes(query)) return false;
-          }
-          if (marketplaceCollection !== null && theme.collection !== marketplaceCollection) return false;
-          if (marketplaceDarkLight !== "all" && theme.type !== marketplaceDarkLight) return false;
-          return true;
-        });
+        // Marketplace theme ID set for origin detection
+        const mktIds = new Set(marketplaceThemes.map(t => String(t.id || "").toLowerCase()));
 
-        const installedCount = marketplaceThemes.filter(
-          (t) =>
-            installedThemeIds.has(String(t.id).toLowerCase()) ||
-            userThemeIds.has(String(t.id).toLowerCase())
-        ).length;
+        // All installed themes (built-in + user)
+        const allInstalledThemes = [
+          ...appThemes.map(([key, theme]) => ({
+            id: key,
+            name: theme.name || key,
+            origin: "built-in",
+            type: theme.type || null,
+            author: "shipped",
+            thumbnailUrl: bundledThemes[key]?.thumbnail || null,
+            description: null,
+          })),
+          ...userThemes.map(([key, theme]) => {
+            const tid = key.toLowerCase();
+            const isMkt = marketplaceThemes.length > 0 && mktIds.has(tid);
+            const mktData = isMkt ? marketplaceThemes.find(t => String(t.id || "").toLowerCase() === tid) : null;
+            return {
+              id: key,
+              name: theme.name || mktData?.name || key,
+              origin: isMkt ? "marketplace" : "local",
+              type: theme.type || mktData?.type || null,
+              author: mktData?.author || (isMkt ? null : "you"),
+              thumbnailUrl: mktData?.paths?.thumbnail ? `${MARKETPLACE_BASE}${mktData.paths.thumbnail}` : null,
+              description: mktData?.description || null,
+            };
+          }),
+        ];
+
+        // Local-only themes
+        const allLocalThemes = userThemes
+          .filter(([key]) => marketplaceThemes.length === 0 || !mktIds.has(key.toLowerCase()))
+          .map(([key, theme]) => ({
+            id: key,
+            name: theme.name || key,
+            origin: "local",
+            type: theme.type || null,
+            author: "you",
+            thumbnailUrl: null,
+            description: null,
+          }));
+
+        // Filter helpers
+        const searchFilter = (theme) => {
+          const q = marketplaceSearch.trim().toLowerCase();
+          if (!q) return true;
+          return [theme.name, theme.author, theme.description].filter(Boolean).join(" ").toLowerCase().includes(q);
+        };
+        const typeFilter = (theme) => marketplaceDarkLight === "all" || theme.type === marketplaceDarkLight;
+
+        // Filtered marketplace themes
+        const filteredMarketplace = marketplaceThemes.filter((t) => {
+          const q = marketplaceSearch.trim().toLowerCase();
+          if (q) {
+            const h = [t?.name, t?.id, t?.author, t?.description].filter(Boolean).join(" ").toLowerCase();
+            if (!h.includes(q)) return false;
+          }
+          if (marketplaceCollection !== null && t.collection !== marketplaceCollection) return false;
+          if (marketplaceDarkLight !== "all" && t.type !== marketplaceDarkLight) return false;
+          return true;
+        }).sort((a, b) => (a.name || a.id || "").localeCompare(b.name || b.id || ""));
+
+        // Filtered installed/local themes
+        const filteredInstalled = allInstalledThemes.filter(t =>
+          searchFilter(t) && typeFilter(t) &&
+          (installedOriginFilter === "all" || t.origin === installedOriginFilter)
+        );
+        const filteredLocal = allLocalThemes.filter(t => searchFilter(t) && typeFilter(t));
+
+        // Origin counts for installed tab pills
+        const originCounts = {
+          all: allInstalledThemes.length,
+          marketplace: allInstalledThemes.filter(t => t.origin === "marketplace").length,
+          local: allInstalledThemes.filter(t => t.origin === "local").length,
+          "built-in": allInstalledThemes.filter(t => t.origin === "built-in").length,
+        };
+
+        // Card renderer for installed/local tabs
+        const renderCard = (theme, showEdit = false) => {
+          const themeId = String(theme.id || "").toLowerCase();
+          const isActive = String(appThemeKey || "").toLowerCase() === themeId;
+          const isBuiltIn = theme.origin === "built-in";
+          const isBusy = marketplaceBusyId === theme.id;
+          return (
+            <div key={theme.id} className="marketplace-card">
+              <div className="marketplace-thumbnail">
+                {theme.thumbnailUrl && <img src={theme.thumbnailUrl} alt={`${theme.name} preview`} />}
+                <span className={`marketplace-origin-badge marketplace-origin-badge-${theme.origin}`}>
+                  {theme.origin === "built-in" ? "BUILT-IN" : theme.origin === "marketplace" ? "MARKET" : "LOCAL"}
+                </span>
+              </div>
+              <div className="marketplace-card-body">
+                <div className="marketplace-card-title-row">
+                  <div className="marketplace-card-title">{theme.name}</div>
+                  {theme.type && (
+                    <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>{theme.type}</span>
+                  )}
+                </div>
+                <div className="marketplace-card-author">
+                  {theme.author === "shipped" ? "shipped" : theme.author ? `by ${theme.author}` : ""}
+                </div>
+                {theme.description && <div className="marketplace-card-description">{theme.description}</div>}
+              </div>
+              <div className="marketplace-card-actions">
+                <button
+                  className={`marketplace-button marketplace-button-secondary${isActive ? " marketplace-button-active" : ""}`}
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment" : theme.id)}
+                >
+                  {isActive ? (
+                    <>
+                      <span className="marketplace-btn-default"><Check size={13} strokeWidth={2.5} /> Enabled</span>
+                      <span className="marketplace-btn-hover"><X size={13} strokeWidth={2.5} /> Disable</span>
+                    </>
+                  ) : "Enable"}
+                </button>
+                {showEdit && !isBuiltIn && (
+                  <button
+                    className="marketplace-icon-button marketplace-button-danger"
+                    type="button"
+                    onClick={() => window.electron?.openThemesFolder?.()}
+                    aria-label="Open themes folder"
+                    title="Open themes folder"
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                )}
+                {!isBuiltIn && (
+                  <button
+                    className="marketplace-icon-button marketplace-button-danger"
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleDeleteTheme({ id: theme.id })}
+                    aria-label="Delete theme"
+                    title="Delete theme"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        };
 
         return (
           <div key="marketplace" className="settings-backdrop" onClick={handleCloseMarketplace}>
             <div className="marketplace-modal" onClick={(e) => e.stopPropagation()}>
               <div className="marketplace-header">
-                <button
-                  className="settings-back-button"
-                  onClick={handleCloseMarketplace}
-                  aria-label="Close marketplace"
-                >
+                <button className="settings-back-button" onClick={handleCloseMarketplace} aria-label="Close marketplace">
                   <ArrowLeft size={18} strokeWidth={2} />
                 </button>
                 <div className="marketplace-header-title">
                   <h2 className="marketplace-title">Marketplace</h2>
                 </div>
-                {installedCount > 0 && (
-                  <span className="marketplace-installed-count">{installedCount} installed</span>
-                )}
               </div>
 
               <div className="marketplace-search-row">
@@ -1550,130 +1688,213 @@ export default function HomePage({
                 />
               </div>
 
-              <div className="marketplace-controls">
-                <div className="marketplace-collection-pills">
-                  <button
-                    className={`marketplace-pill${marketplaceCollection === null ? " marketplace-pill-active" : ""}`}
-                    onClick={() => setMarketplaceCollection(null)}
-                  >
-                    All themes <span className="marketplace-pill-count">{marketplaceThemes.length}</span>
-                  </button>
-                  {allCollections.map(({ collection, count }) => (
-                    <button
-                      key={collection}
-                      className={`marketplace-pill${marketplaceCollection === collection ? " marketplace-pill-active" : ""}`}
-                      onClick={() => setMarketplaceCollection(collection)}
-                    >
-                      {collection.charAt(0).toUpperCase() + collection.slice(1)}{" "}
-                      <span className="marketplace-pill-count">{count}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="marketplace-tabs-row">
                 <div className="marketplace-type-toggle">
                   <button
-                    className={`marketplace-type-btn${marketplaceDarkLight === "all" ? " marketplace-type-btn-active" : ""}`}
-                    onClick={() => setMarketplaceDarkLight("all")}
+                    className={`marketplace-type-btn${marketplaceTab === "marketplace" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceTab("marketplace")}
                   >
-                    All
+                    Marketplace {marketplaceThemes.length > 0 && <span className="marketplace-tab-count">{marketplaceThemes.length}</span>}
                   </button>
                   <button
-                    className={`marketplace-type-btn${marketplaceDarkLight === "dark" ? " marketplace-type-btn-active" : ""}`}
-                    onClick={() => setMarketplaceDarkLight("dark")}
+                    className={`marketplace-type-btn${marketplaceTab === "installed" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceTab("installed")}
                   >
-                    <Moon size={11} /> Dark
+                    Installed <span className="marketplace-tab-count">{allInstalledThemes.length}</span>
                   </button>
                   <button
-                    className={`marketplace-type-btn${marketplaceDarkLight === "light" ? " marketplace-type-btn-active" : ""}`}
-                    onClick={() => setMarketplaceDarkLight("light")}
+                    className={`marketplace-type-btn${marketplaceTab === "local" ? " marketplace-type-btn-active" : ""}`}
+                    onClick={() => setMarketplaceTab("local")}
                   >
-                    <Sun size={11} /> Light
+                    Local <span className="marketplace-tab-count">{allLocalThemes.length}</span>
                   </button>
+                </div>
+                <div className="marketplace-type-toggle">
+                  <button className={`marketplace-type-btn${marketplaceDarkLight === "all" ? " marketplace-type-btn-active" : ""}`} onClick={() => setMarketplaceDarkLight("all")}>All</button>
+                  <button className={`marketplace-type-btn${marketplaceDarkLight === "dark" ? " marketplace-type-btn-active" : ""}`} onClick={() => setMarketplaceDarkLight("dark")}><Moon size={11} /> Dark</button>
+                  <button className={`marketplace-type-btn${marketplaceDarkLight === "light" ? " marketplace-type-btn-active" : ""}`} onClick={() => setMarketplaceDarkLight("light")}><Sun size={11} /> Light</button>
                 </div>
               </div>
 
-              {marketplaceError && (
-                <div className="marketplace-error">{marketplaceError}</div>
+              {marketplaceTab === "marketplace" && (
+                <div className="marketplace-controls">
+                  <div className="marketplace-collection-pills">
+                    {(() => {
+                      const PRIMARY_COUNT = 3;
+                      const primary = allCollections.slice(0, PRIMARY_COUNT);
+                      const overflow = allCollections.slice(PRIMARY_COUNT);
+                      const activeIsOverflow = overflow.some((c) => c.collection === marketplaceCollection);
+                      return (
+                        <>
+                          <button
+                            className={`marketplace-pill${marketplaceCollection === null ? " marketplace-pill-active" : ""}`}
+                            onClick={() => setMarketplaceCollection(null)}
+                          >
+                            All themes <span className="marketplace-pill-count">{marketplaceThemes.length}</span>
+                          </button>
+                          {primary.map(({ collection, count }) => (
+                            <button
+                              key={collection}
+                              className={`marketplace-pill${marketplaceCollection === collection ? " marketplace-pill-active" : ""}`}
+                              onClick={() => setMarketplaceCollection(collection)}
+                            >
+                              {collection.charAt(0).toUpperCase() + collection.slice(1)}{" "}
+                              <span className="marketplace-pill-count">{count}</span>
+                            </button>
+                          ))}
+                          {overflow.length > 0 && (
+                            <div className="marketplace-more-wrap" ref={moreMenuRef}>
+                              <button
+                                className={`marketplace-pill marketplace-pill-more${activeIsOverflow ? " marketplace-pill-active" : ""}`}
+                                onClick={() => setMoreMenuOpen((v) => !v)}
+                              >
+                                {activeIsOverflow
+                                  ? overflow.find((c) => c.collection === marketplaceCollection)?.collection.charAt(0).toUpperCase() +
+                                    overflow.find((c) => c.collection === marketplaceCollection)?.collection.slice(1)
+                                  : "More"}
+                                {" "}<ChevronDown size={11} strokeWidth={2.5} />
+                              </button>
+                              {moreMenuOpen && (
+                                <div className="marketplace-more-menu">
+                                  {overflow.map(({ collection, count }) => (
+                                    <button
+                                      key={collection}
+                                      className={`marketplace-more-item${marketplaceCollection === collection ? " is-active" : ""}`}
+                                      onClick={() => { setMarketplaceCollection(collection); setMoreMenuOpen(false); }}
+                                    >
+                                      <span>{collection.charAt(0).toUpperCase() + collection.slice(1)}</span>
+                                      <span className="marketplace-more-count">{count}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
               )}
 
-              {marketplaceLoading ? (
-                <div className="marketplace-loading">Loading themes...</div>
-              ) : filteredThemes.length === 0 ? (
-                <div className="marketplace-empty">No themes match</div>
-              ) : (
-                <div className="marketplace-grid">
-                  {filteredThemes.map((theme) => {
-                    const themeId = String(theme.id || "").toLowerCase();
-                    const isInstalled =
-                      installedThemeIds.has(themeId) || userThemeIds.has(themeId);
-                    const isActive =
-                      String(appThemeKey || "").toLowerCase() === themeId;
-                    const isBusy = marketplaceBusyId === theme.id;
-                    const thumbnailUrl = theme?.paths?.thumbnail
-                      ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}`
-                      : "";
-                    return (
-                      <div key={theme.id} className="marketplace-card">
-                        <div className="marketplace-thumbnail">
-                          {thumbnailUrl ? (
-                            <img src={thumbnailUrl} alt={`${theme.name} preview`} />
-                          ) : (
-                            <div className="marketplace-thumbnail-empty">No preview</div>
-                          )}
-                        </div>
-                        <div className="marketplace-card-body">
-                          <div className="marketplace-card-title-row">
-                            <div className="marketplace-card-title">{theme.name || theme.id}</div>
-                            {theme.type && (
-                              <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>
-                                {theme.type}
-                              </span>
-                            )}
+              {marketplaceTab === "installed" && (
+                <div className="marketplace-controls">
+                  <div className="marketplace-collection-pills">
+                    {[
+                      { key: "all", label: "All", count: originCounts.all },
+                      { key: "marketplace", label: "Marketplace", count: originCounts.marketplace },
+                      { key: "local", label: "Local", count: originCounts.local },
+                      { key: "built-in", label: "Built-in", count: originCounts["built-in"] },
+                    ].map(({ key, label, count }) => (
+                      <button
+                        key={key}
+                        className={`marketplace-pill${installedOriginFilter === key ? " marketplace-pill-active" : ""}`}
+                        onClick={() => setInstalledOriginFilter(key)}
+                      >
+                        {label} <span className="marketplace-pill-count">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {marketplaceError && <div className="marketplace-error">{marketplaceError}</div>}
+
+              {marketplaceTab === "marketplace" && (
+                marketplaceLoading ? (
+                  <div className="marketplace-loading">Loading themes...</div>
+                ) : filteredMarketplace.length === 0 ? (
+                  <div className="marketplace-empty">No themes match</div>
+                ) : (
+                  <div className="marketplace-grid">
+                    {filteredMarketplace.map((theme) => {
+                      const themeId = String(theme.id || "").toLowerCase();
+                      const isInstalled = installedThemeIds.has(themeId) || userThemeIds.has(themeId);
+                      const isActive = String(appThemeKey || "").toLowerCase() === themeId;
+                      const isBusy = marketplaceBusyId === theme.id;
+                      const thumbnailUrl = theme?.paths?.thumbnail ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}` : "";
+                      return (
+                        <div key={theme.id} className="marketplace-card">
+                          <div className="marketplace-thumbnail">
+                            {thumbnailUrl && <img src={thumbnailUrl} alt={`${theme.name} preview`} />}
                           </div>
-                          <div className="marketplace-card-author">
-                            {theme.author ? `by ${theme.author}` : ""}
+                          <div className="marketplace-card-body">
+                            <div className="marketplace-card-title-row">
+                              <div className="marketplace-card-title">{theme.name || theme.id}</div>
+                              {theme.type && (
+                                <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>{theme.type}</span>
+                              )}
+                            </div>
+                            <div className="marketplace-card-author">{theme.author ? `by ${theme.author}` : ""}</div>
+                            <div className="marketplace-card-description">{theme.description}</div>
                           </div>
-                          <div className="marketplace-card-description">{theme.description}</div>
-                        </div>
-                        <div className="marketplace-card-actions">
-                          {isInstalled ? (
-                            <>
+                          <div className="marketplace-card-actions">
+                            {isInstalled ? (
+                              <>
+                                <button
+                                  className={`marketplace-button marketplace-button-secondary${isActive ? " marketplace-button-active" : ""}`}
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment" : theme.id)}
+                                >
+                                  {isActive ? (
+                                    <>
+                                      <span className="marketplace-btn-default"><Check size={13} strokeWidth={2.5} /> Enabled</span>
+                                      <span className="marketplace-btn-hover"><X size={13} strokeWidth={2.5} /> Disable</span>
+                                    </>
+                                  ) : "Enable"}
+                                </button>
+                                <button
+                                  className="marketplace-icon-button marketplace-button-danger"
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleDeleteTheme(theme)}
+                                  aria-label="Delete theme"
+                                  title="Delete theme"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            ) : (
                               <button
                                 className="marketplace-button"
                                 type="button"
                                 disabled={isBusy}
-                                onClick={() =>
-                                  onAppThemeChange?.(
-                                    isActive ? defaultThemeKey || "parchment" : theme.id
-                                  )
-                                }
+                                onClick={() => handleDownloadTheme(theme)}
                               >
-                                {isActive ? "Disable" : "Enable"}
+                                {isBusy ? "Downloading..." : <><Download size={13} strokeWidth={2.5} /> Download</>}
                               </button>
-                              <button
-                                className="marketplace-icon-button marketplace-button-danger"
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => handleDeleteTheme(theme)}
-                                aria-label="Delete theme"
-                                title="Delete theme"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              className="marketplace-button"
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleDownloadTheme(theme)}
-                            >
-                              {isBusy ? "Downloading..." : "Download"}
-                            </button>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {marketplaceTab === "installed" && (
+                filteredInstalled.length === 0 ? (
+                  <div className="marketplace-empty">No themes match</div>
+                ) : (
+                  <div className="marketplace-grid">
+                    {filteredInstalled.map((t) => renderCard(t, t.origin === "local"))}
+                  </div>
+                )
+              )}
+
+              {marketplaceTab === "local" && (
+                <div className="marketplace-grid">
+                  <div className="marketplace-card marketplace-card-new" onClick={() => window.electron?.openThemesFolder?.()}>
+                    <div className="marketplace-thumbnail marketplace-thumbnail-new">
+                      <FilePlus size={28} strokeWidth={1.5} className="marketplace-new-icon" />
+                    </div>
+                    <div className="marketplace-card-body">
+                      <div className="marketplace-card-title">New Theme</div>
+                      <div className="marketplace-card-author">Open themes folder</div>
+                    </div>
+                  </div>
+                  {filteredLocal.map((t) => renderCard(t, true))}
                 </div>
               )}
             </div>

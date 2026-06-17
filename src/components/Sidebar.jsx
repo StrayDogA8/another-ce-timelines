@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
+import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
 import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed, ArrowUpDown, Check } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import { ICON_MAP as iconMap } from "../config/elementIcons";
@@ -801,6 +802,8 @@ export default function Sidebar({
   const searchActive = searchQuery.trim().length > 0;
   const q = searchQuery.trim().toLowerCase();
   const matchesSearch = (value) => (value || "").toLowerCase().includes(q);
+  const parsedFilter = useMemo(() => parseFilterQuery(searchQuery), [searchQuery]);
+  const elMatches = (el) => matchesFilter(el, parsedFilter);
   const searchPlaceholder = sidebarTab === "timeline"
     ? "Search spans, events, eras..."
     : sidebarTab === "tags"
@@ -827,36 +830,36 @@ export default function Sidebar({
   };
 
   const visibleEras = applySidebarSort(
-    searchActive ? eraRoots.filter((e) => matchesSearch(e.title || e.id)) : eraRoots,
+    searchActive ? eraRoots.filter((e) => elMatches(e)) : eraRoots,
     "start"
   );
   const visibleSpans = applySidebarSort(
-    searchActive ? spanRows.filter((s) => matchesSearch(s.title || s.id)) : spanRows,
+    searchActive ? spanRows.filter((s) => elMatches(s)) : spanRows,
     "start"
   );
   const visibleEvents = applySidebarSort(
-    searchActive ? eventRows.filter((ev) => matchesSearch(ev.title || ev.id)) : eventRows,
+    searchActive ? eventRows.filter((ev) => elMatches(ev)) : eventRows,
     "date"
   );
 
   const visibleGroups = searchActive
     ? eraGroups.groups
         .map((group) => {
-          const eraMatches = matchesSearch(group.era.title || group.era.id);
+          const eraMatches = elMatches(group.era);
           const filteredItems = eraMatches
             ? group.items
-            : group.items.filter((el) => matchesSearch(el.title || el.id));
+            : group.items.filter((el) => elMatches(el));
           const filteredSubGroups = (group.subGroups || [])
             .map((subGroup) => {
-              const subEraMatches = matchesSearch(subGroup.era.title || subGroup.era.id);
+              const subEraMatches = elMatches(subGroup.era);
               return {
                 ...subGroup,
                 items: subEraMatches
                   ? subGroup.items
-                  : subGroup.items.filter((el) => matchesSearch(el.title || el.id)),
+                  : subGroup.items.filter((el) => elMatches(el)),
               };
             })
-            .filter((subGroup) => subGroup.items.length > 0 || matchesSearch(subGroup.era.title || subGroup.era.id));
+            .filter((subGroup) => subGroup.items.length > 0 || elMatches(subGroup.era));
 
           if (!eraMatches && filteredItems.length === 0 && filteredSubGroups.length === 0) {
             return null;
@@ -871,13 +874,13 @@ export default function Sidebar({
         .filter(Boolean)
     : eraGroups.groups;
   const visibleUngrouped = searchActive
-    ? eraGroups.ungrouped.filter((el) => (el.title || el.id || "").toLowerCase().includes(q))
+    ? eraGroups.ungrouped.filter((el) => elMatches(el))
     : eraGroups.ungrouped;
   const visibleEraTree = searchActive
     ? (() => {
         const filterNode = (node) => {
-          const eraMatches = matchesSearch(node.era.title || node.era.id);
-          const filteredItems = eraMatches ? node.items : node.items.filter((el) => matchesSearch(el.title || el.id));
+          const eraMatches = elMatches(node.era);
+          const filteredItems = eraMatches ? node.items : node.items.filter((el) => elMatches(el));
           const filteredChildren = node.children.map(filterNode).filter(Boolean);
           if (!eraMatches && filteredItems.length === 0 && filteredChildren.length === 0) return null;
           return { ...node, items: filteredItems, children: filteredChildren };
@@ -888,21 +891,21 @@ export default function Sidebar({
   const visibleSpanGroups = searchActive
     ? spanGroups.groups
         .map((group) => {
-          const spanMatches = matchesSearch(group.span.title || group.span.id);
-          const filteredItems = spanMatches ? group.items : group.items.filter((el) => matchesSearch(el.title || el.id));
+          const spanMatches = elMatches(group.span);
+          const filteredItems = spanMatches ? group.items : group.items.filter((el) => elMatches(el));
           const filteredSubGroups = (group.subGroups || [])
             .map((sg) => {
-              const sgMatches = matchesSearch(sg.span.title || sg.span.id);
-              return { ...sg, items: sgMatches ? sg.items : sg.items.filter((el) => matchesSearch(el.title || el.id)) };
+              const sgMatches = elMatches(sg.span);
+              return { ...sg, items: sgMatches ? sg.items : sg.items.filter((el) => elMatches(el)) };
             })
-            .filter((sg) => sg.items.length > 0 || matchesSearch(sg.span.title || sg.span.id));
+            .filter((sg) => sg.items.length > 0 || elMatches(sg.span));
           if (!spanMatches && filteredItems.length === 0 && filteredSubGroups.length === 0) return null;
           return { ...group, items: filteredItems, subGroups: filteredSubGroups };
         })
         .filter(Boolean)
     : spanGroups.groups;
   const visibleSpanUngrouped = searchActive
-    ? spanGroups.ungrouped.filter((el) => matchesSearch(el.title || el.id))
+    ? spanGroups.ungrouped.filter((el) => elMatches(el))
     : spanGroups.ungrouped;
 
   const sortedVisibleGroups = sortByHeader(visibleGroups, "era").map((g) => ({

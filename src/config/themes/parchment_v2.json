@@ -3,6 +3,7 @@
   "type": "light",
   "collection": "bundled",
   "author": "sreegjl",
+  "thumbnail": "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/main/shipped_themes/parchment_v2/thumbnail.png",
   "font": {
     "family": "Lexend",
     "cssUrl": "https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&display=swap"
