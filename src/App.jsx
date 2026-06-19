@@ -141,6 +141,7 @@ function App() {
   const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+  const [isRightLocked, setIsRightLocked] = useState(false);
   const [isRightMaximized, setIsRightMaximized] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
@@ -536,7 +537,7 @@ function App() {
 
   const handleSelect = (id) => {
     setSelectedId(id);
-    if (id) setIsRightCollapsed(false);
+    if (id && !isRightLocked) setIsRightCollapsed(false);
   };
 
   const handleSearchSelect = (id) => {
@@ -550,10 +551,10 @@ function App() {
     if (!selectedId && isRightMaximized) {
       setIsRightMaximized(false);
     }
-    if (!selectedId && isRightCollapsed) {
+    if (!selectedId && isRightCollapsed && !isRightLocked) {
       setIsRightCollapsed(false);
     }
-  }, [selectedId, isRightMaximized, isRightCollapsed]);
+  }, [selectedId, isRightMaximized, isRightCollapsed, isRightLocked]);
 
   const handleToggleTag = (tag) => {
     setActiveTags((prev) => {
@@ -1879,7 +1880,15 @@ function App() {
         onToggleLeft={() => setIsLeftCollapsed((v) => !v)}
         showRightToggle={Boolean(selectedId)}
         isRightCollapsed={isRightCollapsed}
-        onToggleRight={() => setIsRightCollapsed((v) => !v)}
+        onToggleRight={() => {
+          if (isRightCollapsed) setIsRightLocked(false);
+          setIsRightCollapsed((v) => !v);
+        }}
+        isRightLocked={isRightLocked}
+        onToggleRightLock={() => {
+          if (!isRightLocked && !isRightCollapsed) setIsRightCollapsed(true);
+          setIsRightLocked((v) => !v);
+        }}
       />
       <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
       <div

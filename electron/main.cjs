@@ -237,7 +237,7 @@ async function createWindow() {
     const appUrl = mainWindow.webContents.getURL();
     if (url !== appUrl) {
       event.preventDefault();
-      shell.openExternal(url);
+      shell.openExternal(url).catch((err) => console.error('Failed to open external URL:', err));
     }
   });
 
@@ -1393,6 +1393,37 @@ ipcMain.handle('save-user-theme', async (event, { id, content }) => {
     return { success: true, path: filePath };
   } catch (error) {
     console.error('Error saving user theme:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('import-theme-dialog', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'JSON Theme Files', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePaths.length) {
+      return { success: true, results: [] };
+    }
+    const dir = userThemesDir();
+    await fs.mkdir(dir, { recursive: true });
+    const results = [];
+    for (const filePath of result.filePaths) {
+      const displayName = path.basename(filePath);
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const parsed = JSON.parse(content);
+        const safeId = sanitizeId(path.basename(filePath, '.json'), 'theme');
+        await fs.writeFile(path.join(dir, `${safeId}.json`), JSON.stringify(parsed, null, 2), 'utf8');
+        results.push({ success: true, id: safeId });
+      } catch (error) {
+        results.push({ success: false, file: displayName, error: error.message });
+      }
+    }
+    return { success: true, results };
+  } catch (error) {
+    console.error('Error importing themes via dialog:', error);
     return { success: false, error: error.message };
   }
 });

@@ -1,4 +1,4 @@
-import { Minus, Square, X, PanelLeft, PanelRight } from "lucide-react";
+import { Minus, Square, X, PanelLeft, PanelRight, PanelRightClose } from "lucide-react";
 
 export default function TopBar({
   title = "Timelines",
@@ -8,6 +8,8 @@ export default function TopBar({
   showRightToggle,
   isRightCollapsed,
   onToggleRight,
+  isRightLocked,
+  onToggleRightLock,
 }) {
   const isElectron = window.electron !== undefined;
 
@@ -62,13 +64,22 @@ export default function TopBar({
             <PanelLeft size={14} />
           </button>
         )}
-        {showRightToggle && onToggleRight && (
+        {showRightToggle && !isRightLocked && onToggleRight && (
           <button
             className="title-bar-button title-bar-panel-toggle"
             onClick={onToggleRight}
             title={isRightCollapsed ? "Show panel" : "Hide panel"}
           >
             <PanelRight size={14} />
+          </button>
+        )}
+        {(!showRightToggle || isRightCollapsed) && onToggleRightLock && (
+          <button
+            className={`title-bar-button title-bar-panel-toggle${isRightLocked ? " title-bar-button-locked" : ""}`}
+            onClick={onToggleRightLock}
+            title={isRightLocked ? "Enable right panel" : "Disable right panel"}
+          >
+            <PanelRightClose size={14} />
           </button>
         )}
         <div className="title-bar-separator" />

@@ -549,6 +549,20 @@
   background: transparent;
 }
 
+.marketplace-card-import {
+  cursor: pointer;
+}
+
+.marketplace-card-import-active,
+.marketplace-card-import-active .marketplace-thumbnail-new {
+  border-color: var(--accent-color) !important;
+  background: var(--surface) !important;
+}
+
+.marketplace-card-import-active .marketplace-new-icon {
+  color: var(--accent-color);
+}
+
 .marketplace-card {
   background: var(--surface);
   border: 1px solid var(--border-color);

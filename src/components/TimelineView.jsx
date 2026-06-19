@@ -1577,7 +1577,8 @@ const TimelineView = forwardRef(function TimelineView({
       elementTargetY = rect.top + rect.height / 2 - containerRect.top;
     }
 
-    const viewportCenterX = containerRect.width / 2;
+    const rightOffset = isRightPanelOpen ? rightPanelWidth : 0;
+    const viewportCenterX = (containerRect.width - rightOffset) / 2;
     const viewportCenterY = containerRect.height / 2;
 
     // Calculate target translate values

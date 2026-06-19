@@ -81,6 +81,11 @@
   width: 36px;
 }
 
+.title-bar-button-locked {
+  color: var(--accent-text, var(--text-muted));
+  opacity: 0.7;
+}
+
 .title-bar-separator {
   width: 1px;
   height: 16px;

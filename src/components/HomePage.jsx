@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Moon, Sun, ChevronDown, Download, Check } from "lucide-react";
+import { File, FilePlus, Upload, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Moon, Sun, ChevronDown, Download, Check } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
@@ -133,7 +133,7 @@ export default function HomePage({
   const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const [sortMode, setSortMode] = useState("date");
+  const [sortMode, setSortMode] = useState(() => localStorage.getItem("home-sort-mode") || "date");
   const [currentFolder, setCurrentFolder] = useState("");
   const [allFolders, setAllFolders] = useState([]);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
@@ -158,6 +158,9 @@ export default function HomePage({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
   const [marketplaceTab, setMarketplaceTab] = useState("marketplace");
+  const [localDragOver, setLocalDragOver] = useState(false);
+  const localGridRef = useRef(null);
+  const localDropHandlerRef = useRef(null);
   const [installedOriginFilter, setInstalledOriginFilter] = useState("all");
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
@@ -464,6 +467,63 @@ export default function HomePage({
     }
   };
 
+  const handleImportResult = async (result) => {
+    if (!result) return;
+    const failed = (result?.results || []).filter(r => !r.success);
+    if (failed.length > 0) {
+      setMarketplaceError(`Failed to import ${failed.length} file(s). Make sure they are valid JSON theme files.`);
+    }
+    if ((result?.results || []).some(r => r.success)) {
+      await onRefreshThemes?.();
+      await loadInstalledThemes();
+    }
+  };
+
+  const processThemeFiles = async (files) => {
+    if (!files.length) return;
+    for (const file of files) {
+      try {
+        const content = await file.text();
+        JSON.parse(content);
+        const id = file.name.replace(/\.json$/i, "");
+        const result = await saveUserTheme({ id, content });
+        if (!result?.success) throw new Error(result?.error || "Save failed");
+      } catch {
+        setMarketplaceError(`Failed to import "${file.name}". Make sure it's a valid JSON file.`);
+      }
+    }
+    await onRefreshThemes?.();
+    await loadInstalledThemes();
+  };
+  localDropHandlerRef.current = processThemeFiles;
+
+  useEffect(() => {
+    if (marketplaceTab !== "local") return;
+    const onDragOver = (e) => {
+      e.preventDefault();
+      setLocalDragOver(true);
+    };
+    const onDragLeave = (e) => {
+      if (!e.relatedTarget) setLocalDragOver(false);
+    };
+    const onDrop = (e) => {
+      const files = Array.from(e.dataTransfer?.files || []).filter(f => f.name.endsWith(".json"));
+      if (!files.length) return;
+      e.preventDefault();
+      setLocalDragOver(false);
+      localDropHandlerRef.current(files);
+    };
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("dragleave", onDragLeave);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("dragleave", onDragLeave);
+      document.removeEventListener("drop", onDrop);
+      setLocalDragOver(false);
+    };
+  }, [marketplaceTab]);
+
   const handleMigrateOldThemes = async () => {
     if (!onMigrateOldThemes) return;
     setThemeMigrationStatus("migrating");
@@ -743,7 +803,7 @@ export default function HomePage({
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <button
                 className="timeline-view-toggle timeline-sort-btn"
-                onClick={() => setSortMode(s => s === "date" ? "name" : s === "name" ? "name-desc" : "date")}
+                onClick={() => setSortMode(s => { const next = s === "date" ? "name" : s === "name" ? "name-desc" : "date"; localStorage.setItem("home-sort-mode", next); return next; })}
                 aria-label="Toggle sort"
                 title={sortMode === "date" ? "Sort: Date modified" : sortMode === "name" ? "Sort: A–Z" : "Sort: Z–A"}
               >
@@ -1884,18 +1944,45 @@ export default function HomePage({
               )}
 
               {marketplaceTab === "local" && (
-                <div className="marketplace-grid">
-                  <div className="marketplace-card marketplace-card-new" onClick={() => window.electron?.openThemesFolder?.()}>
-                    <div className="marketplace-thumbnail marketplace-thumbnail-new">
-                      <FilePlus size={28} strokeWidth={1.5} className="marketplace-new-icon" />
+                <>
+                  <input
+                    id="theme-import-input"
+                    type="file"
+                    accept=".json"
+                    multiple
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files).filter(f => f.name.endsWith(".json"));
+                      if (files.length) localDropHandlerRef.current(files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <div
+                    ref={localGridRef}
+                    className={`marketplace-grid${localDragOver ? " marketplace-grid-drag-over" : ""}`}
+                  >
+                    <div
+                      className={`marketplace-card marketplace-card-new marketplace-card-import${localDragOver ? " marketplace-card-import-active" : ""}`}
+                      onClick={async () => {
+                        if (window.electron?.importThemeDialog) {
+                          const result = await window.electron.importThemeDialog();
+                          await handleImportResult(result);
+                        } else {
+                          document.getElementById("theme-import-input").click();
+                        }
+                      }}
+                    >
+                      <div className="marketplace-thumbnail marketplace-thumbnail-new">
+                        <Upload size={28} strokeWidth={1.5} className="marketplace-new-icon" />
+                      </div>
+                      <div className="marketplace-card-body">
+                        <div className="marketplace-card-title">Import Theme</div>
+                        <div className="marketplace-card-author">Drop or click to add .json</div>
+                      </div>
                     </div>
-                    <div className="marketplace-card-body">
-                      <div className="marketplace-card-title">New Theme</div>
-                      <div className="marketplace-card-author">Open themes folder</div>
-                    </div>
+                    {filteredLocal.map((t) => renderCard(t, true))}
                   </div>
-                  {filteredLocal.map((t) => renderCard(t, true))}
-                </div>
+                </>
               )}
             </div>
           </div>

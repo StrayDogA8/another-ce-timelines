@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electron', {
   listFonts: () => ipcRenderer.invoke('list-fonts'),
   saveUserTheme: (payload) => ipcRenderer.invoke('save-user-theme', payload),
   deleteUserTheme: (payload) => ipcRenderer.invoke('delete-user-theme', payload),
+  importThemeDialog: () => ipcRenderer.invoke('import-theme-dialog'),
   fetchWikipedia: (payload) => ipcRenderer.invoke('fetch-wikipedia', payload),
   openExternal: (payload) => ipcRenderer.invoke('open-external', payload),
   captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
