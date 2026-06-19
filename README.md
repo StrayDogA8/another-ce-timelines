@@ -9,6 +9,7 @@ A free, open-source app for creating customizable, interactive timelines for wor
 [![Electron](https://img.shields.io/badge/Electron-2B2E3A?logo=electron&logoColor=fff)](#)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+[Download](https://github.com/sreegjl/timelines/releases/tag/v0.5.0-alpha.3) · [Wiki](https://github.com/sreegjl/timelines/wiki) · [Feature Suggestions & Roadmap](https://github.com/sreegjl/timelines/issues/8)
 
 ![Default View](docs/default-view.png)
 

@@ -418,11 +418,20 @@ const TimelineView = forwardRef(function TimelineView({
       return merged;
     };
 
-    const normalizedScaleSections = normalizeScaleSections(
-      file?.scaleSections, file?.breaks, minYear, maxYear
-    );
+    const isLogScale = (file?.scaleType || "default") === "logarithmic";
+    const logFactor = Math.max(1, Number(file?.logScaleFactor) || 10);
+    const logSpan = maxYear - minYear;
+
+    const normalizedScaleSections = isLogScale
+      ? []
+      : normalizeScaleSections(file?.scaleSections, file?.breaks, minYear, maxYear);
 
     const compressYear = (year) => {
+      if (isLogScale) {
+        if (logSpan <= 0) return year;
+        const t = (year - minYear) / logSpan;
+        return minYear + logSpan * (1 - Math.log1p(logFactor * (1 - t)) / Math.log1p(logFactor));
+      }
       let adjustment = 0;
       for (const section of normalizedScaleSections) {
         const duration = section.end - section.start;
@@ -439,12 +448,16 @@ const TimelineView = forwardRef(function TimelineView({
       return year - adjustment;
     };
 
-
-
     const compressedMin = compressYear(minYear);
     const compressedMax = compressYear(maxYear);
     const range = Math.max(1e-9, compressedMax - compressedMin);
+
     const decompressYear = (compressedYear) => {
+      if (isLogScale) {
+        if (logSpan <= 0) return compressedYear;
+        const u = (compressedYear - minYear) / logSpan;
+        return minYear + logSpan * (1 - (Math.pow(1 + logFactor, 1 - u) - 1) / logFactor);
+      }
       let adjustment = 0;
       for (const section of normalizedScaleSections) {
         const duration = section.end - section.start;
@@ -886,6 +899,28 @@ const TimelineView = forwardRef(function TimelineView({
       if (last && Math.abs(last.value - normalizedValue) < 1e-6) return;
       nextTicks.push({ ...tick, value: normalizedValue });
     };
+
+    if (file?.scaleType === "logarithmic") {
+      const lf = Math.max(1, Number(file?.logScaleFactor) || 10);
+      const ls = maxYear - minYear;
+      const logDecompress = (c) => {
+        if (ls <= 0) return c;
+        const u = (c - minYear) / ls;
+        return minYear + ls * (1 - (Math.pow(1 + lf, 1 - u) - 1) / lf);
+      };
+      const compFineStep = targetYearTickPx / Math.max(PX_PER_YEAR * safeScale, 1e-9) / 10;
+      for (let compPos = minYear; compPos <= maxYear + epsilon; compPos += compFineStep) {
+        const clampedComp = Math.min(compPos, maxYear);
+        const realYear = logDecompress(clampedComp);
+        const absYear = Math.max(Math.abs(realYear), 1);
+        const magnitude = Math.floor(Math.log10(absYear));
+        const roundTo = Math.pow(10, Math.max(0, magnitude - 2));
+        const niceTick = Math.round(realYear / roundTo) * roundTo;
+        pushTick({ value: niceTick });
+      }
+      nextTicks.sort((a, b) => a.value - b.value);
+      return nextTicks;
+    }
 
     for (const segment of visibleSegments) {
       if (segment.scale <= 0) continue;

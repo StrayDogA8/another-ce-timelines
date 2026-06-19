@@ -124,8 +124,8 @@
 
 .grid-line {
   position: absolute;
-  top: -200vh;
-  height: 500vh;
+  top: -10000px;
+  height: calc(100% + 20000px);
   width: 2px;
   transform: translateX(-1.2px);
   background: var(--text-primary);

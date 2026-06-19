@@ -48,6 +48,8 @@ export default function SettingsModal({
   const [fontFamily, setFontFamily] = useState("default");
   const [useCalendar, setUseCalendar] = useState(false);
   const [scaleSections, setScaleSections] = useState([]);
+  const [scaleType, setScaleType] = useState("default");
+  const [logScaleFactor, setLogScaleFactor] = useState(10);
   const [negID, setNegID] = useState("");
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
@@ -197,6 +199,8 @@ export default function SettingsModal({
         setLayout(timelineData.file.layout || "Horizontal");
         setUseCalendar(Boolean(timelineData.file.useCalendar ?? timelineData.file.useDays ?? timelineData.file.useMonths));
         setScaleSections(loadScaleSections(timelineData.file.scaleSections, timelineData.file.breaks));
+        setScaleType(timelineData.file.scaleType || "default");
+        setLogScaleFactor(Number.isFinite(Number(timelineData.file.logScaleFactor)) && Number(timelineData.file.logScaleFactor) >= 1 ? Number(timelineData.file.logScaleFactor) : 10);
         setNegID(timelineData.file.negID || "");
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
@@ -300,6 +304,8 @@ export default function SettingsModal({
           endLabel: parsedEnd.label,
           useCalendar: useCalendar || undefined,
           scaleSections: parsedScaleSections,
+          scaleType: scaleType !== "default" ? scaleType : undefined,
+          logScaleFactor: scaleType === "logarithmic" ? logScaleFactor : undefined,
           layout,
           branchOrdering,
           fixedEventHeight,
@@ -345,6 +351,8 @@ export default function SettingsModal({
     useCalendar,
     layout,
     scaleSections,
+    scaleType,
+    logScaleFactor,
     branchOrdering,
     fixedEventHeight,
     compactEvents,
@@ -659,7 +667,49 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Scale Sections */}
+          {/* Scale Type */}
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Scale Type</div>
+              <div className="settings-row-description">How time is distributed along the timeline axis.</div>
+            </div>
+            <div className="settings-row-right">
+              <select
+                className="settings-select"
+                value={scaleType}
+                onChange={(e) => setScaleType(e.target.value)}
+              >
+                <option value="default">Default</option>
+                <option value="logarithmic">Logarithmic Scaling</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Log Scale Factor — only in logarithmic mode */}
+          {scaleType === "logarithmic" && (
+            <div className="settings-row">
+              <div className="settings-row-left">
+                <div className="settings-row-label">Log Scale Factor</div>
+                <div className="settings-row-description">Controls the strength of the logarithmic curve. Higher values compress recent time more.</div>
+              </div>
+              <div className="settings-row-right">
+                <input
+                  type="number"
+                  className="settings-input settings-input-small"
+                  value={logScaleFactor}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (Number.isFinite(v) && v >= 1) setLogScaleFactor(v);
+                  }}
+                  min={1}
+                  step={1}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Scale Sections — hidden in logarithmic mode */}
+          {scaleType !== "logarithmic" && (
           <div className="settings-row settings-row-scale-sections">
             <div className="settings-row-left">
               <div className="settings-row-label">Scale Sections</div>
@@ -734,7 +784,7 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
-
+          )}
 
               {/* Negative Era */}
               <div className="settings-row no-border-bottom">

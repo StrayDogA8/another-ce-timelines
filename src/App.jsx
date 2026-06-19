@@ -1018,6 +1018,8 @@ function App() {
     mapEventMarker,
     mapSpanMarker,
     mapEraMarker,
+    scaleType,
+    logScaleFactor,
   }) => {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
@@ -1073,6 +1075,8 @@ function App() {
         mapEventMarker,
         mapSpanMarker,
         mapEraMarker,
+        scaleType,
+        logScaleFactor,
       };
 
       // Clean up legacy breaks field when saving with new scaleSections
@@ -1085,6 +1089,8 @@ function App() {
       if (!nextFile.useCalendar) delete nextFile.useCalendar;
       if (!tickDensity || tickDensity === 1) delete nextFile.tickDensity;
       if (!scaleSections || scaleSections.length === 0) delete nextFile.scaleSections;
+      if (!scaleType || scaleType === "default") delete nextFile.scaleType;
+      if (!logScaleFactor || scaleType !== "logarithmic") delete nextFile.logScaleFactor;
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
