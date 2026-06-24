@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect, useCallback, startTransition } from "react";
 import TimelineView from "./components/TimelineView";
+import SpreadsheetView from "./components/SpreadsheetView";
 import Sidebar from "./components/Sidebar";
 import RightPanel from "./components/RightPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -142,6 +143,7 @@ function App() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isRightLocked, setIsRightLocked] = useState(false);
+  const [viewMode, setViewMode] = useState("timeline"); // "timeline" | "spreadsheet"
   const [isRightMaximized, setIsRightMaximized] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
@@ -634,6 +636,31 @@ function App() {
           groups: finalGroups,
         },
       };
+      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
+      saveTimeline(updatedData, timelineId).catch(console.error);
+      return updatedData;
+    });
+  };
+
+  const handleSetElementGroup = (elementId, groupTitle) => {
+    if (!elementId || !groupTitle?.trim()) return;
+    const title = groupTitle.trim();
+    setTimelineData((prevData) => {
+      const existing = Array.isArray(prevData.file?.groups) ? prevData.file.groups : [];
+      let group = existing.find((g) => g.title.toLowerCase() === title.toLowerCase());
+      let updatedGroups = existing;
+      if (!group) {
+        const existingIds = new Set(existing.map((g) => g.id).filter(Boolean));
+        let nextIndex = existing.length + 1;
+        let nextId = `g-${nextIndex}`;
+        while (existingIds.has(nextId)) { nextIndex++; nextId = `g-${nextIndex}`; }
+        group = { id: nextId, title, order: existing.length, stack: existing.length, visible: true, locked: false };
+        updatedGroups = [...existing, group];
+      }
+      const updatedElements = (prevData.elements ?? []).map((el) =>
+        el.id === elementId ? { ...el, groupId: group.id } : el
+      );
+      const updatedData = { ...prevData, file: { ...prevData.file, groups: updatedGroups }, elements: updatedElements };
       const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
       saveTimeline(updatedData, timelineId).catch(console.error);
       return updatedData;
@@ -1877,113 +1904,148 @@ function App() {
       <TopBar
         title={timelineData.file?.title || "Timelines"}
         isLeftCollapsed={isLeftCollapsed}
-        onToggleLeft={() => setIsLeftCollapsed((v) => !v)}
-        showRightToggle={Boolean(selectedId)}
+        onToggleLeft={viewMode !== "spreadsheet" ? () => setIsLeftCollapsed((v) => !v) : undefined}
+        showRightToggle={Boolean(selectedId) && viewMode !== "spreadsheet"}
         isRightCollapsed={isRightCollapsed}
-        onToggleRight={() => {
+        onToggleRight={viewMode !== "spreadsheet" ? () => {
           if (isRightCollapsed) setIsRightLocked(false);
           setIsRightCollapsed((v) => !v);
-        }}
+        } : undefined}
         isRightLocked={isRightLocked}
-        onToggleRightLock={() => {
+        onToggleRightLock={viewMode !== "spreadsheet" ? () => {
           if (!isRightLocked && !isRightCollapsed) setIsRightCollapsed(true);
           setIsRightLocked((v) => !v);
-        }}
+        } : undefined}
       />
       <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
-      <div
-        className="sidebar-resizer overlay-resizer"
-        style={{ left: `${currentLeftWidth - 3}px` }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          isDraggingLeft.current = true;
-          document.body.classList.add("dragging");
-        }}
-      />
-
-      <aside
-        className="app-sidebar overlay-sidebar"
-        style={{ width: isLeftCollapsed ? COLLAPSED_WIDTH : sidebarWidth }}
-      >
-        <ErrorBoundary name="Sidebar">
-        <Sidebar
-          isCollapsed={isLeftCollapsed}
-          onToggle={() => setIsLeftCollapsed((v) => !v)}
-          selectedId={selectedId}
-          onSelect={handleSelect}
-          timelineData={filteredTimelineData}
-          allElements={timelineData.elements}
-          activeTags={activeTags}
-          hiddenTags={hiddenTags}
-          onToggleTag={handleToggleTag}
-          onToggleHiddenTag={handleToggleHiddenTag}
-          onClearTags={handleClearTags}
-          pinnedTags={pinnedTags}
-          onTogglePinnedTag={handleTogglePinnedTag}
-          onAddGroup={handleAddGroup}
-          onUpdateGroup={handleUpdateGroup}
-          onUpdateGroups={handleUpdateGroups}
-          onDeleteGroup={handleDeleteGroup}
-          tagColors={timelineData.file?.tagColors || {}}
-          onUpdateTagColor={handleUpdateTagColor}
-          onAddEvent={handleAddEvent}
-          onAddSpan={handleAddSpan}
-          onAddEra={handleAddEra}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onDownloadJson={handleDownloadJSON}
-          onDownloadPng={handleDownloadPNG}
-          onDownloadVideo={handleDownloadVideo}
-          onLoadTimeline={handleLoadTimeline}
-          onNewTimeline={handleNewTimeline}
-          onDuplicateTimeline={handleDuplicateTimeline}
-          onBackToHome={handleBackToHome}
-          onDelete={handleRequestDelete}
-          onDuplicateElement={handleDuplicateElement}
-          onEditElement={handleEditElement}
-          onPatchFile={handlePatchFile}
-          keybinds={keybinds}
-        />
-        </ErrorBoundary>
-      </aside>
+      {viewMode !== "spreadsheet" && (
+        <>
+          <div
+            className="sidebar-resizer overlay-resizer"
+            style={{ left: `${currentLeftWidth - 3}px` }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              isDraggingLeft.current = true;
+              document.body.classList.add("dragging");
+            }}
+          />
+          <aside
+            className="app-sidebar overlay-sidebar"
+            style={{ width: isLeftCollapsed ? COLLAPSED_WIDTH : sidebarWidth }}
+          >
+            <ErrorBoundary name="Sidebar">
+            <Sidebar
+              isCollapsed={isLeftCollapsed}
+              onToggle={() => setIsLeftCollapsed((v) => !v)}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              timelineData={filteredTimelineData}
+              allElements={timelineData.elements}
+              activeTags={activeTags}
+              hiddenTags={hiddenTags}
+              onToggleTag={handleToggleTag}
+              onToggleHiddenTag={handleToggleHiddenTag}
+              onClearTags={handleClearTags}
+              pinnedTags={pinnedTags}
+              onTogglePinnedTag={handleTogglePinnedTag}
+              onAddGroup={handleAddGroup}
+              onUpdateGroup={handleUpdateGroup}
+              onUpdateGroups={handleUpdateGroups}
+              onDeleteGroup={handleDeleteGroup}
+              tagColors={timelineData.file?.tagColors || {}}
+              onUpdateTagColor={handleUpdateTagColor}
+              onAddEvent={handleAddEvent}
+              onAddSpan={handleAddSpan}
+              onAddEra={handleAddEra}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onDownloadJson={handleDownloadJSON}
+              onDownloadPng={handleDownloadPNG}
+              onDownloadVideo={handleDownloadVideo}
+              onLoadTimeline={handleLoadTimeline}
+              onNewTimeline={handleNewTimeline}
+              onDuplicateTimeline={handleDuplicateTimeline}
+              onBackToHome={handleBackToHome}
+              onDelete={handleRequestDelete}
+              onDuplicateElement={handleDuplicateElement}
+              onEditElement={handleEditElement}
+              onPatchFile={handlePatchFile}
+              keybinds={keybinds}
+            />
+            </ErrorBoundary>
+          </aside>
+        </>
+      )}
 
       <main
         className="app-content"
         style={{ display: isRightMaximized ? "none" : "block" }}
       >
-          <ErrorBoundary name="Timeline">
-          <TimelineView
-            ref={timelineViewRef}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            timelineData={filteredTimelineData}
-            onAddEvent={handleAddEvent}
-            onAddSpan={handleAddSpan}
-            onAddEra={handleAddEra}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onDelete={handleRequestDelete}
-            onDuplicateElement={handleDuplicateElement}
-            onEditElement={handleEditElement}
-            downloadPngTrigger={downloadPngTrigger}
-            exportPngOptions={exportPngOptions}
-            onExportPng={handleDownloadPNG}
-            onExportVideo={handleDownloadVideo}
-            rightPanelWidth={rightWidth}
-            isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
-            leftPanelWidth={currentLeftWidth}
-            isLeftPanelOpen={!isLeftCollapsed}
-            activeTags={activeTags}
-            hiddenTags={hiddenTags}
-            allTags={allTags}
-            onToggleTag={handleToggleTag}
-            onToggleHiddenTag={handleToggleHiddenTag}
-            onClearTags={handleClearTags}
-            pinnedTags={pinnedTags}
-            onTogglePinnedTag={handleTogglePinnedTag}
-            onViewportYearChange={handleViewportYearChange}
-            tagColors={timelineData.file?.tagColors || {}}
-            keybinds={keybinds}
-          />
-          </ErrorBoundary>
+          {viewMode === "spreadsheet" ? (
+            <ErrorBoundary name="Spreadsheet">
+              <SpreadsheetView
+                timelineData={filteredTimelineData}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onUpdate={handleUpdate}
+                leftPanelWidth={0}
+                rightPanelWidth={0}
+                isRightPanelOpen={false}
+                onSetViewMode={setViewMode}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onBackToHome={handleBackToHome}
+                onAddEvent={handleAddEvent}
+                onAddSpan={handleAddSpan}
+                onAddEra={handleAddEra}
+                onDelete={handleRequestDelete}
+                onDuplicate={handleDuplicateElement}
+                onSetElementGroup={handleSetElementGroup}
+                activeTags={activeTags}
+                hiddenTags={hiddenTags}
+                allTags={allTags}
+                onToggleTag={handleToggleTag}
+                onToggleHiddenTag={handleToggleHiddenTag}
+                onClearTags={handleClearTags}
+                pinnedTags={pinnedTags}
+                onTogglePinnedTag={handleTogglePinnedTag}
+              />
+            </ErrorBoundary>
+          ) : (
+            <ErrorBoundary name="Timeline">
+            <TimelineView
+              ref={timelineViewRef}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              timelineData={filteredTimelineData}
+              onAddEvent={handleAddEvent}
+              onAddSpan={handleAddSpan}
+              onAddEra={handleAddEra}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onDelete={handleRequestDelete}
+              onDuplicateElement={handleDuplicateElement}
+              onEditElement={handleEditElement}
+              downloadPngTrigger={downloadPngTrigger}
+              exportPngOptions={exportPngOptions}
+              onExportPng={handleDownloadPNG}
+              onExportVideo={handleDownloadVideo}
+              rightPanelWidth={rightWidth}
+              isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
+              leftPanelWidth={currentLeftWidth}
+              isLeftPanelOpen={!isLeftCollapsed}
+              activeTags={activeTags}
+              hiddenTags={hiddenTags}
+              allTags={allTags}
+              onToggleTag={handleToggleTag}
+              onToggleHiddenTag={handleToggleHiddenTag}
+              onClearTags={handleClearTags}
+              pinnedTags={pinnedTags}
+              onTogglePinnedTag={handleTogglePinnedTag}
+              onViewportYearChange={handleViewportYearChange}
+              tagColors={timelineData.file?.tagColors || {}}
+              keybinds={keybinds}
+              onSetViewMode={setViewMode}
+            />
+            </ErrorBoundary>
+          )}
       </main>
 
       <SettingsModal
@@ -2043,7 +2105,7 @@ function App() {
         />
       )}
 
-      {selectedId && (
+      {selectedId && viewMode !== "spreadsheet" && (
         <>
           {!isRightMaximized && !isRightCollapsed && (
             <div

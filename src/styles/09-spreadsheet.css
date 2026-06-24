@@ -1,0 +1,689 @@
+.sheet-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  box-sizing: border-box;
+  transition: padding-left 0.15s ease, padding-right 0.15s ease;
+}
+
+.sheet-scroll-x {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-width: auto;
+}
+
+/* ── Sticky top wrapper (header + colbar move as one block) ──── */
+
+.sheet-sticky-top {
+  flex-shrink: 0;
+  z-index: 12;
+  background: var(--surface);
+}
+
+/* ── Header bar ──────────────────────────────────────────────── */
+
+.sheet-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 12px 10px 18px;
+  min-height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--accent-color);
+  flex-shrink: 0;
+}
+
+.sheet-header-title-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-header-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  min-width: 180px;
+}
+
+/* lets the search row grow to fill remaining space */
+.sheet-search-expand {
+  flex: 1;
+  min-width: 0;
+}
+
+
+.sheet-export-menu {
+  min-width: 200px;
+}
+
+.sb-new-menu-section-label {
+  padding: 6px 10px 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+
+/* match new-button height to the search row, visible border, right-aligned */
+.sheet-header .sb-new-btn {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+/* ── Header right-side controls (new button + action buttons) ── */
+
+.sheet-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sheet-colbar-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+/* ── Column visibility bar ───────────────────────────────────── */
+
+.sheet-colbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 3px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sheet-colbar::-webkit-scrollbar {
+  display: none;
+}
+
+.sheet-colbar-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  opacity: 0.6;
+  user-select: none;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.sheet-colbar-btn {
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.45;
+  transition: opacity 0.12s, background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sheet-colbar-btn-on {
+  opacity: 1;
+  color: var(--text-primary);
+  background: var(--accent-color);
+  border-color: color-mix(in srgb, var(--accent-color), var(--text-primary) 15%);
+  font-weight: 500;
+}
+
+.sheet-colbar-btn:not(.sheet-colbar-btn-on):hover {
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--accent-color), transparent 60%);
+  color: var(--text-primary);
+  border-color: var(--text-subtle);
+}
+
+.sheet-colbar-btn-on:hover {
+  background: color-mix(in srgb, var(--accent-color), var(--text-primary) 10%);
+}
+
+/* ── Table ───────────────────────────────────────────────────── */
+
+.sheet-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  min-width: max-content;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+
+.sheet-thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sheet-th {
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--accent-color);
+  border-right: 1px solid var(--border-color);
+  padding: 0 10px;
+  height: 45px;
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+  vertical-align: middle;
+  position: relative;
+  overflow: visible;
+}
+
+.sheet-th:last-child { border-right: none; }
+
+.sheet-th-sortable { cursor: pointer; }
+.sheet-th-sortable:hover { color: var(--text-primary); }
+.sheet-th-active { color: var(--text-primary); }
+
+.sheet-sort-icon {
+  vertical-align: middle;
+  margin-left: 3px;
+  opacity: 0.6;
+}
+
+/* ── Resize handle ───────────────────────────────────────────── */
+
+.sheet-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.sheet-resize-handle:hover,
+.sheet-resize-handle:active {
+  background: var(--accent-color);
+  opacity: 0.6;
+}
+
+/* ── Rows ────────────────────────────────────────────────────── */
+
+.sheet-row {
+  cursor: default;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sheet-row:hover .sheet-cell {
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 78%);
+}
+
+.sheet-row:hover .sheet-cell-disabled {
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 38%) !important;
+}
+
+.sheet-row-selected .sheet-cell {
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 78%);
+}
+
+.sheet-row-selected:hover .sheet-cell {
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 70%);
+}
+
+/* ── Cells ───────────────────────────────────────────────────── */
+
+.sheet-cell-name {
+  font-weight: 500;
+}
+
+.sheet-cell {
+  padding: 0 10px;
+  height: 34px;
+  vertical-align: middle;
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--surface);
+  font-size: var(--text-sm);
+  max-width: 0; /* forces text-overflow to work with table-layout:fixed */
+}
+
+.sheet-cell:last-child { border-right: none; }
+
+.sheet-cell-editable { cursor: default; }
+.sheet-cell-editable:hover { background: var(--inset-bg); }
+
+.sheet-cell-muted {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.sheet-cell-center {
+  text-align: center;
+  padding: 0 6px;
+}
+
+.sheet-cell-empty {
+  color: var(--text-subtle);
+  opacity: 0.35;
+}
+
+.sheet-cell-na {
+  color: var(--text-subtle);
+  opacity: 0.25;
+}
+
+.sheet-cell-disabled {
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 60%) !important;
+}
+
+.sheet-cell-selected {
+  box-shadow: inset 0 0 0 2px var(--link-color) !important;
+}
+
+.sheet-cell-editing {
+  padding: 0;
+  overflow: visible;
+  position: relative;
+  background: var(--inset-bg);
+}
+
+/* ── Inputs ──────────────────────────────────────────────────── */
+
+.sheet-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-bottom: 2px solid var(--accent-color);
+  background: var(--inset-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  display: block;
+}
+
+.sheet-input:focus {
+  border-bottom-color: var(--link-color, var(--accent-color));
+  background: var(--app-bg);
+}
+
+.sheet-select-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-bottom: 2px solid var(--accent-color);
+  background: var(--inset-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  display: block;
+  cursor: pointer;
+  appearance: auto;
+}
+
+/* ── Type text ───────────────────────────────────────────────── */
+
+.sheet-type-text {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Icon / check / note ─────────────────────────────────────── */
+
+.sheet-check-icon {
+  color: var(--accent-text, var(--text-primary));
+}
+
+.sheet-note-icon {
+  color: var(--text-muted);
+}
+
+.sheet-icon-key {
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-family: monospace;
+}
+
+/* ── Sources list cell ───────────────────────────────────────── */
+
+.sheet-cell-sources {
+  height: auto;
+  min-height: 34px;
+  vertical-align: top;
+  padding: 6px 8px;
+}
+
+.sheet-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sheet-source-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border-radius: 4px;
+  padding: 2px 2px;
+}
+
+.sheet-source-item-edit:hover {
+  background: color-mix(in srgb, var(--accent-color), transparent 60%);
+}
+
+.sheet-source-avatar {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-color), transparent 30%);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.sheet-source-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sheet-source-title {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.sheet-source-sub {
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.sheet-source-remove {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-subtle);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+
+.sheet-source-item:hover .sheet-source-remove {
+  opacity: 0.5;
+}
+
+.sheet-source-remove:hover {
+  opacity: 1 !important;
+  color: var(--danger-color, #e05252);
+}
+
+/* Add-row (search + new button) */
+
+.sheet-source-add-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sheet-source-search {
+  flex: 1;
+  height: 22px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 3px;
+  background: var(--inset-bg);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.sheet-source-search:focus {
+  box-shadow: 0 0 0 1.5px var(--link-color, var(--accent-color));
+}
+
+.sheet-source-new-btn {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: none;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sheet-source-new-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-subtle);
+}
+
+/* New source inline form */
+
+.sheet-source-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sheet-source-new-input {
+  width: 100%;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--inset-bg);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.sheet-source-new-input:focus {
+  border-color: var(--link-color, var(--accent-color));
+}
+
+.sheet-source-new-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.sheet-source-cancel-btn,
+.sheet-source-add-btn {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 3px;
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: none;
+  color: var(--text-subtle);
+}
+
+.sheet-source-add-btn {
+  background: var(--accent-color);
+  color: var(--text-primary);
+  border-color: transparent;
+}
+
+.sheet-source-add-btn:hover {
+  filter: brightness(1.1);
+}
+
+.sheet-source-cancel-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Group expanded cell ─────────────────────────────────────── */
+
+.sheet-cell-group-expanded {
+  height: auto;
+  min-height: 34px;
+  vertical-align: top;
+  padding: 6px 8px;
+}
+
+.sheet-group-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sheet-group-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-color), transparent 50%);
+}
+
+.sheet-group-current-name {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-group-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sheet-group-option {
+  width: 100%;
+  text-align: left;
+  padding: 3px 4px;
+  border: none;
+  background: none;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-group-option:hover {
+  background: color-mix(in srgb, var(--accent-color), transparent 60%);
+  color: var(--text-primary);
+}
+
+.sheet-group-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────── */
+
+.sheet-scroll-x::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.sheet-scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sheet-scroll-x::-webkit-scrollbar-thumb:horizontal {
+  background: color-mix(in srgb, var(--accent-color), var(--text-primary) 35%);
+  border-radius: 999px;
+}
+
+.sheet-scroll-x::-webkit-scrollbar-thumb:horizontal:hover {
+  background: color-mix(in srgb, var(--accent-color), var(--text-primary) 55%);
+}
+
+.sheet-scroll-x::-webkit-scrollbar-thumb:vertical {
+  background: color-mix(in srgb, var(--accent-color), var(--text-primary) 35%);
+  border-radius: 999px;
+}
+
+.sheet-scroll-x::-webkit-scrollbar-thumb:vertical:hover {
+  background: color-mix(in srgb, var(--accent-color), var(--text-primary) 55%);
+}
+
+.sheet-scroll-x::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+
+.sheet-empty {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}

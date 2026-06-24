@@ -1057,6 +1057,15 @@
   line-height: 1.4;
 }
 
+.settings-row-description a {
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+.settings-row-description a:hover {
+  text-decoration: underline;
+}
+
 
 .settings-input {
   width: 100%;

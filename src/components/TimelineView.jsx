@@ -13,7 +13,7 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare, ExternalLink } from "lucide-react";
+import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare, Table2, ExternalLink } from "lucide-react";
 import { ICON_MAP } from "../config/elementIcons";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
@@ -198,6 +198,7 @@ const TimelineView = forwardRef(function TimelineView({
   onViewportYearChange,
   tagColors = {},
   keybinds = {},
+  onSetViewMode,
 }, ref) {
   const isMac = navigator.userAgent?.includes("Mac");
   const fmtKey = (bind) => {
@@ -3541,6 +3542,17 @@ const TimelineView = forwardRef(function TimelineView({
             onClick={() => setShowMap((v) => !v)}
           >
             {showMap ? <GanttChartSquare size={16} /> : <MapIcon size={16} />}
+          </button>
+        )}
+        {onSetViewMode && (
+          <button
+            type="button"
+            className="timeline-canvas-button"
+            onClick={() => onSetViewMode("spreadsheet")}
+            aria-label="Spreadsheet view"
+            data-tooltip="Spreadsheet view"
+          >
+            <Table2 size={16} />
           </button>
         )}
         <button
