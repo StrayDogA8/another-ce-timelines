@@ -190,6 +190,7 @@ export function layoutSpans({
   spanChildPlacement,
   timelineStart,
   timelineEnd,
+  belowLine = false,
 }) {
   const spanLaneEnds = [];
   const spanLaneIntervals = [];
@@ -467,7 +468,9 @@ export function layoutSpans({
     }
 
     const topLane = thick ? lane + 1 : lane;
-    const top = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+    const top = belowLine
+      ? BASE_LINE_Y + SPAN_OFFSET + topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP)
+      : BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
     const spanHeight = thick
       ? CSS_SPAN_HEIGHT + SPAN_HEIGHT + SPAN_VERTICAL_GAP
       : thin ? Math.round(CSS_SPAN_HEIGHT / 2) : CSS_SPAN_HEIGHT;
@@ -542,7 +545,9 @@ export function layoutSpans({
         const thick = isThickSpan(span);
         const thin = isThinSpan(span);
         const topLane = thick ? denseLane + 1 : denseLane;
-        const baseTop = BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
+        const baseTop = belowLine
+          ? BASE_LINE_Y + SPAN_OFFSET + topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP)
+          : BASE_LINE_Y - SPAN_OFFSET - SPAN_HEIGHT - topLane * (SPAN_HEIGHT + SPAN_VERTICAL_GAP);
         const topOffset = thin ? Math.round((CSS_SPAN_HEIGHT - span.spanHeight) / 2) : 0;
         span.top = baseTop + topOffset;
         spanLaneById[span.id] = denseLane;
@@ -588,6 +593,7 @@ export function layoutEvents({
   pinnedTags = [],
   negID,
   posID,
+  belowLine = false,
   useCalendar = false,
   hideDecimals = false,
 }) {
@@ -678,19 +684,23 @@ export function layoutEvents({
   syncProbeDateRow({ showDateRow: false, showYear: false, visibleTags: [] });
   const noYearSingleLineHeight = probe.offsetHeight;
   syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
+  const probeBorderSize = (parseInt(getComputedStyle(probe).borderTopWidth, 10) || 0) + (parseInt(getComputedStyle(probe).borderBottomWidth, 10) || 0);
 
   let measureEvent;
   if (fixedEventHeight) {
     // OverflowTags ensures tags never wrap when fixedEventHeight is on,
     // so the box is always the single-line CSS height.
-    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears) => {
+    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears, sourceLink, eventBorderStyle) => {
       if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
         const squareSize = compactEvents ? 60 : 70;
-        return { boxHeight: squareSize + VERTICAL_GAP, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
+        const sqBorder = eventBorderStyle === "none" ? 0 : probeBorderSize;
+        return { boxHeight: squareSize + sqBorder, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
       }
       const visibleTags = getVisiblePinnedTags(tags);
       const showDateRow = hideYears !== true || visibleTags.length > 0;
-      return { boxHeight: showDateRow ? singleLineHeight : noYearSingleLineHeight, isMultiLine: false, boxWidth: EVENT_WIDTH };
+      let h = showDateRow ? singleLineHeight : noYearSingleLineHeight;
+      if (eventBorderStyle === "none") h -= probeBorderSize;
+      return { boxHeight: h, isMultiLine: false, boxWidth: EVENT_WIDTH };
     };
   } else {
     // Switch to auto-height for measuring multi-line content
@@ -753,25 +763,28 @@ export function layoutEvents({
 
     const BANNER_HEIGHT = compactEvents ? 36 : 48;
 
-    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears) => {
+    measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears, sourceLink, eventBorderStyle) => {
       if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
         const squareSize = compactEvents ? 60 : 70;
-        return { boxHeight: squareSize + VERTICAL_GAP, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
+        const sqBorder = eventBorderStyle === "none" ? 0 : probeBorderSize;
+        return { boxHeight: squareSize + sqBorder, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
       }
       const isBanner = thumbnail && thumbnailStyle === "banner";
+      const hasStripThumb = thumbnail && !isBanner;
       const visibleTags = getVisiblePinnedTags(tags);
       const showDateRow = hideYears !== true || visibleTags.length > 0;
       const showYear = hideYears !== true;
-      setupProbeLayout(thumbnail && !isBanner);
+      setupProbeLayout(hasStripThumb);
+      probe.classList.toggle("has-source-link", !!sourceLink);
       syncProbeDateRow({
         showDateRow,
         showYear,
         visibleTags,
-        hasThumbnailLayout: thumbnail && !isBanner,
+        hasThumbnailLayout: hasStripThumb,
       });
       const baseline = showDateRow
-        ? ((thumbnail && !isBanner) ? thumbnailBaseContentHeight : baseContentHeight)
-        : ((thumbnail && !isBanner) ? thumbnailNoYearBaseContentHeight : noYearBaseContentHeight);
+        ? (hasStripThumb ? thumbnailBaseContentHeight : baseContentHeight)
+        : (hasStripThumb ? thumbnailNoYearBaseContentHeight : noYearBaseContentHeight);
       probeTitle.innerHTML = "";
       if (icon) probeTitle.appendChild(probeIcon);
       probeTitle.appendChild(document.createTextNode(title || "X"));
@@ -779,16 +792,21 @@ export function layoutEvents({
         probeYearSpan.textContent = yearLabel || "0000";
       }
       const naturalHeight = probe.offsetHeight;
+      const borderAdj = eventBorderStyle === "none" ? probeBorderSize : 0;
       if (isBanner) {
-        probe.classList.remove("multi-lane");
-        const bannerNaturalHeight = probe.offsetHeight;
-        probe.classList.add("multi-lane");
-        return { boxHeight: bannerNaturalHeight + BANNER_HEIGHT, isMultiLine: true, boxWidth: EVENT_WIDTH };
+        probe.style.minHeight = '0';
+        const textHeight = probe.offsetHeight;
+        probe.style.minHeight = '';
+        return { boxHeight: textHeight + BANNER_HEIGHT - borderAdj, isMultiLine: true, boxWidth: EVENT_WIDTH };
       }
       const isMultiLine = naturalHeight > baseline;
       const canonicalHeight = showDateRow ? singleLineHeight : noYearSingleLineHeight;
       return {
-        boxHeight: isMultiLine ? naturalHeight : Math.max(naturalHeight, canonicalHeight),
+        boxHeight: (isMultiLine
+          ? naturalHeight
+          : hasStripThumb
+            ? Math.max(naturalHeight, canonicalHeight)
+            : canonicalHeight) - borderAdj,
         isMultiLine,
         boxWidth: EVENT_WIDTH,
       };
@@ -797,7 +815,9 @@ export function layoutEvents({
 
   // Use continuous vertical packing instead of discrete lanes
   const VERTICAL_GAP = Math.max(0, LANE_SPACING - singleLineHeight);
-  const LANE0_TOP = BASE_LINE_Y - spanBandHeight - BOX_OFFSET;
+  const LANE0_TOP = belowLine
+    ? BASE_LINE_Y + spanBandHeight + BOX_OFFSET
+    : BASE_LINE_Y - spanBandHeight - BOX_OFFSET;
   const placed = []; // { left, right, top, boxHeight }
 
   const finalEvents = laidOut.map((event) => {
@@ -810,7 +830,9 @@ export function layoutEvents({
       event.icon,
       event.thumbnail,
       event.thumbnailStyle,
-      event.hideYears
+      event.hideYears,
+      event.sourceLink,
+      event.eventBorderStyle
     );
 
     // Find placed events that horizontally overlap
@@ -819,15 +841,25 @@ export function layoutEvents({
 
     const conflicts = placed
       .filter((p) => p.right + EVENT_GAP > left)
-      .sort((a, b) => b.top - a.top); // closest to baseline first
+      .sort((a, b) => belowLine ? a.top - b.top : b.top - a.top);
 
-    // Start at the closest-to-baseline position, maintaining the same gap as single-line events
-    const minBottom = LANE0_TOP + singleLineHeight; // bottom edge that single-line events sit at
-    let top = Math.min(LANE0_TOP, minBottom - boxHeight);
-    for (const c of conflicts) {
-      if (top < c.top + c.boxHeight + VERTICAL_GAP &&
-          top + boxHeight + VERTICAL_GAP > c.top) {
-        top = c.top - boxHeight - VERTICAL_GAP;
+    let top;
+    if (belowLine) {
+      top = LANE0_TOP;
+      for (const c of conflicts) {
+        if (top < c.top + c.boxHeight + VERTICAL_GAP &&
+            top + boxHeight + VERTICAL_GAP > c.top) {
+          top = c.top + c.boxHeight + VERTICAL_GAP;
+        }
+      }
+    } else {
+      const minBottom = LANE0_TOP + singleLineHeight;
+      top = Math.min(LANE0_TOP, minBottom - boxHeight);
+      for (const c of conflicts) {
+        if (top < c.top + c.boxHeight + VERTICAL_GAP &&
+            top + boxHeight + VERTICAL_GAP > c.top) {
+          top = c.top - boxHeight - VERTICAL_GAP;
+        }
       }
     }
 

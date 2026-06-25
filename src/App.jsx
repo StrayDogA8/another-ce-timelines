@@ -67,6 +67,7 @@ function App() {
         stack: Number.isFinite(group?.stack) ? group.stack : index,
         visible: group?.visible !== false,
         locked: group?.locked === true,
+        belowLine: group?.belowLine === true,
       };
     });
     const groupIdSet = new Set(groups.map((group) => group?.id).filter(Boolean));

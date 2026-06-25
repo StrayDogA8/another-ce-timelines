@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { parseTimelineInput } from "../utils/dateUtils";
 import { formatYear } from "../utils/timelineUtils";
+import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
 import { ICON_MAP } from "../config/elementIcons";
 import { pickAndImportImage } from "../utils/electronApi";
 
@@ -194,8 +195,8 @@ export default function SpreadsheetView({
 
   const searchedElements = useMemo(() => {
     if (!search.trim()) return elements;
-    const q = search.trim().toLowerCase();
-    return elements.filter((el) => (el.title ?? "").toLowerCase().includes(q));
+    const parsed = parseFilterQuery(search);
+    return elements.filter((el) => matchesFilter(el, parsed));
   }, [elements, search]);
 
   const getCellDisplayValue = useCallback((el, field) => {
@@ -485,6 +486,21 @@ export default function SpreadsheetView({
     return () => document.removeEventListener("wheel", handler, { capture: true });
   }, []);
 
+  // Dismiss dropdowns on scroll so fixed-position menus don't float away from their cells
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handler = () => {
+      setTagDropdown([]); setTagDropdownPos(null);
+      setParentDropdown([]); setParentDropdownPos(null);
+      setMergeDropdown([]); setMergeDropdownPos(null);
+      setNoteDropdown([]); setNoteDropdownPos(null);
+      setSourceDropdown([]); setSourceDropdownPos(null);
+    };
+    el.addEventListener("scroll", handler);
+    return () => el.removeEventListener("scroll", handler);
+  }, []);
+
   // Scroll to newly added element
   useEffect(() => {
     const currentIds = new Set(elements.map((el) => el.id));
@@ -680,12 +696,7 @@ export default function SpreadsheetView({
       if (!sourceInputRef.current || matches.length === 0) return;
       const rect = sourceInputRef.current.getBoundingClientRect();
       if (rect.width === 0) return;
-      const estimatedHeight = Math.min(matches.length * 48, 240);
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const top = spaceBelow < estimatedHeight && rect.top > estimatedHeight
-        ? rect.top - estimatedHeight
-        : rect.bottom;
-      setSourceDropdownPos({ left: rect.left, top, width: rect.width });
+      setSourceDropdownPos({ left: rect.left, top: rect.bottom, width: rect.width });
     });
   };
 
@@ -809,10 +820,25 @@ export default function SpreadsheetView({
     triggerDownload(JSON.stringify(data, null, 2), `${displayName || "timeline"}.json`, "application/json");
   };
 
+  const clearAllMenus = useCallback(() => {
+    setEditCell(null);
+    setTagDropdown([]); setTagDropdownPos(null);
+    setParentDropdown([]); setParentDropdownPos(null);
+    setMergeDropdown([]); setMergeDropdownPos(null);
+    setNoteDropdown([]); setNoteDropdownPos(null);
+    setSourceDropdown([]); setSourceDropdownPos(null);
+    setNewSourceCellId(null); setNewSourceTitle(""); setNewSourceUrl(""); setNewSourceDesc("");
+    setNewGroupCellId(null); setNewGroupName("");
+    setThumbPanelCellId(null); setThumbPanelUrl("");
+  }, []);
+
   const selectCell = (e, id, field) => {
     e.stopPropagation();
     onSelect(id);
     setSelectedCell({ id, field });
+    if (editCell && (editCell.id !== id || editCell.field !== field)) {
+      clearAllMenus();
+    }
     if (thumbPanelCellId && !(id === thumbPanelCellId && field === "thumbnail")) {
       setThumbPanelCellId(null); setThumbPanelUrl("");
     }
@@ -953,7 +979,8 @@ export default function SpreadsheetView({
         <td key={field}
           className={`sheet-cell sheet-cell-muted sheet-cell-editable${expanded ? " sheet-cell-group-expanded" : ""}${selClass}`}
           style={{ width: cellW }}
-          onClick={(e) => { selectCell(e, el.id, field); if (!expanded) startEdit(e, el.id, field); }}
+          onClick={(e) => selectCell(e, el.id, field)}
+          onDoubleClick={(e) => { if (!expanded) startEdit(e, el.id, field); }}
         >
           {!expanded
             ? (currentGroup
@@ -1097,7 +1124,8 @@ export default function SpreadsheetView({
       }
       return (
         <td key={field} className={`sheet-cell sheet-cell-muted sheet-cell-editable${selClass}`} style={{ width: cellW }}
-          onClick={(e) => { selectCell(e, el.id, field); startEdit(e, el.id, field); }}>
+          onClick={(e) => selectCell(e, el.id, field)}
+          onDoubleClick={(e) => startEdit(e, el.id, field)}>
           {sizeVal || <span className="sheet-cell-empty">—</span>}
         </td>
       );
@@ -1163,7 +1191,8 @@ export default function SpreadsheetView({
       }
       return (
         <td key={field} className={`sheet-cell sheet-cell-muted sheet-cell-editable${selClass}`} style={{ width: cellW }}
-          onClick={(e) => { selectCell(e, el.id, field); startEdit(e, el.id, field); }}>
+          onClick={(e) => selectCell(e, el.id, field)}
+          onDoubleClick={(e) => startEdit(e, el.id, field)}>
           {styleVal || <span className="sheet-cell-empty">—</span>}
         </td>
       );
@@ -1314,7 +1343,8 @@ export default function SpreadsheetView({
       }
       return (
         <td key={field} className={`sheet-cell sheet-cell-muted sheet-cell-editable${selClass}`} style={{ width: cellW }}
-          onClick={(e) => { selectCell(e, el.id, field); startEdit(e, el.id, field); }}>
+          onClick={(e) => selectCell(e, el.id, field)}
+          onDoubleClick={(e) => startEdit(e, el.id, field)}>
           {el.thumbnail
             ? <span>{styleLabel}</span>
             : <span className="sheet-cell-empty">—</span>}
@@ -1551,6 +1581,7 @@ export default function SpreadsheetView({
             className="sb-search-input"
             type="text"
             placeholder="Search…"
+            spellCheck={false}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -1657,7 +1688,7 @@ export default function SpreadsheetView({
       </div>
       </div>{/* end sheet-sticky-top */}
 
-      <div ref={scrollRef} className="sheet-scroll-x" onClick={() => { setSelectedCell(null); setThumbPanelCellId(null); setThumbPanelUrl(""); }}>
+      <div ref={scrollRef} className="sheet-scroll-x" onClick={() => { setSelectedCell(null); clearAllMenus(); }}>
       <table className="sheet-table" style={{ width: visibleCols.reduce((s, c) => s + w(c.key), 0) }}>
         <colgroup>
           {visibleCols.map((col) => (
@@ -1766,7 +1797,7 @@ export default function SpreadsheetView({
       {/* Source autocomplete dropdown */}
       {sourceDropdown.length > 0 && sourceDropdownPos && (
         <div
-          className="timeline-context-menu sheet-tag-dropdown"
+          className="timeline-context-menu sheet-tag-dropdown sheet-source-dropdown"
           style={{ position: "fixed", left: sourceDropdownPos.left, top: sourceDropdownPos.top, minWidth: sourceDropdownPos.width }}
         >
           {sourceDropdown.map((src, i) => (

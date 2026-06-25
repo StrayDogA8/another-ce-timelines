@@ -512,7 +512,8 @@ const TimelineView = forwardRef(function TimelineView({
 
     // spans
     const SPAN_HEIGHT = 23;
-    const SPAN_OFFSET = 14;
+    const hasBelowLineGroups = groups.some((g) => g.visible !== false && g.belowLine);
+    const SPAN_OFFSET = hasBelowLineGroups ? 34 : 14;
     const SPAN_GAP = 6;
     const SPAN_VERTICAL_GAP = 2;
 
@@ -572,6 +573,7 @@ const TimelineView = forwardRef(function TimelineView({
         )
       );
 
+      const isBelowLine = group.belowLine === true;
       const { finalSpans: tempSpans, spanLaneEnds } = layoutSpans({
         spans: spansInGroup,
         yearToPx,
@@ -583,6 +585,7 @@ const TimelineView = forwardRef(function TimelineView({
         spanChildPlacement: groupSpanChildPlacement,
         timelineStart: file.start,
         timelineEnd: file.end,
+        belowLine: isBelowLine,
       });
       const spanBandHeight = calcSpanBandHeight(
         spanLaneEnds.length,
@@ -607,14 +610,19 @@ const TimelineView = forwardRef(function TimelineView({
         posID: file.posID,
         useCalendar: useCalendar,
         hideDecimals: file.hideDecimals,
+        belowLine: isBelowLine,
       });
       const spanBottoms = tempSpans.map((span) => span.top + (span.spanHeight ?? 20));
       const eventBottoms = tempEvents.map((event) => event.top + (event._boxHeight || 29));
       const itemTops = [...tempSpans.map((span) => span.top), ...tempEvents.map((event) => event.top)];
       const itemBottoms = [...spanBottoms, ...eventBottoms];
       const hasItems = itemTops.length > 0 && itemBottoms.length > 0;
-      const contentTop = hasItems ? Math.min(...itemTops) : TEMP_BASE_LINE_Y - (EMPTY_GROUP_HEIGHT + 20);
-      const contentBottom = hasItems ? Math.max(...itemBottoms) : TEMP_BASE_LINE_Y - 20;
+      const contentTop = hasItems
+        ? Math.min(...itemTops)
+        : isBelowLine ? TEMP_BASE_LINE_Y + 20 : TEMP_BASE_LINE_Y - (EMPTY_GROUP_HEIGHT + 20);
+      const contentBottom = hasItems
+        ? Math.max(...itemBottoms)
+        : isBelowLine ? TEMP_BASE_LINE_Y + EMPTY_GROUP_HEIGHT + 20 : TEMP_BASE_LINE_Y - 20;
       const contentHeight = hasItems
         ? Math.max(EVENT_MIN_HEIGHT, (contentBottom - contentTop) + GROUP_BAND_PADDING_Y * 2)
         : EMPTY_GROUP_HEIGHT;
@@ -627,6 +635,7 @@ const TimelineView = forwardRef(function TimelineView({
         bgColor: group.bgColor,
         hideBand: Boolean(group.hideBand),
         visible: group.visible !== false,
+        belowLine: isBelowLine,
         yOffset: 0,
         index,
         spansInGroup,
@@ -641,22 +650,38 @@ const TimelineView = forwardRef(function TimelineView({
       };
     });
 
+    const aboveLineRaw = tempGroupLayoutsRaw.filter((g) => !g.belowLine);
+    const belowLineRaw = tempGroupLayoutsRaw.filter((g) => g.belowLine);
+
     let cumulativeAbove = 0;
-    const tempGroupLayouts = tempGroupLayoutsRaw
-      .map((group) => {
-        const next = {
-          ...group,
-          yOffset: -cumulativeAbove,
-          topExtent: group.contentTop - cumulativeAbove,
-        };
-        cumulativeAbove += group.contentHeight + interGroupGap;
-        return next;
-      })
+    const aboveLineLayouts = aboveLineRaw.map((group) => {
+      const next = {
+        ...group,
+        yOffset: -cumulativeAbove,
+        topExtent: group.contentTop - cumulativeAbove,
+      };
+      cumulativeAbove += group.contentHeight + interGroupGap;
+      return next;
+    });
+
+    let cumulativeBelow = 0;
+    const belowLineLayouts = belowLineRaw.map((group) => {
+      const next = {
+        ...group,
+        yOffset: +cumulativeBelow,
+        bottomExtent: group.contentBottom + cumulativeBelow,
+      };
+      cumulativeBelow += group.contentHeight + interGroupGap;
+      return next;
+    });
+
+    const tempGroupLayouts = [...aboveLineLayouts, ...belowLineLayouts]
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     // Calculate dynamic timeline height based on temporary layout
-    const maxGroupTop = tempGroupLayouts.length > 0
-      ? Math.min(...tempGroupLayouts.map((group) => group.topExtent))
+    const aboveLineTopExtents = aboveLineLayouts.map((g) => g.topExtent).filter(Number.isFinite);
+    const maxGroupTop = aboveLineTopExtents.length > 0
+      ? Math.min(...aboveLineTopExtents)
       : TEMP_BASE_LINE_Y;
     const tempEraTop = TEMP_BASE_LINE_Y + ERA_OFFSET;
     const maxEraTop = eras.length > 0 ? tempEraTop : TEMP_BASE_LINE_Y;
@@ -671,9 +696,17 @@ const TimelineView = forwardRef(function TimelineView({
           return (eraOffsets.get(era.id) ?? 0) + ERA_BAND_HEIGHT * sizeMultiplier;
         }))
       : 0;
-    const belowBaseline = adjustedEras.length > 0
+
+    const belowLineBottomExtents = belowLineLayouts.map((g) => g.bottomExtent).filter(Number.isFinite);
+    const belowLineGroupsExtent = belowLineBottomExtents.length > 0
+      ? Math.max(...belowLineBottomExtents) - TEMP_BASE_LINE_Y
+      : 0;
+
+    const eraSpace = adjustedEras.length > 0
       ? ERA_OFFSET + maxEraBottom + 8
-      : 30;
+      : 0;
+    const belowBaseline = belowLineGroupsExtent + eraSpace
+      + (belowLineGroupsExtent === 0 && eraSpace === 0 ? 30 : 0);
 
     const calculatedHeight = aboveBaseline + belowBaseline;
     const BASE_LINE_Y = calculatedHeight;
@@ -690,6 +723,7 @@ const TimelineView = forwardRef(function TimelineView({
         spanChildPlacement: group.spanChildPlacement,
         timelineStart: file.start,
         timelineEnd: file.end,
+        belowLine: group.belowLine,
       });
 
       const rawFinalEvents = layoutEvents({
@@ -709,6 +743,7 @@ const TimelineView = forwardRef(function TimelineView({
         posID: file.posID,
         useCalendar: useCalendar,
         hideDecimals: file.hideDecimals,
+        belowLine: group.belowLine,
       });
 
       const finalSpans = rawFinalSpans.map((span) => ({
@@ -740,7 +775,9 @@ const TimelineView = forwardRef(function TimelineView({
         ...group.finalEvents.map((event) => event.top + (event._boxHeight || 29)),
       ];
       if (tops.length === 0 || bottoms.length === 0) {
-        const center = BASE_LINE_Y + group.yOffset - 20;
+        const center = group.belowLine
+          ? BASE_LINE_Y + group.yOffset + 20
+          : BASE_LINE_Y + group.yOffset - 20;
         const half = Math.round(EVENT_MIN_HEIGHT / 2);
         return { top: center - half, bottom: center + half };
       }
@@ -757,42 +794,53 @@ const TimelineView = forwardRef(function TimelineView({
       };
     };
 
-    const groupLayoutsByStack = [...groupLayoutsRaw].sort((a, b) => {
-      const stackDiff = (a.stack ?? 0) - (b.stack ?? 0); // bottom -> top
+    const stackSort = (a, b) => {
+      const stackDiff = (a.stack ?? 0) - (b.stack ?? 0);
       if (stackDiff !== 0) return stackDiff;
       return (a.order ?? 0) - (b.order ?? 0);
-    });
+    };
+    const aboveByStack = groupLayoutsRaw.filter((g) => !g.belowLine).sort(stackSort);
+    const belowByStack = groupLayoutsRaw.filter((g) => g.belowLine).sort(stackSort);
 
     const extentById = new Map(
-      groupLayoutsByStack.map((group) => [group.id, getGroupExtent(group)])
+      groupLayoutsRaw.map((group) => [group.id, getGroupExtent(group)])
     );
 
-    for (let i = 1; i < groupLayoutsByStack.length; i += 1) {
-      const lowerGroup = groupLayoutsByStack[i - 1];
-      const upperGroup = groupLayoutsByStack[i];
+    const shiftGroup = (group, delta) => {
+      group.yOffset += delta;
+      group.finalSpans = group.finalSpans.map((span) => ({ ...span, top: span.top + delta }));
+      group.finalEvents = group.finalEvents.map((event) => ({ ...event, top: event.top + delta }));
+      const ext = extentById.get(group.id);
+      if (ext) extentById.set(group.id, { top: ext.top + delta, bottom: ext.bottom + delta });
+    };
+
+    // Above-line: push higher-stack groups upward to avoid overlap
+    for (let i = 1; i < aboveByStack.length; i += 1) {
+      const lowerGroup = aboveByStack[i - 1];
+      const upperGroup = aboveByStack[i];
       const lowerExtent = extentById.get(lowerGroup.id);
       const upperExtent = extentById.get(upperGroup.id);
       if (!lowerExtent || !upperExtent) continue;
-
       const maxUpperBottom = lowerExtent.top - interGroupGap;
       if (upperExtent.bottom > maxUpperBottom) {
-        const shiftUp = upperExtent.bottom - maxUpperBottom;
-        upperGroup.yOffset -= shiftUp;
-        upperGroup.finalSpans = upperGroup.finalSpans.map((span) => ({
-          ...span,
-          top: span.top - shiftUp,
-        }));
-        upperGroup.finalEvents = upperGroup.finalEvents.map((event) => ({
-          ...event,
-          top: event.top - shiftUp,
-        }));
-        extentById.set(upperGroup.id, {
-          top: upperExtent.top - shiftUp,
-          bottom: upperExtent.bottom - shiftUp,
-        });
+        shiftGroup(upperGroup, -(upperExtent.bottom - maxUpperBottom));
       }
     }
 
+    // Below-line: push higher-index groups downward to avoid overlap
+    for (let i = 1; i < belowByStack.length; i += 1) {
+      const upperGroup = belowByStack[i - 1];
+      const lowerGroup = belowByStack[i];
+      const upperExtent = extentById.get(upperGroup.id);
+      const lowerExtent = extentById.get(lowerGroup.id);
+      if (!upperExtent || !lowerExtent) continue;
+      const minLowerTop = upperExtent.bottom + interGroupGap;
+      if (lowerExtent.top < minLowerTop) {
+        shiftGroup(lowerGroup, minLowerTop - lowerExtent.top);
+      }
+    }
+
+    const groupLayoutsByStack = [...aboveByStack, ...belowByStack];
     groupLayoutsByStack.forEach((group) => {
       const extent = extentById.get(group.id);
       group.extentTop = extent?.top;
@@ -819,7 +867,7 @@ const TimelineView = forwardRef(function TimelineView({
       const clampedRight = tlEndPx != null ? Math.min(rawRight, tlEndPx) : rawRight;
       const laneOffset = eraOffsets.get(era.id) ?? 0;
       const sizeMultiplier = era.eraSize === "extra-thick" ? 3 : era.eraSize === "thick" ? 2 : 1;
-      const top = Math.floor(BASE_LINE_Y + ERA_OFFSET + laneOffset);
+      const top = Math.floor(BASE_LINE_Y + belowLineGroupsExtent + ERA_OFFSET + laneOffset);
       const left = Math.floor(clampedLeft);
       const width = Math.ceil(clampedRight) - left;
       const height = ERA_BAND_HEIGHT * sizeMultiplier;
@@ -1414,14 +1462,25 @@ const TimelineView = forwardRef(function TimelineView({
     };
   }, [filterMenu]);
 
+  // Reset viewport when switching to a different timeline
+  const prevFileIdRef = useRef(file?.id);
+  useEffect(() => {
+    if (file?.id && file.id !== prevFileIdRef.current) {
+      translateRef.current = { x: 0, y: 0 };
+      scaleRef.current = 1;
+      prevCalculatedHeightRef.current = null;
+    }
+    prevFileIdRef.current = file?.id;
+  }, [file?.id]);
+
   // DPI + zoom/pan effect
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Initialize with vertical centering (similar to margin-top: 25vh)
+    // Initialize: position the timeline line in the upper-center of the viewport
     if (translateRef.current.x === 0 && translateRef.current.y === 0) {
-      translateRef.current.y = container.clientHeight * 0.25;
+      translateRef.current.y = container.clientHeight * 0.55 - BASE_LINE_Y;
       applyTransform();
     }
 
@@ -3182,24 +3241,29 @@ const TimelineView = forwardRef(function TimelineView({
 
             if (parentSpan && parentSpan.groupId !== event.groupId) return null;
 
+            const groupLayout = groupLayoutById.get(event.groupId);
+            const isBelowLine = groupLayout?.belowLine === true;
+
             const fallbackTargetY =
               file?.eventLinesToGroupBottom === true
                 ? (groupBandBottomById.get(event.groupId) ?? BASE_LINE_Y)
                 : BASE_LINE_Y;
-            let targetY = parentSpan
-              ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top)
-              : fallbackTargetY;
+            let targetY;
+            if (isBelowLine) {
+              targetY = parentSpan
+                ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top) + (parentSpan.spanHeight ?? 20)
+                : BASE_LINE_Y;
+            } else {
+              targetY = parentSpan
+                ? (spanRenderTopById.get(parentSpan.id) ?? parentSpan.top)
+                : fallbackTargetY;
+            }
 
-            const hasPinnedTags = (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t));
-            const isBannerEvent = event.thumbnail && event.thumbnailStyle === "banner";
-            const effectiveBoxHeight = event.hideYears === true && !hasPinnedTags && !isBannerEvent
-              ? (file?.compactEvents ? 14 : 16)
-              : (event._boxHeight || 29);
+            const effectiveBoxHeight = event._boxHeight || 29;
             const eventBottom = event.top + effectiveBoxHeight;
 
-            const lineHeight = Math.abs(eventBottom - targetY);
             const parentColor = parentSpan?.color;
-            const groupColor = groupLayoutById.get(event.groupId)?.bgColor;
+            const groupColor = groupLayout?.bgColor;
             const groupBlendBase = groupColor || resolvedActiveBg;
             const mixedGroupColor = blendColors(groupBlendBase, resolvedElementBg, 0.6);
             const lineColor = event.color || parentColor || (
@@ -3211,8 +3275,57 @@ const TimelineView = forwardRef(function TimelineView({
             const isDotted = eventLineStyle === "dotted";
             const groupConnectedUnparented =
               file?.eventLinesToGroupBottom === true && !parentSpan;
-            const dotYOffset = groupConnectedUnparented ? 2 : 0;
 
+            if (isBelowLine) {
+              const lineHeight = Math.max(0, event.top - targetY);
+              const dotYOffset = groupConnectedUnparented ? -2 : 0;
+              return (
+                <div
+                  key={`event-line-${event.id}`}
+                  className="event-line-container"
+                  style={{
+                    position: 'absolute',
+                    left: `${event._x}px`,
+                    top: `${targetY}px`,
+                    pointerEvents: 'none',
+                    zIndex: Math.round(event.top),
+                  }}
+                >
+                  <div
+                    className="event-line"
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '0',
+                      transform: 'translateX(-50%)',
+                      width: isDashed || isDotted ? '0' : '2px',
+                      height: `${lineHeight}px`,
+                      background: isDashed || isDotted ? 'transparent' : lineColor,
+                      borderLeft: isDashed
+                        ? `2px dashed ${lineColor}`
+                        : isDotted
+                          ? `2px dotted ${lineColor}`
+                          : 'none',
+                    }}
+                  />
+                  <div
+                    className="event-dot"
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: `${dotYOffset}px`,
+                      transform: 'translate(-50%, -50%)',
+                      width: '8px',
+                      height: '8px',
+                      background: lineColor,
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            const lineHeight = Math.abs(eventBottom - targetY);
+            const dotYOffset = groupConnectedUnparented ? 2 : 0;
             return (
               <div
                 key={`event-line-${event.id}`}

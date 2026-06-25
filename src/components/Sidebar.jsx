@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useLayoutEffect, Fragment } from "react";
 import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
 import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed, ArrowUpDown, Check } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
@@ -250,6 +250,7 @@ export default function Sidebar({
   const [pendingNewGroupEditId, setPendingNewGroupEditId] = useState(null);
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverPlacement, setDragOverPlacement] = useState(null);
+  const [dividerDragOver, setDividerDragOver] = useState(false);
   const [openGroupContents, setOpenGroupContents] = useState({});
   const menuRef = useRef(null);
   const submenuRef = useRef(null);
@@ -456,22 +457,27 @@ export default function Sidebar({
 
   const displayGroups = useMemo(
     () => [...groups].sort((a, b) => {
-      const stackDiff = (b.stack ?? 0) - (a.stack ?? 0); // top to bottom
+      const aBelow = a.belowLine ? 1 : 0;
+      const bBelow = b.belowLine ? 1 : 0;
+      if (aBelow !== bBelow) return aBelow - bBelow;
+      const stackDiff = (b.stack ?? 0) - (a.stack ?? 0); // top to bottom within zone
       if (stackDiff !== 0) return stackDiff;
       return (a.order ?? 0) - (b.order ?? 0);
     }),
     [groups]
   );
 
-  const commitDisplayGroupOrder = (nextDisplayGroups) => {
+  const commitDisplayGroupOrder = (nextDisplayGroups, dividerIndex) => {
     if (!Array.isArray(nextDisplayGroups) || nextDisplayGroups.length === 0) return;
     const total = nextDisplayGroups.length;
+    const divIdx = dividerIndex ?? total;
     const patchedById = new Map(
       nextDisplayGroups.map((group, index) => [
         group.id,
         {
           stack: total - index - 1,
           order: index,
+          belowLine: index >= divIdx,
         },
       ])
     );
@@ -489,6 +495,7 @@ export default function Sidebar({
     nextGroups.forEach((group) => onUpdateGroup?.(group.id, {
       stack: group.stack,
       order: group.order,
+      belowLine: group.belowLine,
     }));
   };
 
@@ -1235,6 +1242,7 @@ export default function Sidebar({
             className="sb-search-input"
             type="text"
             placeholder={searchPlaceholder}
+            spellCheck={false}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -1687,67 +1695,117 @@ export default function Sidebar({
               {visibleDisplayGroups.length === 0 && (
                 <div className="filter-menu-empty">{searchActive ? "No matching groups" : "No groups found"}</div>
               )}
-              {visibleDisplayGroups.map((group) => {
+              {visibleDisplayGroups.map((group, idx) => {
                 const count = group.visibleCount;
                 const canDelete = displayGroups.length > 1;
                 const groupTint = normalizeColorForInput(group.bgColor) || themeGroupColor;
                 const itemsInGroup = group.visibleItems;
                 const isGroupOpen = searchActive || !!openGroupContents[group.id];
-                return (
+                const isFirstBelowLine = group.belowLine && (idx === 0 || !visibleDisplayGroups[idx - 1]?.belowLine);
+                const dividerEl = (
                   <div
-                    key={group.id}
-                    className={`sb-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
-                    draggable={editingGroupId !== group.id}
-                    onDragStart={(e) => {
-                      setDraggedGroupId(group.id);
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", group.id);
-                    }}
+                    key="sb-timeline-divider"
+                    className={`sb-timeline-line-divider${dividerDragOver ? " is-drag-over" : ""}`}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      if (draggedGroupId && draggedGroupId !== group.id) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const position = e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
-                        setDragOverPlacement({ id: group.id, position });
+                      if (draggedGroupId) {
+                        setDividerDragOver(true);
+                        setDragOverPlacement(null);
                         e.dataTransfer.dropEffect = "move";
                       }
                     }}
                     onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget)) {
-                        setDragOverPlacement((prev) => (prev?.id === group.id ? null : prev));
-                      }
+                      if (!e.currentTarget.contains(e.relatedTarget)) setDividerDragOver(false);
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       const sourceId = draggedGroupId || e.dataTransfer.getData("text/plain");
-                      const targetId = group.id;
-                      const position = dragOverPlacement?.id === group.id ? dragOverPlacement.position : "top";
-                      if (!sourceId || sourceId === targetId) {
-                        setDraggedGroupId(null);
-                        setDragOverPlacement(null);
-                        return;
-                      }
+                      setDividerDragOver(false);
+                      setDraggedGroupId(null);
+                      setDragOverPlacement(null);
+                      if (!sourceId) return;
                       const fromIndex = displayGroups.findIndex((item) => item.id === sourceId);
-                      const toIndex = displayGroups.findIndex((item) => item.id === targetId);
-                      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
-                        setDraggedGroupId(null);
-                        setDragOverPlacement(null);
-                        return;
-                      }
+                      if (fromIndex < 0) return;
+                      const origDivider = displayGroups.filter((g) => !g.belowLine).length;
+                      const sourceWasBelow = displayGroups[fromIndex]?.belowLine;
                       const reordered = [...displayGroups];
                       const [moved] = reordered.splice(fromIndex, 1);
-                      let insertIndex = toIndex + (position === "bottom" ? 1 : 0);
-                      if (fromIndex < insertIndex) insertIndex -= 1;
-                      reordered.splice(insertIndex, 0, moved);
-                      commitDisplayGroupOrder(reordered);
-                      setDraggedGroupId(null);
-                      setDragOverPlacement(null);
-                    }}
-                    onDragEnd={() => {
-                      setDraggedGroupId(null);
-                      setDragOverPlacement(null);
+                      const insertAt = sourceWasBelow ? origDivider : origDivider - 1;
+                      reordered.splice(Math.max(0, insertAt), 0, moved);
+                      const newDivider = sourceWasBelow ? origDivider + 1 : origDivider - 1;
+                      commitDisplayGroupOrder(reordered, Math.max(0, newDivider));
                     }}
                   >
+                    <div className="sb-timeline-line-divider-line" />
+                    <span className="sb-timeline-line-divider-label">Timeline</span>
+                    <div className="sb-timeline-line-divider-line" />
+                  </div>
+                );
+                return (
+                  <Fragment key={group.id}>
+                    {isFirstBelowLine && dividerEl}
+                    <div
+                      className={`sb-group-item${draggedGroupId === group.id ? " is-dragging" : ""}${dragOverPlacement?.id === group.id ? ` is-drag-over-${dragOverPlacement.position}` : ""}`}
+                      draggable={editingGroupId !== group.id}
+                      onDragStart={(e) => {
+                        setDraggedGroupId(group.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", group.id);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedGroupId && draggedGroupId !== group.id) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const position = e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
+                          setDragOverPlacement({ id: group.id, position });
+                          setDividerDragOver(false);
+                          e.dataTransfer.dropEffect = "move";
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDragOverPlacement((prev) => (prev?.id === group.id ? null : prev));
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const sourceId = draggedGroupId || e.dataTransfer.getData("text/plain");
+                        const targetId = group.id;
+                        const position = dragOverPlacement?.id === group.id ? dragOverPlacement.position : "top";
+                        if (!sourceId || sourceId === targetId) {
+                          setDraggedGroupId(null);
+                          setDragOverPlacement(null);
+                          return;
+                        }
+                        const fromIndex = displayGroups.findIndex((item) => item.id === sourceId);
+                        const toIndex = displayGroups.findIndex((item) => item.id === targetId);
+                        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+                          setDraggedGroupId(null);
+                          setDragOverPlacement(null);
+                          return;
+                        }
+                        const reordered = [...displayGroups];
+                        const [moved] = reordered.splice(fromIndex, 1);
+                        let insertIndex = toIndex + (position === "bottom" ? 1 : 0);
+                        if (fromIndex < insertIndex) insertIndex -= 1;
+                        reordered.splice(insertIndex, 0, moved);
+                        const origDivider = displayGroups.filter((g) => !g.belowLine).length;
+                        const sourceWasBelow = displayGroups[fromIndex]?.belowLine;
+                        const targetIsBelow = group.belowLine;
+                        let newDivider = origDivider;
+                        if (sourceWasBelow !== targetIsBelow) {
+                          newDivider = sourceWasBelow ? origDivider + 1 : origDivider - 1;
+                        }
+                        commitDisplayGroupOrder(reordered, Math.max(0, newDivider));
+                        setDraggedGroupId(null);
+                        setDragOverPlacement(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedGroupId(null);
+                        setDragOverPlacement(null);
+                        setDividerDragOver(false);
+                      }}
+                    >
                     <div
                       className={`sb-group-header${isGroupOpen ? " is-open" : ""}`}
                       onClick={() => itemsInGroup.length > 0 && toggleGroupContents(group.id)}
@@ -1791,6 +1849,14 @@ export default function Sidebar({
                       <div className="sb-group-actions" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
+                          className={`filter-menu-icon-btn${group.hideBand ? " is-active" : ""}`}
+                          title={group.hideBand ? "Show band" : "Hide band"}
+                          onClick={() => onUpdateGroup?.(group.id, { hideBand: !group.hideBand })}
+                        >
+                          {group.hideBand ? <SquareDashed size={12} /> : <Square size={12} />}
+                        </button>
+                        <button
+                          type="button"
                           className={`filter-menu-icon-btn${group.visible === false ? " filter-menu-hide-btn is-active" : ""}`}
                           title={group.visible === false ? "Show group" : "Hide group"}
                           onClick={() => updateGroupPatch(group.id, { visible: group.visible === false ? true : false })}
@@ -1814,13 +1880,6 @@ export default function Sidebar({
                               >
                                 <Edit2 size={13} />
                                 <span>Rename</span>
-                              </button>
-                              <button
-                                className="sb-group-kebab-item"
-                                onClick={(e) => { e.stopPropagation(); onUpdateGroup?.(group.id, { hideBand: !group.hideBand }); }}
-                              >
-                                {group.hideBand ? <Square size={13} /> : <SquareDashed size={13} />}
-                                <span>{group.hideBand ? "Show Band" : "Hide Band"}</span>
                               </button>
                               <button
                                 className="sb-group-kebab-item sb-group-kebab-item-danger"
@@ -1864,8 +1923,44 @@ export default function Sidebar({
                       </div>
                     )}
                   </div>
+                  </Fragment>
                 );
               })}
+              {!visibleDisplayGroups.some((g) => g.belowLine) && (
+                <div
+                  className={`sb-timeline-line-divider${dividerDragOver ? " is-drag-over" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedGroupId) {
+                      setDividerDragOver(true);
+                      setDragOverPlacement(null);
+                      e.dataTransfer.dropEffect = "move";
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) setDividerDragOver(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const sourceId = draggedGroupId || e.dataTransfer.getData("text/plain");
+                    setDividerDragOver(false);
+                    setDraggedGroupId(null);
+                    setDragOverPlacement(null);
+                    if (!sourceId) return;
+                    const fromIndex = displayGroups.findIndex((item) => item.id === sourceId);
+                    if (fromIndex < 0) return;
+                    const reordered = [...displayGroups];
+                    const [moved] = reordered.splice(fromIndex, 1);
+                    reordered.push(moved);
+                    commitDisplayGroupOrder(reordered, reordered.length - 1);
+                  }}
+                >
+                  <div className="sb-timeline-line-divider-line" />
+                  <span className="sb-timeline-line-divider-label">Timeline</span>
+                  <div className="sb-timeline-line-divider-line" />
+                  <div className="sb-below-line-drop-zone" />
+                </div>
+              )}
             </div>
           </div>
         )}
