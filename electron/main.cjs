@@ -989,14 +989,19 @@ ipcMain.handle('set-app-settings', async (event, settings) => {
     if (!settings || typeof settings !== 'object') {
       return { success: false, error: 'Invalid settings' };
     }
-    const sanitized = {};
+    const filePath = appSettingsPath();
+    let existing = {};
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      existing = JSON.parse(raw);
+    } catch { /* first run or corrupt file — start fresh */ }
+    const merged = { ...existing };
     for (const key of Object.keys(settings)) {
       if (ALLOWED_SETTINGS_KEYS.has(key)) {
-        sanitized[key] = settings[key];
+        merged[key] = settings[key];
       }
     }
-    const filePath = appSettingsPath();
-    await fs.writeFile(filePath, JSON.stringify(sanitized, null, 2), 'utf8');
+    await fs.writeFile(filePath, JSON.stringify(merged, null, 2), 'utf8');
     return { success: true };
   } catch (error) {
     console.error('Error saving app settings:', error);

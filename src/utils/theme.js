@@ -13,8 +13,12 @@ export const applyTheme = (themeConfig, themeKey) => {
   const theme = themes[themeKey] || themes[fallbackKey];
   if (!theme) return;
 
+  document.body.classList.add("theme-transitioning");
   const root = document.documentElement;
   Object.entries(theme.colors || {}).forEach(([key, value]) => {
     root.style.setProperty(`--${key}`, value);
+  });
+  requestAnimationFrame(() => {
+    setTimeout(() => document.body.classList.remove("theme-transitioning"), 250);
   });
 };
