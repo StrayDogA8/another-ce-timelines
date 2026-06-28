@@ -147,8 +147,26 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
         const lastSegment = parsed.title.split("/").pop();
         if (lastSegment) titleCandidates.push(lastSegment);
       }
-      const tryApi = async (base, title) => {
-        const q = `?action=parse&page=${encodeURIComponent(title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
+
+      const resolveSectionIndex = async (base, title, anchor) => {
+        const q = `?action=parse&page=${encodeURIComponent(title)}&prop=sections&format=json&formatversion=2`;
+        const result = await fetchWikipedia({ url: base + q });
+        if (!result?.success) return null;
+        const j = JSON.parse(result.html);
+        const sections = j?.parse?.sections;
+        if (!Array.isArray(sections)) return null;
+        const normalizedAnchor = anchor.replace(/_/g, " ");
+        const match = sections.find((s) =>
+          s.anchor === anchor ||
+          s.anchor.replace(/_/g, " ") === normalizedAnchor ||
+          s.line?.replace(/<[^>]*>/g, "") === normalizedAnchor
+        );
+        return match ? match.index : null;
+      };
+
+      const tryApi = async (base, title, sectionIndex) => {
+        let q = `?action=parse&page=${encodeURIComponent(title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
+        if (sectionIndex != null) q += `&section=${sectionIndex}`;
         const result = await fetchWikipedia({ url: base + q });
         if (!result?.success) return null;
         const j = JSON.parse(result.html);
@@ -156,13 +174,29 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
         if (text && typeof text === "object") text = text["*"] ?? null;
         return text ? { parse: { ...j.parse, text } } : null;
       };
+
       let data = null;
       outer: for (const title of titleCandidates) {
         for (const base of apiPaths) {
-          data = await tryApi(base, title);
+          let sectionIndex = null;
+          if (parsed.section) {
+            sectionIndex = await resolveSectionIndex(base, title, parsed.section);
+            if (sectionIndex == null) continue;
+          }
+          data = await tryApi(base, title, sectionIndex);
           if (data) break outer;
         }
       }
+
+      if (!data && parsed.section) {
+        outer2: for (const title of titleCandidates) {
+          for (const base of apiPaths) {
+            data = await tryApi(base, title, null);
+            if (data) break outer2;
+          }
+        }
+      }
+
       if (!data) {
         const pageResult = await fetchWikipedia({ url });
         if (pageResult?.success) {
@@ -178,7 +212,11 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
               ...titleCandidates,
             ])];
             for (const title of discoveryTitles) {
-              data = await tryApi(apiBase, title);
+              let sectionIndex = null;
+              if (parsed.section) {
+                sectionIndex = await resolveSectionIndex(apiBase, title, parsed.section);
+              }
+              data = await tryApi(apiBase, title, sectionIndex);
               if (data) break;
             }
           }
@@ -283,7 +321,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
     if (!wikiUrl) return null;
     const parsedForLink = parseMediaWikiUrl(wikiUrl);
     const safeHref = parsedForLink
-      ? `${parsedForLink.host}/wiki/${encodeURIComponent(parsedForLink.title)}`
+      ? `${parsedForLink.host}/wiki/${encodeURIComponent(parsedForLink.title)}${parsedForLink.section ? `#${encodeURIComponent(parsedForLink.section)}` : ""}`
       : null;
     return (
       <>
@@ -300,7 +338,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
                 title="Open in browser"
                 onClick={(e) => e.stopPropagation()}
               >
-                Open article
+                {parsedForLink?.section ? `§ ${parsedForLink.section.replace(/_/g, " ")}` : "Open article"}
               </a>
             )}
             <ChevronDown size={14} style={{ transform: isWikiCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s ease", color: "var(--ui-muted)" }} />
@@ -327,7 +365,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
           <div className="note-create-card-icon"><BookOpen size={18} /></div>
           <div className="note-create-card-text">
             <span className="note-create-card-title">Add wiki</span>
-            <span className="note-create-card-subtitle">Link a MediaWiki article</span>
+            <span className="note-create-card-subtitle">Link a MediaWiki article or section</span>
           </div>
         </button>
       )}
@@ -342,7 +380,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
               value={wikiUrlInput}
               onChange={(e) => { setWikiUrlInput(e.target.value); setWikiUrlInputError(""); }}
               onKeyDown={handleWikiUrlKeyDown}
-              placeholder="https://en.wikipedia.org/wiki/…"
+              placeholder="https://en.wikipedia.org/wiki/… or …/wiki/Page#Section"
             />
             {wikiUrlInputError && <div className="wiki-url-error">{wikiUrlInputError}</div>}
           </div>
@@ -354,13 +392,14 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
       )}
       {wikiUrl && parsedWiki && !isWikiUrlInputOpen && (() => {
         const articleTitle = parsedWiki.title.replace(/_/g, " ");
+        const sectionName = parsedWiki.section?.replace(/_/g, " ");
         let articleHost = "";
         try { articleHost = new URL(parsedWiki.host).hostname; } catch { /* invalid host */ }
         return (
           <div className="wiki-url-card">
             <div className="wiki-url-card-avatar">{articleTitle.charAt(0).toUpperCase()}</div>
             <div className="wiki-url-card-info">
-              <div className="wiki-url-card-title">{articleTitle}</div>
+              <div className="wiki-url-card-title">{articleTitle}{sectionName ? ` § ${sectionName}` : ""}</div>
               <div className="wiki-url-card-host">{articleHost}</div>
             </div>
             <div className="wiki-url-card-actions">

@@ -6,7 +6,7 @@
 
 /* Wikipedia integration */
 .wiki-header-link {
-  color: inherit;
+  color: var(--text-subtle);
   text-decoration: none;
   font-weight: inherit;
   transition: color 0.15s ease, text-decoration-color 0.15s ease;

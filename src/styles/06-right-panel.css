@@ -1747,7 +1747,7 @@
 .note-render h1,
 .note-render h2,
 .note-render h3 {
-  margin: 0.5rem 0 0.25rem;
+  margin: 0.85rem 0 0.3rem;
   font-weight: 700;
 }
 
@@ -1764,18 +1764,18 @@
 }
 
 .note-render p {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.7rem;
 }
 
 .note-render hr {
   border: none;
   border-top: 1px solid var(--accent-color);
-  margin: 0.75rem 0;
+  margin: 1rem 0;
 }
 
 .note-render ul,
 .note-render ol {
-  margin: 0 0 0.5rem 1.25rem;
+  margin: 0 0 0.7rem 1.25rem;
   padding: 0;
 }
 
@@ -1784,6 +1784,19 @@
   background: var(--accent-color);
   padding: 0 4px;
   border-radius: 4px;
+}
+
+.note-render blockquote {
+  border-left: 3px solid var(--link-color);
+  margin: 0.7rem 0;
+  padding: 0.35rem 0.75rem;
+  background: color-mix(in srgb, var(--link-color), transparent 90%);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary, color-mix(in srgb, var(--text-primary), transparent 30%));
+}
+
+.note-render blockquote p:last-child {
+  margin-bottom: 0;
 }
 
 .note-render a {
@@ -1882,22 +1895,52 @@
   background: color-mix(in srgb, var(--accent-color), transparent 60%);
 }
 
-.note-render ul.contains-task-list {
+.note-render ul:has(> li > input[type="checkbox"]) {
   list-style: none;
-  padding-left: 0.25rem;
+  margin-left: 0;
+  padding-left: 0;
 }
 
-.note-render .contains-task-list li {
+.note-render li:has(> input[type="checkbox"]) {
   display: flex;
   align-items: baseline;
   gap: 6px;
 }
 
-.note-render .contains-task-list input[type="checkbox"] {
+.note-render li > input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
   margin: 0;
   flex-shrink: 0;
-  accent-color: var(--ui-muted);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ui-muted);
+  background: transparent;
   cursor: pointer;
+  position: relative;
+}
+
+.note-render li:has(> input[type="checkbox"]:checked) {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.note-render li > input[type="checkbox"]:checked {
+  background: var(--link-color);
+  border-color: var(--link-color);
+}
+
+.note-render li > input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 5.5px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translate(-50%, -60%) rotate(40deg);
 }
 
 .note-render img:-moz-broken,

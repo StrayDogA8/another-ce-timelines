@@ -43,7 +43,8 @@ export const parseMediaWikiUrl = (url) => {
       title = decodeURIComponent(pathname.slice(1));
     }
     if (!title) return null;
-    return { host: parsed.origin, title };
+    const section = parsed.hash ? decodeURIComponent(parsed.hash.slice(1)) : null;
+    return { host: parsed.origin, title, section };
   } catch {
     return null;
   }
