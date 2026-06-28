@@ -931,7 +931,7 @@ export default function RightPanel({
             <WikiSection
               key={`wiki-${selectedElement?.id}`}
               wikiUrl={formData.wikiUrl}
-              useWikipedia={timelineData?.file?.useWikipedia}
+              useWiki={timelineData?.file?.useWiki}
               isEditMode={false}
               onUrlChange={handleWikiUrlChange}
             />
@@ -2157,7 +2157,7 @@ export default function RightPanel({
               <WikiSection
                 key={`wiki-${selectedElement?.id}`}
                 wikiUrl={formData.wikiUrl}
-                useWikipedia={timelineData?.file?.useWikipedia}
+                useWiki={timelineData?.file?.useWiki}
                 isEditMode={true}
                 onUrlChange={handleWikiUrlChange}
               />

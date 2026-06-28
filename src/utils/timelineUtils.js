@@ -588,7 +588,8 @@ export function layoutEvents({
   LANE_SPACING,
   BOX_OFFSET,
   fixedEventHeight,
-  compactEvents = false,
+  eventWidth = 150,
+  eventFontSize = 10,
   fontFamily,
   pinnedTags = [],
   negID,
@@ -601,12 +602,36 @@ export function layoutEvents({
     .sort((a, b) => a.date - b.date)
     .map((ev) => ({ ...ev, _x: yearToPx(ev.date) }));
 
+  const eventHeight = Math.round(eventWidth / 6);
+  const paddingV = Math.max(2, Math.round(eventHeight * 0.08));
+  const paddingH = Math.round(eventWidth * 0.053);
+  const borderRadius = Math.round(eventWidth * 0.053);
+  const noYearHeight = Math.max(10, eventHeight - 9);
+  const dateFontSize = Math.max(6, eventFontSize - 1);
+  const tagFontSize = Math.max(5, eventFontSize - 2);
+  const tagPad = Math.round(eventFontSize * 0.6);
+  const dateGap = Math.max(2, Math.round(eventFontSize * 0.4));
+  const thumbTileWidth = Math.round(eventWidth * 0.193);
+  const bannerHeight = Math.round(eventWidth * 0.32);
+  const squareSize = Math.round(eventWidth * 0.467);
+
   // Create an offscreen probe matching .event styling for accurate height measurement
   const probe = document.createElement("div");
   probe.className = "event";
-  if (compactEvents) {
-    probe.classList.add("event-compact");
-  }
+  probe.style.setProperty('--event-width', `${eventWidth}px`);
+  probe.style.setProperty('--event-height', `${eventHeight}px`);
+  probe.style.setProperty('--event-height-noyear', `${noYearHeight}px`);
+  probe.style.setProperty('--event-pad-v', `${paddingV}px`);
+  probe.style.setProperty('--event-pad-h', `${paddingH}px`);
+  probe.style.setProperty('--event-radius', `${borderRadius}px`);
+  probe.style.setProperty('--event-font-size', `${eventFontSize}px`);
+  probe.style.setProperty('--event-date-font-size', `${dateFontSize}px`);
+  probe.style.setProperty('--event-date-gap', `${dateGap}px`);
+  probe.style.setProperty('--event-tag-font-size', `${tagFontSize}px`);
+  probe.style.setProperty('--event-tag-pad', `${tagPad}px`);
+  probe.style.setProperty('--event-tile-width', `${thumbTileWidth}px`);
+  probe.style.setProperty('--event-banner-height', `${bannerHeight}px`);
+  probe.style.setProperty('--event-font-scale', `${eventFontSize / 10}`);
   const probeTitle = document.createElement("div");
   probeTitle.className = "event-title";
   const probeDate = document.createElement("div");
@@ -685,20 +710,28 @@ export function layoutEvents({
   const noYearSingleLineHeight = probe.offsetHeight;
   syncProbeDateRow({ showDateRow: true, showYear: true, visibleTags: [] });
   const probeBorderSize = (parseInt(getComputedStyle(probe).borderTopWidth, 10) || 0) + (parseInt(getComputedStyle(probe).borderBottomWidth, 10) || 0);
+  probe.style.height = 'auto';
+  probe.style.minHeight = '0';
+  const textContentHeight = probe.offsetHeight;
+  probe.style.height = '';
+  probe.style.minHeight = '';
 
   let measureEvent;
   if (fixedEventHeight) {
-    // OverflowTags ensures tags never wrap when fixedEventHeight is on,
-    // so the box is always the single-line CSS height.
     measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears, sourceLink, eventBorderStyle) => {
       if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
-        const squareSize = compactEvents ? 60 : 70;
         const sqBorder = eventBorderStyle === "none" ? 0 : probeBorderSize;
         return { boxHeight: squareSize + sqBorder, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
       }
+      if (thumbnail && thumbnailStyle === "banner") {
+        return { boxHeight: textContentHeight + bannerHeight, isMultiLine: true, boxWidth: EVENT_WIDTH };
+      }
+      if (thumbnail) {
+        return { boxHeight: singleLineHeight, isMultiLine: false, boxWidth: EVENT_WIDTH };
+      }
       const visibleTags = getVisiblePinnedTags(tags);
       const showDateRow = hideYears !== true || visibleTags.length > 0;
-      let h = showDateRow ? singleLineHeight : noYearSingleLineHeight;
+      let h = singleLineHeight;
       if (eventBorderStyle === "none") h -= probeBorderSize;
       return { boxHeight: h, isMultiLine: false, boxWidth: EVENT_WIDTH };
     };
@@ -714,12 +747,12 @@ export function layoutEvents({
 
     // Reusable icon placeholder
     const probeIcon = document.createElement("span");
-    probeIcon.style.cssText = "float: left; width: 10px; height: 10px; margin-right: 3px; margin-top: 1px;";
+    probeIcon.style.cssText = `float: left; width: ${eventFontSize}px; height: ${eventFontSize}px; margin-right: 3px; margin-top: 1px;`;
 
     const probeThumbnailTile = document.createElement("div");
     probeThumbnailTile.className = "event-thumbnail-tile";
     // Fix the width for probe measurement since aspect-ratio:1 is based on height
-    probeThumbnailTile.style.width = `${compactEvents ? 23 : 29}px`;
+    probeThumbnailTile.style.width = `${thumbTileWidth}px`;
     probeTextContent = document.createElement("div");
     probeTextContent.className = "event-text-content";
 
@@ -761,11 +794,10 @@ export function layoutEvents({
       }
     };
 
-    const BANNER_HEIGHT = compactEvents ? 36 : 48;
+    const BANNER_HEIGHT = bannerHeight;
 
     measureEvent = (title, tags, yearLabel, icon, thumbnail, thumbnailStyle, hideYears, sourceLink, eventBorderStyle) => {
       if (thumbnail && (thumbnailStyle === "square-fill" || thumbnailStyle === "circle-fill")) {
-        const squareSize = compactEvents ? 60 : 70;
         const sqBorder = eventBorderStyle === "none" ? 0 : probeBorderSize;
         return { boxHeight: squareSize + sqBorder, isMultiLine: false, squareSize, boxWidth: squareSize + 4 };
       }

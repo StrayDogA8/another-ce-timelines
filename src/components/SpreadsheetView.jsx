@@ -100,7 +100,7 @@ export default function SpreadsheetView({
   const [thumbPanelUrl, setThumbPanelUrl] = useState("");
 
   const file = timelineData?.file ?? {};
-  const { useCalendar, useMaps, useWikipedia, negID, posID, hideDecimals } = file;
+  const { useCalendar, useMaps, useWiki, negID, posID, hideDecimals } = file;
   const elements = timelineData?.elements ?? [];
 
   const displayName = useMemo(() => {
@@ -145,13 +145,13 @@ export default function SpreadsheetView({
       { key: "thumbnailStyle", label: "Thumbnail Style", sortable: false },
     ];
     if (useMaps)      cols.push({ key: "coords", label: "Coordinates", sortable: false });
-    if (useWikipedia) cols.push({ key: "wiki",   label: "Wiki",        sortable: false });
+    if (useWiki) cols.push({ key: "wiki",   label: "Wiki",        sortable: false });
     cols.push(
       { key: "note",    label: "Note",    sortable: false },
       { key: "sources", label: "Sources", sortable: false },
     );
     return cols;
-  }, [useMaps, useWikipedia]);
+  }, [useMaps, useWiki]);
 
   const OPTIONAL_COLS = useMemo(() => COLS.filter((c) => c.key !== "type" && c.key !== "title"), [COLS]);
 

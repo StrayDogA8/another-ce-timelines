@@ -121,14 +121,13 @@ function App() {
       return rest;
     });
 
-    return {
-      ...data,
-      file: {
-        ...(data.file || {}),
-        groups,
-      },
-      elements: nextElements,
-    };
+    const file = { ...(data.file || {}), groups };
+    if (file.useWikipedia && !file.useWiki) {
+      file.useWiki = file.useWikipedia;
+    }
+    delete file.useWikipedia;
+
+    return { ...data, file, elements: nextElements };
   }, []);
 
   const [themeConfig, setThemeConfig] = useState(loadThemeConfig());
@@ -1028,7 +1027,8 @@ function App() {
     layout,
     branchOrdering,
     fixedEventHeight,
-    compactEvents,
+    eventWidth,
+    eventFontSize,
     thinConnectors,
     hideSpanConnectors,
     eventLinesToGroupBottom,
@@ -1040,7 +1040,8 @@ function App() {
     nestEraSubGroups,
     showPopularTags,
     useSecondaryBg,
-    useWikipedia,
+    useWiki,
+    useSpreadsheet,
     useMaps,
     mapTileUrl,
     mapLimitToViewportYear,
@@ -1085,7 +1086,8 @@ function App() {
         layout,
         branchOrdering,
         fixedEventHeight,
-        compactEvents,
+        eventWidth,
+        eventFontSize,
         thinConnectors,
         hideSpanConnectors,
         eventLinesToGroupBottom,
@@ -1097,7 +1099,8 @@ function App() {
         nestEraSubGroups,
         showPopularTags,
         useSecondaryBg,
-        useWikipedia,
+        useWiki,
+        useSpreadsheet,
         useMaps,
         mapTileUrl,
         mapLimitToViewportYear,
@@ -1123,7 +1126,10 @@ function App() {
       if (!layout) delete nextFile.layout;
       if (!branchOrdering) delete nextFile.branchOrdering;
       if (!fixedEventHeight) delete nextFile.fixedEventHeight;
-      if (!compactEvents) delete nextFile.compactEvents;
+      delete nextFile.compactEvents;
+      delete nextFile.eventHeight;
+      if (!eventWidth || eventWidth === 150) delete nextFile.eventWidth;
+      if (!eventFontSize || eventFontSize === 10) delete nextFile.eventFontSize;
       if (!thinConnectors) delete nextFile.thinConnectors;
       if (!eventLinesToGroupBottom) delete nextFile.eventLinesToGroupBottom;
       if (!hideDecimals) delete nextFile.hideDecimals;
@@ -1134,7 +1140,8 @@ function App() {
       if (!nestEraSubGroups) delete nextFile.nestEraSubGroups;
       delete nextFile.useEraGroupsInPanel;
       delete nextFile.useSpanGroupsInPanel;
-      if (!useWikipedia) delete nextFile.useWikipedia;
+      if (!useWiki) delete nextFile.useWiki;
+      if (!useSpreadsheet) delete nextFile.useSpreadsheet;
       if (!useMaps) delete nextFile.useMaps;
       if (!mapTileUrl) delete nextFile.mapTileUrl;
       if (!mapLimitToViewportYear) delete nextFile.mapLimitToViewportYear;
@@ -1733,6 +1740,12 @@ function App() {
     }
   }, [filteredElements, selectedId]);
 
+  useEffect(() => {
+    if (viewMode === "spreadsheet" && !timelineData?.file?.useSpreadsheet) {
+      setViewMode("timeline");
+    }
+  }, [viewMode, timelineData?.file?.useSpreadsheet]);
+
   const compareElementsByTimelineOrder = useCallback((a, b) => {
     if (a.type === "event" && b.type === "event") {
       if ((a.date ?? 0) !== (b.date ?? 0)) return (a.date ?? 0) - (b.date ?? 0);
@@ -1991,7 +2004,7 @@ function App() {
                 leftPanelWidth={0}
                 rightPanelWidth={0}
                 isRightPanelOpen={false}
-                onSetViewMode={setViewMode}
+                onSetViewMode={filteredTimelineData?.file?.useSpreadsheet ? setViewMode : undefined}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onBackToHome={handleBackToHome}
                 onAddEvent={handleAddEvent}
@@ -2043,7 +2056,7 @@ function App() {
               onViewportYearChange={handleViewportYearChange}
               tagColors={timelineData.file?.tagColors || {}}
               keybinds={keybinds}
-              onSetViewMode={setViewMode}
+              onSetViewMode={filteredTimelineData?.file?.useSpreadsheet ? setViewMode : undefined}
             />
             </ErrorBoundary>
           )}

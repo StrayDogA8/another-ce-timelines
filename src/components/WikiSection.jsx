@@ -109,7 +109,7 @@ function sanitizeWikiHtml(html, host = "https://en.wikipedia.org") {
   return doc.body.innerHTML;
 }
 
-export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlChange }) {
+export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange }) {
   const [wikiContent, setWikiContent] = useState("");
   const [isWikiLoading, setIsWikiLoading] = useState(false);
   const [wikiError, setWikiError] = useState("");
@@ -277,7 +277,7 @@ export default function WikiSection({ wikiUrl, useWikipedia, isEditMode, onUrlCh
     setWikiUrlInputError("");
   };
 
-  if (!useWikipedia) return null;
+  if (!useWiki) return null;
 
   if (!isEditMode) {
     if (!wikiUrl) return null;

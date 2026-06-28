@@ -54,7 +54,8 @@ export default function SettingsModal({
   const [posID, setPosID] = useState("");
   const [branchOrdering, setBranchOrdering] = useState("later-first");
   const [fixedEventHeight, setFixedEventHeight] = useState(false);
-  const [compactEvents, setCompactEvents] = useState(false);
+  const [eventWidth, setEventWidth] = useState(150);
+  const [eventFontSize, setEventFontSize] = useState(10);
   const [thinConnectors, setThinConnectors] = useState(false);
   const [hideSpanConnectors, setHideSpanConnectors] = useState(false);
   const [eventLinesToGroupBottom, setEventLinesToGroupBottom] = useState(false);
@@ -66,7 +67,8 @@ export default function SettingsModal({
   const [nestEraSubGroups, setNestEraSubGroups] = useState(false);
   const [showPopularTags, setShowPopularTags] = useState(true);
   const [useSecondaryBg, setUseSecondaryBg] = useState(false);
-  const [useWikipedia, setUseWikipedia] = useState(false);
+  const [useWiki, setUseWikipedia] = useState(false);
+  const [useSpreadsheet, setUseSpreadsheet] = useState(false);
   const [useMaps, setUseMaps] = useState(false);
   const [mapTileUrl, setMapTileUrl] = useState("");
   const [mapLimitToViewportYear, setMapLimitToViewportYear] = useState(false);
@@ -205,7 +207,11 @@ export default function SettingsModal({
         setPosID(timelineData.file.posID || "");
         setBranchOrdering(timelineData.file.branchOrdering || "later-first");
         setFixedEventHeight(Boolean(timelineData.file.fixedEventHeight));
-        setCompactEvents(Boolean(timelineData.file.compactEvents));
+        let rawWidth = timelineData.file.eventWidth;
+        let rawFontSize = timelineData.file.eventFontSize;
+        if (rawWidth == null && timelineData.file.compactEvents) { rawWidth = 130; rawFontSize = 7; }
+        setEventWidth(rawWidth ?? 150);
+        setEventFontSize(rawFontSize ?? 10);
         setThinConnectors(Boolean(timelineData.file.thinConnectors));
         setHideSpanConnectors(Boolean(timelineData.file.hideSpanConnectors));
         setEventLinesToGroupBottom(Boolean(timelineData.file.eventLinesToGroupBottom));
@@ -217,7 +223,8 @@ export default function SettingsModal({
         setNestEraSubGroups(Boolean(timelineData.file.nestEraSubGroups));
         setShowPopularTags(timelineData.file.showPopularTags !== false);
         setUseSecondaryBg(Boolean(timelineData.file.useSecondaryBg));
-        setUseWikipedia(Boolean(timelineData.file.useWikipedia));
+        setUseWikipedia(Boolean(timelineData.file.useWiki));
+        setUseSpreadsheet(Boolean(timelineData.file.useSpreadsheet));
         setUseMaps(Boolean(timelineData.file.useMaps));
         setMapTileUrl(timelineData.file.mapTileUrl || "");
         setMapLimitToViewportYear(Boolean(timelineData.file.mapLimitToViewportYear));
@@ -309,7 +316,8 @@ export default function SettingsModal({
           layout,
           branchOrdering,
           fixedEventHeight,
-          compactEvents,
+          eventWidth,
+          eventFontSize,
           thinConnectors,
           hideSpanConnectors,
           eventLinesToGroupBottom,
@@ -321,7 +329,8 @@ export default function SettingsModal({
           nestEraSubGroups,
           showPopularTags,
           useSecondaryBg,
-          useWikipedia,
+          useWiki,
+          useSpreadsheet,
           useMaps,
           mapTileUrl,
           mapLimitToViewportYear,
@@ -355,7 +364,8 @@ export default function SettingsModal({
     logScaleFactor,
     branchOrdering,
     fixedEventHeight,
-    compactEvents,
+    eventWidth,
+    eventFontSize,
     thinConnectors,
     hideSpanConnectors,
     eventLinesToGroupBottom,
@@ -367,7 +377,8 @@ export default function SettingsModal({
     nestEraSubGroups,
     showPopularTags,
     useSecondaryBg,
-    useWikipedia,
+    useWiki,
+    useSpreadsheet,
     useMaps,
     mapTileUrl,
     mapLimitToViewportYear,
@@ -910,21 +921,41 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Compact Events */}
+              {/* Event Size */}
               <div className="settings-row">
                 <div className="settings-row-left">
-                  <div className="settings-row-label">Compact Events</div>
-                  <div className="settings-row-description">Render event boxes with smaller size and smaller text.</div>
+                  <div className="settings-row-label">Event Size</div>
+                  <div className="settings-row-description">Control the size of event boxes ({eventWidth}px{eventWidth === 150 ? "" : " · default: 150"}).</div>
                 </div>
-                <div className="settings-row-right">
-                  <label className="settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={compactEvents}
-                      onChange={(e) => setCompactEvents(e.target.checked)}
-                    />
-                    <span className="settings-toggle-slider"></span>
-                  </label>
+                <div className="settings-row-right" style={{ minWidth: 120 }}>
+                  <input
+                    type="range"
+                    min={100}
+                    max={250}
+                    step={5}
+                    value={eventWidth}
+                    onChange={(e) => setEventWidth(Number(e.target.value))}
+                    className="settings-slider"
+                  />
+                </div>
+              </div>
+
+              {/* Event Font Size */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Event Font Size</div>
+                  <div className="settings-row-description">Control the text size inside event boxes ({eventFontSize}px{eventFontSize === 10 ? "" : " · default: 10"}).</div>
+                </div>
+                <div className="settings-row-right" style={{ minWidth: 120 }}>
+                  <input
+                    type="range"
+                    min={7}
+                    max={14}
+                    step={1}
+                    value={eventFontSize}
+                    onChange={(e) => setEventFontSize(Number(e.target.value))}
+                    className="settings-slider"
+                  />
                 </div>
               </div>
 
@@ -1014,8 +1045,26 @@ export default function SettingsModal({
                   <label className="settings-toggle">
                     <input
                       type="checkbox"
-                      checked={useWikipedia}
+                      checked={useWiki}
                       onChange={(e) => setUseWikipedia(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Spreadsheet */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Spreadsheet View</div>
+                  <div className="settings-row-description">Enable a table view for bulk editing elements.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useSpreadsheet}
+                      onChange={(e) => setUseSpreadsheet(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

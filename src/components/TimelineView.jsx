@@ -283,6 +283,7 @@ const TimelineView = forwardRef(function TimelineView({
     compressedMax,
     TIMELINE_PADDING,
     decompressYear,
+    evFontSize,
   } = useMemo(() => {
     const file = timelineData.file;
     const events = timelineData.elements.filter(e => e.type === "event");
@@ -518,10 +519,43 @@ const TimelineView = forwardRef(function TimelineView({
     const SPAN_VERTICAL_GAP = 2;
 
     // events
-    const compactEvents = Boolean(file?.compactEvents);
-    const EVENT_WIDTH = compactEvents ? 130 : 160;
+    let evWidth = file?.eventWidth;
+    let evFontSize = file?.eventFontSize;
+    if (evWidth == null && file?.compactEvents) { evWidth = 130; evFontSize = 7; }
+    evWidth = evWidth ?? 150;
+    evFontSize = evFontSize ?? 10;
+    const evHeight = Math.round(evWidth / 6);
+
+    const paddingV = Math.max(2, Math.round(evHeight * 0.08));
+    const paddingH = Math.round(evWidth * 0.053);
+    const evBorderRadius = Math.round(evWidth * 0.053);
+    const noYearHeight = Math.max(10, evHeight - 9);
+    const evDateFontSize = Math.max(6, evFontSize - 1);
+    const evTagFontSize = Math.max(5, evFontSize - 2);
+    const evTagPad = Math.round(evFontSize * 0.6);
+    const evDateGap = Math.max(2, Math.round(evFontSize * 0.4));
+    const evTileWidth = Math.round(evWidth * 0.193);
+    const evBannerHeight = Math.round(evWidth * 0.32);
+
+    const root = document.documentElement;
+    root.style.setProperty('--event-width', `${evWidth}px`);
+    root.style.setProperty('--event-height', `${evHeight}px`);
+    root.style.setProperty('--event-height-noyear', `${noYearHeight}px`);
+    root.style.setProperty('--event-pad-v', `${paddingV}px`);
+    root.style.setProperty('--event-pad-h', `${paddingH}px`);
+    root.style.setProperty('--event-radius', `${evBorderRadius}px`);
+    root.style.setProperty('--event-font-size', `${evFontSize}px`);
+    root.style.setProperty('--event-date-font-size', `${evDateFontSize}px`);
+    root.style.setProperty('--event-date-gap', `${evDateGap}px`);
+    root.style.setProperty('--event-tag-font-size', `${evTagFontSize}px`);
+    root.style.setProperty('--event-tag-pad', `${evTagPad}px`);
+    root.style.setProperty('--event-tile-width', `${evTileWidth}px`);
+    root.style.setProperty('--event-banner-height', `${evBannerHeight}px`);
+    root.style.setProperty('--event-font-scale', `${evFontSize / 10}`);
+
+    const EVENT_WIDTH = evWidth + 10;
     const EVENT_GAP = 15;
-    const LANE_SPACING = compactEvents ? 29 : 37;
+    const LANE_SPACING = evHeight + paddingV * 2 + 4 + 4;
     const BOX_OFFSET = 50;
     const EVENT_MIN_HEIGHT = 29;
 
@@ -603,7 +637,8 @@ const TimelineView = forwardRef(function TimelineView({
         LANE_SPACING,
         BOX_OFFSET,
         fixedEventHeight: Boolean(file.fixedEventHeight),
-        compactEvents,
+        eventWidth: evWidth,
+        eventFontSize: evFontSize,
         fontFamily: resolvedFont,
         pinnedTags,
         negID: file.negID,
@@ -736,7 +771,8 @@ const TimelineView = forwardRef(function TimelineView({
         LANE_SPACING,
         BOX_OFFSET,
         fixedEventHeight: Boolean(file.fixedEventHeight),
-        compactEvents,
+        eventWidth: evWidth,
+        eventFontSize: evFontSize,
         fontFamily: resolvedFont,
         pinnedTags,
         negID: file.negID,
@@ -898,6 +934,7 @@ const TimelineView = forwardRef(function TimelineView({
       compressedMax,
       TIMELINE_PADDING,
       decompressYear,
+      evFontSize,
     };
   }, [timelineData, pinnedTags, showMap]);
 
@@ -3073,7 +3110,7 @@ const TimelineView = forwardRef(function TimelineView({
                       <div
                         key={event.id}
                         data-id={event.id}
-                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.sourceLink ? " has-source-link" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
+                        className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.sourceLink ? " has-source-link" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
                         style={{
                           left: `${event._x}px`,
                           top: `${event.top}px`,
@@ -3094,7 +3131,7 @@ const TimelineView = forwardRef(function TimelineView({
                         {event.thumbnail && event.thumbnailStyle !== "banner" && <div className="event-thumbnail-tile" style={{ backgroundImage: `url("${event.thumbnail}")`, backgroundSize: event.thumbnailFit || "cover" }} />}
                         {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
                         <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
-                        <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
+                        <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={evFontSize} className="event-title-icon" />; })()}{event.title}</div>
                         {event.sourceLink && (
                           <a
                             className="event-source-link"
@@ -3399,7 +3436,7 @@ const TimelineView = forwardRef(function TimelineView({
               <div
                 key={event.id}
                 data-id={event.id}
-                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${file?.compactEvents ? " event-compact" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
+                className={`event ${isSelected ? "is-selected" : ""}${event._isMultiLine ? " multi-lane" : ""}${event.hideYears === true && !(Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t)) ? " event-no-year" : ""}${event.thumbnail && event.thumbnailStyle !== "banner" && event.thumbnailStyle !== "square-fill" && event.thumbnailStyle !== "circle-fill" ? " has-thumbnail" : ""}${event.thumbnail && event.thumbnailStyle === "banner" ? " has-thumbnail-banner" : ""}${event.thumbnail && event.thumbnailStyle === "square-fill" ? " has-thumbnail-square" : ""}${event.thumbnail && event.thumbnailStyle === "circle-fill" ? " has-thumbnail-circle" : ""}`}
                 style={{
                   left: `${event._x}px`,
                   top: `${event.top}px`,
@@ -3419,7 +3456,7 @@ const TimelineView = forwardRef(function TimelineView({
                 {event.thumbnail && event.thumbnailStyle !== "banner" && <div className="event-thumbnail-tile" style={{ backgroundImage: `url("${event.thumbnail}")`, backgroundSize: event.thumbnailFit || "cover" }} />}
                 {event.thumbnail && event.thumbnailStyle === "banner" && <img className="event-thumbnail-banner" src={event.thumbnail} alt="" style={{ objectFit: event.thumbnailFit || "cover" }} />}
                 <div className={event.thumbnail && event.thumbnailStyle !== "banner" ? "event-text-content" : ""}>
-                <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={10} className="event-title-icon" />; })()}{event.title}</div>
+                <div className="event-title">{event.icon && ICON_MAP[event.icon] && (() => { const I = ICON_MAP[event.icon]; return <I size={evFontSize} className="event-title-icon" />; })()}{event.title}</div>
                 {(event.hideYears !== true || (Array.isArray(event.tags) ? event.tags : []).some((t) => pinnedTags.includes(t))) && <div className="event-date">
                   {event.hideYears !== true && <span className="event-year">{event.dateLabel ?? formatYear(event.date, file.negID, file.posID, file?.useCalendar === true, file.hideDecimals)}</span>}
                   {(() => {
