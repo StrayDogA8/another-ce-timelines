@@ -13,7 +13,7 @@ Timelines Studio is a free, open-source app for creating customizable, interacti
 
 ![Default View](docs/default-view.png)
 
-![Right Panel](docs/right-panel.png)
+![Map View](docs/map-view.png)
 
 ## Data
 
