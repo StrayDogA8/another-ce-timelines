@@ -291,7 +291,7 @@ export default function MarketplaceModal({
             className={`marketplace-button marketplace-button-secondary${isActive ? " marketplace-button-active" : ""}`}
             type="button"
             disabled={isBusy}
-            onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment" : theme.id)}
+            onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment_v2" : theme.id)}
           >
             {isActive ? (
               <>
@@ -499,7 +499,7 @@ export default function MarketplaceModal({
                             className={`marketplace-button marketplace-button-secondary${isActive ? " marketplace-button-active" : ""}`}
                             type="button"
                             disabled={isBusy}
-                            onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment" : theme.id)}
+                            onClick={() => onAppThemeChange?.(isActive ? defaultThemeKey || "parchment_v2" : theme.id)}
                           >
                             {isActive ? (
                               <>

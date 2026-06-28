@@ -170,8 +170,8 @@ export default function HomePage({
     return entries.sort(([aKey], [bKey]) => {
       const aLower = aKey.toLowerCase();
       const bLower = bKey.toLowerCase();
-      if (aLower === "parchment" && bLower !== "parchment") return -1;
-      if (aLower !== "parchment" && bLower === "parchment") return 1;
+      if (aLower === "parchment_v2" && bLower !== "parchment_v2") return -1;
+      if (aLower !== "parchment_v2" && bLower === "parchment_v2") return 1;
       const aIsDefault = aLower === defaultThemeKey;
       const bIsDefault = bLower === defaultThemeKey;
       if (aIsDefault && !bIsDefault) return -1;
@@ -989,7 +989,7 @@ export default function HomePage({
                               onChange={(e) => onAppThemeChange?.(e.target.value)}
                             >
                               {appThemes.map(([key, theme]) => {
-                                const isDefault = key.toLowerCase() === "parchment";
+                                const isDefault = key.toLowerCase() === "parchment_v2";
                                 const label = `${theme?.name || key}${isDefault ? " (Default)" : ""}`;
                                 return (
                                   <option key={key} value={key}>
