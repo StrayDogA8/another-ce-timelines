@@ -66,6 +66,7 @@ export default function SettingsModal({
   const [panelGroupMode, setPanelGroupMode] = useState("default");
   const [nestEraSubGroups, setNestEraSubGroups] = useState(false);
   const [showPopularTags, setShowPopularTags] = useState(true);
+  const [keepSelection, setKeepSelection] = useState(false);
   const [useSecondaryBg, setUseSecondaryBg] = useState(false);
   const [useWiki, setUseWikipedia] = useState(false);
   const [useSpreadsheet, setUseSpreadsheet] = useState(false);
@@ -222,6 +223,7 @@ export default function SettingsModal({
         setPanelGroupMode(timelineData.file.panelGroupMode || (timelineData.file.useEraGroupsInPanel ? "eras" : "default"));
         setNestEraSubGroups(Boolean(timelineData.file.nestEraSubGroups));
         setShowPopularTags(timelineData.file.showPopularTags !== false);
+        setKeepSelection(Boolean(timelineData.file.keepSelection));
         setUseSecondaryBg(Boolean(timelineData.file.useSecondaryBg));
         setUseWikipedia(Boolean(timelineData.file.useWiki));
         setUseSpreadsheet(Boolean(timelineData.file.useSpreadsheet));
@@ -328,6 +330,7 @@ export default function SettingsModal({
           panelGroupMode,
           nestEraSubGroups,
           showPopularTags,
+          keepSelection,
           useSecondaryBg,
           useWiki,
           useSpreadsheet,
@@ -376,6 +379,7 @@ export default function SettingsModal({
     panelGroupMode,
     nestEraSubGroups,
     showPopularTags,
+    keepSelection,
     useSecondaryBg,
     useWiki,
     useSpreadsheet,
@@ -1201,6 +1205,24 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={disableGroups}
                       onChange={(e) => setDisableGroups(e.target.checked)}
+                    />
+                    <span className="settings-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Keep Selection */}
+              <div className="settings-row">
+                <div className="settings-row-left">
+                  <div className="settings-row-label">Keep Selection</div>
+                  <div className="settings-row-description">Keep the last selected element selected when clicking the timeline background.</div>
+                </div>
+                <div className="settings-row-right">
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={keepSelection}
+                      onChange={(e) => setKeepSelection(e.target.checked)}
                     />
                     <span className="settings-toggle-slider"></span>
                   </label>

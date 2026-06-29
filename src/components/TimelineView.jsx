@@ -2528,7 +2528,7 @@ const TimelineView = forwardRef(function TimelineView({
       ref={containerRef}
       className={`timeline-scroll${file?.fixedEventHeight ? ' fixed-event-height' : ''}`}
       style={file?.useSecondaryBg ? { backgroundColor: "var(--surface)" } : undefined}
-      onClick={(e) => { if (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay")) handleSelect(null); }} // clear selection on background click
+      onClick={(e) => { if (!file?.keepSelection && (e.target === e.currentTarget || e.target.closest(".timeline, .grid-year-labels-overlay"))) handleSelect(null); }}
       onContextMenu={handleContextMenu}
     >
       {!showMap && (

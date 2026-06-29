@@ -1044,6 +1044,7 @@ function App() {
     panelGroupMode,
     nestEraSubGroups,
     showPopularTags,
+    keepSelection,
     useSecondaryBg,
     useWiki,
     useSpreadsheet,
@@ -1103,6 +1104,7 @@ function App() {
         panelGroupMode,
         nestEraSubGroups,
         showPopularTags,
+        keepSelection,
         useSecondaryBg,
         useWiki,
         useSpreadsheet,
@@ -1145,6 +1147,7 @@ function App() {
       if (!nestEraSubGroups) delete nextFile.nestEraSubGroups;
       delete nextFile.useEraGroupsInPanel;
       delete nextFile.useSpanGroupsInPanel;
+      if (!keepSelection) delete nextFile.keepSelection;
       if (!useWiki) delete nextFile.useWiki;
       if (!useSpreadsheet) delete nextFile.useSpreadsheet;
       if (!useMaps) delete nextFile.useMaps;
