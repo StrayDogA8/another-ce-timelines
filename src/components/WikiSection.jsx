@@ -159,7 +159,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
         const match = sections.find((s) =>
           s.anchor === anchor ||
           s.anchor.replace(/_/g, " ") === normalizedAnchor ||
-          s.line?.replace(/<[^>]*>/g, "") === normalizedAnchor
+          (() => { let t = s.line ?? ""; let prev; do { prev = t; t = t.replace(/<[^>]*>/g, ""); } while (t !== prev); return t; })() === normalizedAnchor
         );
         return match ? match.index : null;
       };
