@@ -14,7 +14,7 @@ import { pickAndImportImage } from "../utils/electronApi";
 const TYPE_LABEL = { event: "Event", span: "Span", era: "Era" };
 
 const DEFAULT_WIDTHS = {
-  type: 72, title: 200, parent: 130, parentType: 90, date: 90, end: 85, mergeInto: 130,
+  type: 72, title: 200, description: 180, parent: 130, parentType: 90, date: 90, end: 85, mergeInto: 130,
   group: 85, tags: 160, icon: 80, hideYear: 75, color: 110, size: 100,
   hideDetails: 90, lineStyle: 100, borderStyle: 105,
   coords: 150, wiki: 160, note: 110, sources: 110, thumbnail: 180, thumbnailStyle: 120,
@@ -127,6 +127,7 @@ export default function SpreadsheetView({
     const cols = [
       { key: "type",       label: "Type",        sortable: true  },
       { key: "title",      label: "Title",        sortable: true  },
+      { key: "description", label: "Description", sortable: false },
       { key: "date",       label: "Date / Start", sortable: true  },
       { key: "end",        label: "End",          sortable: true  },
       { key: "parent",     label: "Parent",       sortable: false },
@@ -203,6 +204,7 @@ export default function SpreadsheetView({
     if (!el) return "";
     if (field === "type")    return TYPE_LABEL[el.type] ?? el.type;
     if (field === "title")   return el.title ?? "";
+    if (field === "description") return el.type === "span" ? (el.description ?? "") : "";
     if (field === "parent")     return getParentTitle(el);
     if (field === "parentType") return el.type === "span" ? (el.extendFrom ? "extend" : "branch") : "";
     if (field === "mergeInto")  return getMergeIntoTitle(el);
@@ -301,6 +303,9 @@ export default function SpreadsheetView({
     const updated = { ...el };
     if (field === "title") {
       const t = val.trim(); if (t) updated.title = t; else return null;
+    } else if (field === "description") {
+      if (el.type !== "span") return null;
+      const v = val.trim(); if (v) updated.description = v; else delete updated.description;
     } else if (field === "date") {
       const p = parseTimelineInput(val); if (p.value === null) return null;
       if (el.type === "event") { updated.date = p.value; if (p.label) updated.dateLabel = p.label; else delete updated.dateLabel; }
@@ -524,6 +529,7 @@ export default function SpreadsheetView({
 
     let val = "";
     if      (field === "title")  val = el.title ?? "";
+    else if (field === "description") { if (el.type !== "span") return; val = el.description ?? ""; }
     else if (field === "parent") val = getParentTitle(el);
     else if (field === "date")   val = String(el.type === "event" ? (el.date ?? "") : (el.start ?? ""));
     else if (field === "end")    { if (el.type === "event") return; val = String(el.end ?? ""); }
@@ -1499,10 +1505,20 @@ export default function SpreadsheetView({
       );
     }
 
+    if (field === "description" && el.type !== "span") {
+      return (
+        <td key={field} className={`sheet-cell sheet-cell-muted sheet-cell-disabled${selClass}`} style={{ width: cellW }}
+          onClick={(e) => selectCell(e, el.id, field)}>
+          <span className="sheet-cell-na">—</span>
+        </td>
+      );
+    }
+
     let display = "";
     if      (field === "date")   display = getDateDisplay(el);
     else if (field === "end")    display = getEndDisplay(el) ?? "";
     else if (field === "title")  display = el.title ?? "";
+    else if (field === "description") display = el.type === "span" ? (el.description ?? "") : "";
     else if (field === "tags")   display = (el.tags ?? []).join(", ");
     else if (field === "coords") display = (el.lat != null && el.lng != null) ? `${el.lat}, ${el.lng}` : "";
     else if (field === "wiki")   display = el.wikiUrl ?? "";

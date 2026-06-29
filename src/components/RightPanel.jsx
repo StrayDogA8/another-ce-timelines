@@ -989,6 +989,24 @@ export default function RightPanel({
               </div>
             </div>
 
+            {formData.type === "span" && (
+              <div className="form-group">
+                <div className="edit-row">
+                  <label htmlFor="description">Description</label>
+                  <div className="edit-separator" />
+                  <input
+                    id="description"
+                    type="text"
+                    value={formData.description || ""}
+                    onChange={(e) => handleChange("description", e.target.value)}
+                    onBlur={(e) => commitDraft({ ...formData, description: e.target.value })}
+                    className="edit-input"
+                    maxLength={200}
+                    placeholder="Short description..."
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Date/Start/End based on type */}
             {formData.type === "event" ? (

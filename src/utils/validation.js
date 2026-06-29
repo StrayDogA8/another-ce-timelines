@@ -216,5 +216,11 @@ export const buildValidatedUpdate = (draft, timelineData) => {
     }
   }
 
+  if (!nextData.description || !nextData.description.trim()) {
+    delete nextData.description;
+  } else {
+    nextData.description = nextData.description.trim();
+  }
+
   return { errors, nextData };
 };

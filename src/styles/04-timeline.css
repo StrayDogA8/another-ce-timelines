@@ -299,7 +299,19 @@
   white-space: nowrap;
 }
 
-.span-item.hide-span-years .span-years {
+.span-description {
+  margin-left: 7px;
+  color: var(--ui-muted);
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 400;
+}
+
+.span-item.hide-span-years .span-years,
+.span-item.hide-span-years .span-description {
   display: none;
 }
 
@@ -321,15 +333,18 @@
 
 .span-segment .span-title { margin-left: 5px; }
 .span-segment .span-years { margin-left: 5px; }
+.span-segment .span-description { margin-left: 5px; }
 
 .span-thin { z-index: 10; }
 .span-thin .span-title,
-.span-thin .span-years {
+.span-thin .span-years,
+.span-thin .span-description {
   font-size: 8px;
 }
 
 .span-thin-segment .span-title,
-.span-thin-segment .span-years {
+.span-thin-segment .span-years,
+.span-thin-segment .span-description {
   font-size: 8px;
 }
 

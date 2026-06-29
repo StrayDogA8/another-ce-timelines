@@ -3081,6 +3081,11 @@ const TimelineView = forwardRef(function TimelineView({
                             </>
                           );
                         })()}
+                        {!hideSpanDetails && span.description && (
+                          <span className="span-description" style={{ color: spanTextColor, opacity: 0.7 }}>
+                            {span.description}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -3263,6 +3268,11 @@ const TimelineView = forwardRef(function TimelineView({
                     </span>
                   );
                 })()}
+                {!hideSpanDetails && span.description && (
+                  <span className="span-description" style={{ color: spanTextColor, opacity: 0.7 }}>
+                    {span.description}
+                  </span>
+                )}
               </div>
             );
           })}
