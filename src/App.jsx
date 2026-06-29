@@ -39,6 +39,7 @@ const DEFAULT_GROUP = {
   title: "Main",
   order: 0,
   stack: 0,
+  hideBand: true,
   visible: true,
   locked: false,
 };
@@ -142,9 +143,10 @@ function App() {
   const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
-  const [isRightLocked, setIsRightLocked] = useState(false);
+  const [rightLockState, setRightLockState] = useState(null); // null | "open" | "closed"
   const [viewMode, setViewMode] = useState("timeline"); // "timeline" | "spreadsheet"
   const [isRightMaximized, setIsRightMaximized] = useState(false);
+  const [lastSelectedId, setLastSelectedId] = useState(null);
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -539,7 +541,8 @@ function App() {
 
   const handleSelect = (id) => {
     setSelectedId(id);
-    if (id && !isRightLocked) setIsRightCollapsed(false);
+    if (id) setLastSelectedId(id);
+    if (id && rightLockState !== "closed") setIsRightCollapsed(false);
   };
 
   const handleSearchSelect = (id) => {
@@ -550,13 +553,15 @@ function App() {
   };
 
   useEffect(() => {
-    if (!selectedId && isRightMaximized) {
+    if (!selectedId && isRightMaximized && rightLockState !== "open") {
       setIsRightMaximized(false);
     }
-    if (!selectedId && isRightCollapsed && !isRightLocked) {
-      setIsRightCollapsed(false);
+    if (!selectedId && rightLockState !== "open") {
+      if (!isRightCollapsed) {
+        // default: collapse when nothing selected
+      }
     }
-  }, [selectedId, isRightMaximized, isRightCollapsed, isRightLocked]);
+  }, [selectedId, isRightMaximized, isRightCollapsed, rightLockState]);
 
   const handleToggleTag = (tag) => {
     setActiveTags((prev) => {
@@ -654,7 +659,7 @@ function App() {
         let nextIndex = existing.length + 1;
         let nextId = `g-${nextIndex}`;
         while (existingIds.has(nextId)) { nextIndex++; nextId = `g-${nextIndex}`; }
-        group = { id: nextId, title, order: existing.length, stack: existing.length, visible: true, locked: false };
+        group = { id: nextId, title, order: existing.length, stack: existing.length, visible: true, locked: false, hideBand: true };
         updatedGroups = [...existing, group];
       }
       const updatedElements = (prevData.elements ?? []).map((el) =>
@@ -1912,6 +1917,13 @@ function App() {
   }
 
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
+  const displayedElement = selectedElement
+    || (rightLockState === "open" ? timelineData.elements.find((el) => el.id === lastSelectedId) : null);
+  const isRightPanelVisible = rightLockState === "closed"
+    ? false
+    : rightLockState === "open"
+      ? Boolean(displayedElement) && !isRightCollapsed
+      : Boolean(selectedElement) && !isRightCollapsed;
 
   return (
     <>
@@ -1920,15 +1932,17 @@ function App() {
         isLeftCollapsed={isLeftCollapsed}
         onToggleLeft={viewMode !== "spreadsheet" ? () => setIsLeftCollapsed((v) => !v) : undefined}
         showRightToggle={Boolean(selectedId) && viewMode !== "spreadsheet"}
-        isRightCollapsed={isRightCollapsed}
+        isRightCollapsed={!isRightPanelVisible}
         onToggleRight={viewMode !== "spreadsheet" ? () => {
-          if (isRightCollapsed) setIsRightLocked(false);
+          if (rightLockState === "closed") setRightLockState(null);
           setIsRightCollapsed((v) => !v);
         } : undefined}
-        isRightLocked={isRightLocked}
-        onToggleRightLock={viewMode !== "spreadsheet" ? () => {
-          if (!isRightLocked && !isRightCollapsed) setIsRightCollapsed(true);
-          setIsRightLocked((v) => !v);
+        rightLockState={rightLockState}
+        onCycleRightLock={viewMode !== "spreadsheet" ? () => {
+          setRightLockState((prev) => {
+            if (prev) return null;
+            return isRightPanelVisible ? "open" : "closed";
+          });
         } : undefined}
       />
       <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
@@ -2042,7 +2056,7 @@ function App() {
               onExportPng={handleDownloadPNG}
               onExportVideo={handleDownloadVideo}
               rightPanelWidth={rightWidth}
-              isRightPanelOpen={Boolean(selectedId) && !isRightCollapsed}
+              isRightPanelOpen={isRightPanelVisible}
               leftPanelWidth={currentLeftWidth}
               isLeftPanelOpen={!isLeftCollapsed}
               activeTags={activeTags}
@@ -2119,9 +2133,9 @@ function App() {
         />
       )}
 
-      {selectedId && viewMode !== "spreadsheet" && (
+      {viewMode !== "spreadsheet" && (
         <>
-          {!isRightMaximized && !isRightCollapsed && (
+          {!isRightMaximized && isRightPanelVisible && (
             <div
               className="right-resizer overlay-resizer"
               style={{ right: `${Math.max(rightWidth, MIN_WIDTH) - 3}px` }}
@@ -2136,7 +2150,7 @@ function App() {
             />
           )}
 
-          {isRightCollapsed && (
+          {!isRightPanelVisible && rightLockState !== "closed" && (
             <div
               className="right-resizer overlay-resizer"
               style={{ right: "-3px" }}
@@ -2151,7 +2165,7 @@ function App() {
             />
           )}
 
-          {!isRightCollapsed && (
+          {isRightPanelVisible && (
             <aside
               className="app-right overlay-right"
               style={{
@@ -2163,7 +2177,7 @@ function App() {
               <ErrorBoundary name="Right panel">
               <RightPanel
                 onSelect={handleSelect}
-                selectedElement={selectedElement}
+                selectedElement={displayedElement}
                 onUpdate={handleUpdate}
                 timelineData={timelineData}
                 editRequestId={editRequestId}

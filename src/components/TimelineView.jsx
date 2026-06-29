@@ -13,7 +13,8 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Map as MapIcon, GanttChartSquare, Table2, ExternalLink } from "lucide-react";
+import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
+import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Target, Map as MapIcon, GanttChartSquare, Table2, ExternalLink, HelpCircle } from "lucide-react";
 import { ICON_MAP } from "../config/elementIcons";
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
@@ -220,6 +221,8 @@ const TimelineView = forwardRef(function TimelineView({
   const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
   const [filterMenu, setFilterMenu] = useState(null);
+  const [filterQuery, setFilterQuery] = useState("");
+  const filterInputRef = useRef(null);
   const [showMap, setShowMap] = useState(false);
   const mapViewRef = useRef(null);
   const [sliderValue, setSliderValue] = useState(0);
@@ -1675,7 +1678,8 @@ const TimelineView = forwardRef(function TimelineView({
     }
 
     const rightOffset = isRightPanelOpen ? rightPanelWidth : 0;
-    const viewportCenterX = (containerRect.width - rightOffset) / 2;
+    const leftOffset = isLeftPanelOpen ? leftPanelWidth : 0;
+    const viewportCenterX = leftOffset + (containerRect.width - leftOffset - rightOffset) / 2;
     const viewportCenterY = containerRect.height / 2;
 
     // Calculate target translate values
@@ -1721,7 +1725,7 @@ const TimelineView = forwardRef(function TimelineView({
 
     let rafId = requestAnimationFrame(animate);
     return () => { if (rafId) cancelAnimationFrame(rafId); };
-  }, [selectedId, showMap]);
+  }, [selectedId, showMap, isRightPanelOpen, isLeftPanelOpen]);
 
   // Scrollbar position to selected element's year in map view
   useEffect(() => {
@@ -3746,6 +3750,66 @@ const TimelineView = forwardRef(function TimelineView({
             e.stopPropagation();
           }}
         >
+          <div className="fm-query-section">
+            <div className="fm-query-input-row">
+              <ListFilter size={13} className="fm-query-icon" />
+              <input
+                ref={filterInputRef}
+                className="fm-query-input"
+                placeholder="Filter elements…"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                onKeyDown={(e) => { if (e.key === "Escape" && !filterQuery) setFilterMenu(null); else if (e.key === "Escape") setFilterQuery(""); }}
+              />
+              {filterQuery && <button type="button" className="fm-query-clear" onClick={() => { setFilterQuery(""); filterInputRef.current?.focus(); }}>×</button>}
+            </div>
+            {[
+              { label: "TYPE", chips: [
+                { text: "event", insert: "is:event " }, { text: "span", insert: "is:span " },
+                { text: "era", insert: "is:era " }, { text: "has:coords", insert: "has:coords " },
+              ]},
+              { label: "DATE", chips: [
+                { text: ">", insert: ">" }, { text: "≥", insert: ">=" },
+                { text: "<", insert: "<" }, { text: "≤", insert: "<=" },
+              ]},
+              { label: "LOGIC", chips: [
+                { text: "|", insert: "| " }, { text: "~", insert: "~" },
+                { text: "(  )", insert: "() ", cursor: -2 },
+                { text: '" "', insert: '"" ', cursor: -2 },
+              ]},
+            ].map((row) => (
+              <div key={row.label} className="fm-chip-row">
+                <span className="fm-chip-label">{row.label}</span>
+                {row.chips.map((chip) => (
+                  <button
+                    key={chip.text}
+                    type="button"
+                    className="fm-chip"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const input = filterInputRef.current;
+                      if (!input) return;
+                      const pos = input.selectionStart ?? filterQuery.length;
+                      const next = filterQuery.slice(0, pos) + chip.insert + filterQuery.slice(pos);
+                      setFilterQuery(next);
+                      requestAnimationFrame(() => {
+                        input.focus();
+                        const newPos = pos + chip.insert.length + (chip.cursor || 0);
+                        input.setSelectionRange(newPos, newPos);
+                      });
+                    }}
+                  >{chip.text}</button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="fm-tags-header">
+            <span className="fm-tags-title">TAGS</span>
+            <span className="fm-tags-subtitle">SHOW ONLY</span>
+            <span className="fm-tags-count">{allTags.length} tags</span>
+          </div>
           <div className="filter-menu-dropdown">
             {allTags.length === 0 && (
               <div className="filter-menu-empty">No tags found</div>
@@ -3754,59 +3818,76 @@ const TimelineView = forwardRef(function TimelineView({
               const isShown = activeTags.includes(tag);
               const isHidden = hiddenTags.includes(tag);
               const isPinned = pinnedTags.includes(tag);
+              const count = timelineData?.elements?.filter((el) => el.tags?.includes(tag)).length || 0;
               return (
-                <div key={tag} className="context-menu-item filter-menu-item filter-menu-item-with-pin">
-                  <span className="filter-menu-label">{tag}</span>
-                  <div className="filter-menu-actions">
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleTag?.(tag);
-                      }}
-                      aria-label={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                      title={isShown ? "Disable show filter for tag" : "Enable show filter for tag"}
-                    >
-                      <Eye size={12} />
-                    </button>
+                <div
+                  key={tag}
+                  className={`sb-tag-row${isHidden ? " is-hidden" : ""}`}
+                  onClick={() => onToggleTag?.(tag)}
+                  title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
+                >
+                  <span className="sb-tag-name"><span className="sb-tag-hash">#</span>{tag}</span>
+                  <span className="sb-tag-count">{count}</span>
+                  <div className="sb-tag-actions">
                     <button
                       type="button"
                       className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleHiddenTag?.(tag);
-                      }}
-                      aria-label={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
-                      title={isHidden ? "Disable hide filter for tag" : "Enable hide filter for tag"}
+                      onClick={(e) => { e.stopPropagation(); onToggleHiddenTag?.(tag); }}
+                      title={isHidden ? "Show tag" : "Hide tag"}
                     >
-                      <EyeOff size={12} />
+                      {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
                     </button>
-                  <button
-                    type="button"
-                    className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTogglePinnedTag?.(tag);
-                    }}
-                    aria-label={isPinned ? "Remove label" : "Use as label"}
-                    title={isPinned ? "Remove label" : "Use as label"}
-                  >
-                    <Tag size={12} />
-                  </button>
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                      onClick={(e) => { e.stopPropagation(); onToggleTag?.(tag); }}
+                      title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
+                    >
+                      <Target size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
+                      onClick={(e) => { e.stopPropagation(); onTogglePinnedTag?.(tag); }}
+                      title={isPinned ? "Remove label" : "Use as label"}
+                    >
+                      <Tag size={12} />
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="filter-menu-divider" />
-          <button
-            className="context-menu-item"
-            type="button"
-            onClick={() => onClearTags?.()}
-          >
-            Clear
-          </button>
+          <div className="fm-footer">
+            <button
+              className="fm-footer-clear"
+              type="button"
+              onClick={() => { onClearTags?.(); setFilterQuery(""); }}
+            >
+              Clear
+            </button>
+            <span className="fm-footer-count">
+              {(() => {
+                const parsed = parseFilterQuery(filterQuery);
+                const total = timelineData?.elements?.length || 0;
+                const shown = parsed
+                  ? timelineData?.elements?.filter((el) => matchesFilter(el, parsed)).length || 0
+                  : total;
+                return <><strong>{shown}</strong> shown</>;
+              })()}
+            </span>
+            <button
+              type="button"
+              className="fm-footer-syntax"
+              title="Filter syntax help"
+              onClick={() => {
+                setFilterQuery((prev) => prev ? prev : "is:event ");
+                filterInputRef.current?.focus();
+              }}
+            >
+              <HelpCircle size={11} /> syntax
+            </button>
+          </div>
         </div>
       )}
 
