@@ -326,10 +326,28 @@ const TimelineView = forwardRef(function TimelineView({
       visible: true,
       locked: false,
     };
-    const configuredGroups =
-      file?.disableGroups
-        ? [DEFAULT_GROUP]
-        : Array.isArray(file?.groups) && file.groups.length > 0 ? file.groups : [DEFAULT_GROUP];
+    const DEFAULT_BELOW_GROUP = {
+      id: "g-main-below",
+      title: "Main (Below)",
+      order: 1,
+      stack: 1,
+      visible: true,
+      locked: false,
+      belowLine: true,
+    };
+    const sourceGroups = Array.isArray(file?.groups) && file.groups.length > 0 ? file.groups : [DEFAULT_GROUP];
+    let disabledGroupIdMap = null;
+    const configuredGroups = (() => {
+      if (!file?.disableGroups) return sourceGroups;
+      const hasBelowLineSource = sourceGroups.some((g) => g?.belowLine);
+      disabledGroupIdMap = new Map(
+        sourceGroups.map((g, index) => [
+          g?.id || `g-${index}`,
+          hasBelowLineSource && g?.belowLine ? DEFAULT_BELOW_GROUP.id : DEFAULT_GROUP.id,
+        ])
+      );
+      return hasBelowLineSource ? [DEFAULT_GROUP, DEFAULT_BELOW_GROUP] : [DEFAULT_GROUP];
+    })();
     const groups = configuredGroups.map((group, index) => ({
       ...group,
       id: group?.id || `g-${index}`,
@@ -342,7 +360,10 @@ const TimelineView = forwardRef(function TimelineView({
     );
     const groupIdSet = new Set(groups.map((group) => group.id));
     const defaultGroupId = groups[0]?.id || "g-main";
-    const getSafeGroupId = (groupId) => (groupIdSet.has(groupId) ? groupId : defaultGroupId);
+    const getSafeGroupId = (groupId) => {
+      if (disabledGroupIdMap) return disabledGroupIdMap.get(groupId) ?? defaultGroupId;
+      return groupIdSet.has(groupId) ? groupId : defaultGroupId;
+    };
 
     const adjustedEvents = events.map((event) => ({
       ...event,
