@@ -35,8 +35,6 @@ const safeName = (value) => String(value || '')
   .replace(/^-+|-+$/g, '')
   .toLowerCase();
 
-const getTimelineIdFromTitle = (title) => safeName(title) || 'timeline';
-
 const sanitizeId = (value, fallback = '') => safeName(value) || fallback;
 
 const sanitizeTimelinePath = (value) => {
@@ -94,25 +92,6 @@ const resolveNotePath = async (timelineId, notePath) => {
 
   return resolvedPath;
 };
-const ensureUniqueNoteFilename = async (notesDir, desiredFilename) => {
-  const base = String(desiredFilename || '').replace(/\.md$/i, '');
-  const cleaned = sanitizeId(base, 'note');
-  let candidate = `${cleaned}.md`;
-  let counter = 2;
-  while (true) {
-    try {
-      await fs.access(path.join(notesDir, candidate));
-      candidate = `${cleaned}-${counter}.md`;
-      counter += 1;
-    } catch (error) {
-      if (error?.code === 'ENOENT') {
-        return candidate;
-      }
-      throw error;
-    }
-  }
-};
-
 const readAppSettings = async () => {
   try {
     const content = await fs.readFile(appSettingsPath(), 'utf8');
