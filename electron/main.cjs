@@ -850,7 +850,7 @@ ipcMain.handle('fetch-wikipedia', async (event, { url }) => {
       return { success: false, error: 'Private or local URLs are not allowed' };
     }
     const response = await net.fetch(url, {
-      headers: { 'User-Agent': 'Timelines/0.5.0 (https://timelines.studio)' },
+      headers: { 'User-Agent': 'Timelines/0.6.0 (https://timelines.studio)' },
     });
     if (!response.ok) {
       return { success: false, error: `Request returned ${response.status}` };
