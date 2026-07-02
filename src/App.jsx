@@ -22,9 +22,11 @@ import {
   openTimelinesFolder,
   openNotesFolder,
   deleteNote,
+  deleteAsset,
   renameTimeline,
+  copyTimelineStorage,
 } from "./utils/electronApi";
-import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle } from "./utils/idUtils";
+import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle, getStorageId } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { countOldFormatThemes, isOldFormatTheme, migrateThemeColors } from "./utils/themeMigration";
@@ -49,6 +51,23 @@ const EMPTY_SELECTION_NAVIGATION = Object.freeze({
   nextElement: null,
 });
 const SELECTION_NAV_REPEAT_INTERVAL_MS = 140;
+
+// Bare filename of a local thumbnail; null for external URLs
+const getLocalThumbnailFilename = (thumbnail) => {
+  if (!thumbnail || typeof thumbnail !== "string") return null;
+  if (thumbnail.startsWith("timelines-asset://")) {
+    try {
+      const url = new URL(thumbnail);
+      const p = url.searchParams.get("p");
+      const decoded = p !== null ? p : decodeURIComponent(url.pathname.slice(1));
+      return decoded.split(/[\\/]/).pop() || null;
+    } catch {
+      return null;
+    }
+  }
+  if (!thumbnail.includes("://")) return thumbnail.split(/[\\/]/).pop() || null;
+  return null;
+};
 
 function App() {
   const normalizeTimelineData = useCallback((data) => {
@@ -153,6 +172,7 @@ function App() {
   const [screenshotToast, setScreenshotToast] = useState(false);
   const [deleteElementDialog, setDeleteElementDialog] = useState(null);
   const [deleteElementWithNotes, setDeleteElementWithNotes] = useState(false);
+  const [deleteElementWithImage, setDeleteElementWithImage] = useState(false);
   const [downloadPngTrigger, setDownloadPngTrigger] = useState(0);
   const [timelineData, setTimelineData] = useState(null);
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
@@ -763,14 +783,25 @@ function App() {
     if (!element) return;
     setDeleteElementDialog(element);
     setDeleteElementWithNotes(false);
+    setDeleteElementWithImage(false);
   };
 
   const handleConfirmDeleteElement = async () => {
     const element = deleteElementDialog;
     if (!element) return;
+    const timelineId = getStorageId(timelineData?.file) || 'timeline';
     if (deleteElementWithNotes && element.noteFile) {
-      const timelineId = timelineData?.file?.id?.replace('-timeline', '') || 'timeline';
       await deleteNote({ timelineId, filename: element.noteFile }).catch(console.error);
+    }
+    if (deleteElementWithImage) {
+      const filename = getLocalThumbnailFilename(element.thumbnail);
+      // Don't delete the file if another element still references the same image
+      const sharedWithOtherElement = filename && timelineData?.elements?.some(
+        (el) => el.id !== element.id && getLocalThumbnailFilename(el.thumbnail) === filename
+      );
+      if (filename && !sharedWithOtherElement) {
+        await deleteAsset({ timelineId, filename }).catch(console.error);
+      }
     }
     handleDelete(element.id);
     if (selectedId === element.id) {
@@ -1269,6 +1300,7 @@ function App() {
     const newTimeline = {
       file: {
         id: `${timelineId}-timeline`,
+        uid: timelineId,
         type: "timeline",
         title: timelineConfig.title,
         appVersion: "0.6.0-alpha.1",
@@ -1316,12 +1348,16 @@ function App() {
         file: {
           ...timelineData.file,
           id: `${duplicateId}-timeline`,
+          uid: duplicateId,
           title: duplicateName,
         },
       };
 
       // Save the duplicate
       await saveTimeline(duplicateData, duplicateId);
+
+      const sourceId = getStorageId(timelineData.file) || 'timeline';
+      await copyTimelineStorage({ sourceId, targetId: duplicateId });
 
       // Load the newly created duplicate
       setTimelineData(duplicateData);
@@ -2237,6 +2273,15 @@ function App() {
                   onChange={(e) => setDeleteElementWithNotes(e.target.checked)}
                 />
                 Also delete linked note file
+              </label>
+              <label className="confirm-checkbox">
+                <input
+                  type="checkbox"
+                  checked={deleteElementWithImage}
+                  disabled={!getLocalThumbnailFilename(deleteElementDialog.thumbnail)}
+                  onChange={(e) => setDeleteElementWithImage(e.target.checked)}
+                />
+                Also delete image file
               </label>
             </div>
 

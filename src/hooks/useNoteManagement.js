@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { renderNoteMarkdown } from "../utils/noteUtils";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage, importImageFromPath } from "../utils/electronApi";
 import { isSafeNoteFilename } from "../utils/validation";
+import { getStorageId } from "../utils/idUtils";
 
 export function useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate }) {
-  const timelineId = timelineData?.file?.id?.replace("-timeline", "") ?? null;
+  const timelineId = getStorageId(timelineData?.file);
   const [noteInitialContent, setNoteInitialContent] = useState("");
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [noteExists, setNoteExists] = useState(false);
@@ -38,7 +39,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
         setIsNoteAddOpen(false);
         return;
       }
-      const timelineId = timelineData?.file?.id?.replace("-timeline", "");
+      const timelineId = getStorageId(timelineData?.file);
       if (!timelineId) return;
       setIsNoteLoading(true);
       const result = await readNote({ timelineId, filename: selectedElement.noteFile });
@@ -110,7 +111,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
 
   const handleNoteSave = useCallback(async (content) => {
     if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
-    const timelineId = timelineData?.file?.id?.replace("-timeline", "");
+    const timelineId = getStorageId(timelineData?.file);
     if (!timelineId) return;
     await writeNote({ timelineId, filename: formData.noteFile, content });
     setNoteInitialContent(content);
@@ -130,7 +131,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
   }, [noteInitialContent, handleNoteSave]);
 
   const handleAddNote = useCallback(async () => {
-    const timelineId = timelineData?.file?.id?.replace("-timeline", "");
+    const timelineId = getStorageId(timelineData?.file);
     if (!timelineId) return;
     const result = await createNote({ timelineId, title: formData.title, elementId: formData.id });
     if (!result?.success) { console.error("Failed to create note:", result?.error); return; }
@@ -141,7 +142,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
   }, [formData, timelineData?.file?.id, onUpdate, setFormData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddExistingNote = useCallback(async () => {
-    const timelineId = timelineData?.file?.id?.replace("-timeline", "");
+    const timelineId = getStorageId(timelineData?.file);
     if (!timelineId) return;
     const result = await addExistingNote({ timelineId });
     if (!result?.success) {
@@ -163,7 +164,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
     const confirmed = window.confirm("Delete this note? This cannot be undone.");
     if (!confirmed) return;
-    const timelineId = timelineData?.file?.id?.replace("-timeline", "");
+    const timelineId = getStorageId(timelineData?.file);
     if (!timelineId) return;
     const result = await deleteNote({ timelineId, filename: formData.noteFile });
     if (!result?.success) { console.error("Failed to delete note:", result?.error); return; }
@@ -188,6 +189,8 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     if (!timelineId) return null;
     const result = await pickAndImportImage({ timelineId });
     if (result?.cancelled || !result?.success) return null;
+    // Root-relative paths don't resolve inside notes, use the full asset URL instead
+    if (result.relativePath && /[\\/]/.test(result.relativePath)) return result.assetUrl;
     return result.relativePath;
   }, [timelineId]);
 

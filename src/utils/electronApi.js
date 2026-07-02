@@ -211,6 +211,26 @@ export async function importImageFromPath({ timelineId, filePath }) {
   }
 }
 
+export async function copyTimelineStorage({ sourceId, targetId }) {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.copyTimelineStorage({ sourceId, targetId });
+  } catch (error) {
+    console.error('Error copying timeline storage:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteAsset({ timelineId, filename }) {
+  if (!isElectron()) return { success: false, error: 'Not in Electron environment' };
+  try {
+    return await window.electron.deleteAsset({ timelineId, filename });
+  } catch (error) {
+    console.error('Error deleting asset:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getNotesBaseDir() {
   if (!isElectron()) {
     console.warn('Not running in Electron');

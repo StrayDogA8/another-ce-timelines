@@ -150,6 +150,7 @@ export default function HomePage({
   const [showAllFolders, setShowAllFolders] = useState(false);
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
+  const [deleteDialogWithNotes, setDeleteDialogWithNotes] = useState(false);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
   const [settingsSection, setSettingsSection] = useState("general");
   const [updateStatus, setUpdateStatus] = useState(null); // null | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'dev'
@@ -399,12 +400,18 @@ export default function HomePage({
         file: {
           ...originalData.file,
           id: `${duplicateId}-timeline`,
+          uid: duplicateId,
           title: duplicateName,
         },
       };
 
       // Save the duplicate
       await window.electron.saveTimeline(duplicateData, duplicateId);
+
+      const sourceId = originalData.file?.uid || originalData.file?.id?.replace('-timeline', '') || file.id.split('/').pop();
+      if (window.electron?.copyTimelineStorage) {
+        await window.electron.copyTimelineStorage({ sourceId, targetId: duplicateId });
+      }
 
       // Reload timeline list
       if (window.electron?.listTimelines) {
@@ -485,6 +492,7 @@ export default function HomePage({
 
   const handleDelete = async (file) => {
     setDeleteDialogFile(file);
+    setDeleteDialogWithNotes(false);
     setDeleteDialogWithAssets(false);
   };
 
@@ -496,6 +504,7 @@ export default function HomePage({
       if (window.electron?.deleteTimeline) {
         await window.electron.deleteTimeline({
           id: file.id,
+          deleteNotes: deleteDialogWithNotes,
           deleteAssets: deleteDialogWithAssets,
         });
 
@@ -1333,10 +1342,18 @@ export default function HomePage({
               <label className="confirm-checkbox">
                 <input
                   type="checkbox"
+                  checked={deleteDialogWithNotes}
+                  onChange={(e) => setDeleteDialogWithNotes(e.target.checked)}
+                />
+                Also delete notes for this timeline
+              </label>
+              <label className="confirm-checkbox">
+                <input
+                  type="checkbox"
                   checked={deleteDialogWithAssets}
                   onChange={(e) => setDeleteDialogWithAssets(e.target.checked)}
                 />
-                Also delete notes/assets for this timeline
+                Also delete images for this timeline
               </label>
             </div>
 

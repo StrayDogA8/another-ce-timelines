@@ -43,6 +43,9 @@ const sanitizeTimelinePath = (value) => {
   return sanitized.length > 0 ? sanitized.join('/') : 'timeline';
 };
 
+// Notes/assets folders are keyed by immutable file.uid; older timelines fall back to file.id
+const deriveStorageId = (file) => file?.uid || file?.id?.replace('-timeline', '') || null;
+
 async function listTimelineFilesRecursive(dir, baseDir) {
   const results = [];
   try {
@@ -462,7 +465,7 @@ ipcMain.handle('save-timeline', async (event, { data, filename }) => {
     const safePath = sanitizeTimelinePath(filename);
     const filePath = path.join(dataDir, `${safePath}.timeline`);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    const dataToSave = { ...data, elements: stripThumbnails(data.elements) };
+    const dataToSave = { ...data, elements: await stripThumbnails(data.elements, deriveStorageId(data.file)) };
     await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf8');
     return { success: true, message: 'Timeline saved successfully', path: filePath };
   } catch (error) {
@@ -512,8 +515,16 @@ ipcMain.handle('load-timeline', async (event, filename) => {
     const filePath = path.join(userDataDir, `${safePath}.timeline`);
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
-    const timelineId = data.file?.id?.replace('-timeline', '');
-    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, timelineId) };
+    if (data.file && !data.file.uid) {
+      // One-time migration: stamp the immutable storage uid
+      data.file.uid = data.file.id?.replace('-timeline', '') || safePath.split('/').pop();
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8')
+        .catch((e) => console.warn('Could not persist timeline uid:', e.message));
+    }
+    const storageId = deriveStorageId(data.file);
+    await healMissingAssets(data.elements, storageId, filePath)
+      .catch((e) => console.warn('Asset folder recovery skipped:', e.message));
+    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, storageId) };
     console.log(`Loaded timeline: ${filename}`);
     return resolvedData;
   } catch (error) {
@@ -536,7 +547,7 @@ ipcMain.handle('export-timeline', async (event, { data, suggestedName }) => {
       return { success: false, canceled: true };
     }
 
-    const dataToExport = { ...data, elements: stripThumbnails(data.elements) };
+    const dataToExport = { ...data, elements: await stripThumbnails(data.elements, deriveStorageId(data.file)) };
     await fs.writeFile(filePath, JSON.stringify(dataToExport, null, 2), 'utf8');
 
     return {
@@ -568,8 +579,11 @@ ipcMain.handle('import-timeline', async () => {
 
     const content = await fs.readFile(filePaths[0], 'utf8');
     const data = JSON.parse(content);
-    const timelineId = data.file?.id?.replace('-timeline', '');
-    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, timelineId) };
+    if (data.file && !data.file.uid) {
+      data.file.uid = data.file.id?.replace('-timeline', '')
+        || path.basename(filePaths[0]).replace(/\.(timeline|json)$/i, '');
+    }
+    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, deriveStorageId(data.file)) };
 
     return {
       success: true,
@@ -588,11 +602,20 @@ ipcMain.handle('import-timeline', async () => {
 ipcMain.handle('delete-timeline', async (event, payload) => {
   try {
     const request = payload && typeof payload === 'object' ? payload : { id: payload };
+    const deleteNotes = Boolean(request.deleteNotes);
     const deleteAssets = Boolean(request.deleteAssets);
     const filename = request.id ?? request.filename ?? request.timelineId;
     const userDataDir = await getTimelinesDir();
     const safePath = sanitizeTimelinePath(filename);
     const filePath = path.join(userDataDir, `${safePath}.timeline`);
+
+    // Storage key can differ from the filename, so read it before deleting the file
+    let storageId = safePath.split('/').pop();
+    try {
+      const data = JSON.parse(await fs.readFile(filePath, 'utf8'));
+      const idFromFile = deriveStorageId(data.file);
+      if (idFromFile) storageId = idFromFile;
+    } catch {}
 
     await fs.unlink(filePath);
     console.log(`Deleted timeline: ${filename}`);
@@ -604,9 +627,13 @@ ipcMain.handle('delete-timeline', async (event, payload) => {
       if (remaining.length === 0) await fs.rmdir(dir).catch(() => {});
     }
 
-    if (deleteAssets) {
-      const notesDir = await getNotesDir(safePath);
+    if (deleteNotes) {
+      const notesDir = await getNotesDir(storageId);
       await fs.rm(notesDir, { recursive: true, force: true });
+    }
+    if (deleteAssets) {
+      const assetsDir = await getAssetsDir(storageId);
+      await fs.rm(assetsDir, { recursive: true, force: true });
     }
 
     return { success: true };
@@ -916,11 +943,7 @@ ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
     await fs.mkdir(path.dirname(newFilePath), { recursive: true });
     await fs.rename(oldFilePath, newFilePath).catch(e => { if (e.code !== 'ENOENT') throw e; });
 
-    const notesBase = await getNotesRootDir();
-    const oldNotesPath = path.join(notesBase, safeOldPath.split('/').pop());
-    const newNotesPath = path.join(notesBase, safeNewPath.split('/').pop());
-    await fs.rename(oldNotesPath, newNotesPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
-
+    // Storage folders are keyed by immutable file.uid, so they don't move on rename
     return { success: true };
   } catch (error) {
     console.error('Error renaming timeline:', error);
@@ -1239,46 +1262,147 @@ ipcMain.handle('get-assets-base-dir', async () => {
   }
 });
 
-function extractThumbnailFilename(thumbnail) {
+const toAssetUrl = (absPath) => `timelines-asset://asset?p=${encodeURIComponent(path.normalize(absPath))}`;
+
+const toPosixRelative = (from, to) => {
+  const rel = path.relative(from, path.normalize(to));
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/');
+};
+
+// Storage ref for a thumbnail: bare filename (in the timeline's assets folder)
+// or slash path (relative to the assets root)
+function extractThumbnailRef(thumbnail, assetsRoot, timelineAssetsDir) {
   if (!thumbnail || typeof thumbnail !== 'string') return null;
   if (thumbnail.startsWith('timelines-asset://')) {
     try {
       const url = new URL(thumbnail);
       const p = url.searchParams.get('p');
       const decoded = p !== null ? p : decodeURIComponent(url.pathname.slice(1));
+      if (timelineAssetsDir) {
+        const rel = toPosixRelative(timelineAssetsDir, decoded);
+        if (rel) return rel;
+      }
+      if (assetsRoot) {
+        const rel = toPosixRelative(assetsRoot, decoded);
+        if (rel) return rel;
+      }
       return path.basename(decoded);
     } catch { return null; }
   }
-  if (!thumbnail.includes('://')) return thumbnail; // already a bare filename
-  return null; // external URL — don't touch
+  if (!thumbnail.includes('://')) return thumbnail; // already a stored ref
+  return null; // external URL, don't touch
 }
 
-async function resolveThumbnailUrl(filename, timelineId) {
-  if (!filename || !timelineId) return null;
-  try {
-    const dir = await getAssetsDir(timelineId);
-    return `timelines-asset://asset?p=${encodeURIComponent(path.normalize(path.join(dir, filename)))}`;
-  } catch { return null; }
+// Bare refs prefer the timeline folder, slash refs the assets root;
+// whichever exists on disk wins, so legacy refs keep resolving either way
+async function resolveThumbnailRef(ref, assetsRoot, timelineAssetsDir) {
+  if (!ref) return null;
+  const hasSlash = ref.includes('/') || ref.includes('\\');
+  const candidates = hasSlash
+    ? [path.join(assetsRoot, ref), path.join(timelineAssetsDir, ref)]
+    : [path.join(timelineAssetsDir, ref), path.join(assetsRoot, ref)];
+  const normalizedRoot = path.normalize(assetsRoot);
+  const contained = candidates
+    .map((candidate) => path.normalize(candidate))
+    .filter((candidate) => candidate.startsWith(normalizedRoot + path.sep));
+  for (const candidate of contained) {
+    try {
+      await fs.access(candidate);
+      return toAssetUrl(candidate);
+    } catch {}
+  }
+  return contained.length > 0 ? toAssetUrl(contained[0]) : null;
 }
 
-function stripThumbnails(elements) {
+async function stripThumbnails(elements, storageId) {
   if (!Array.isArray(elements)) return elements;
+  const assetsRoot = await getAssetsRootDir();
+  const timelineAssetsDir = storageId ? await getAssetsDir(storageId) : null;
   return elements.map(el => {
     if (!el.thumbnail) return el;
-    const filename = extractThumbnailFilename(el.thumbnail);
-    return filename ? { ...el, thumbnail: filename } : el;
+    const ref = extractThumbnailRef(el.thumbnail, assetsRoot, timelineAssetsDir);
+    return ref ? { ...el, thumbnail: ref } : el;
   });
 }
 
-async function resolveThumbnails(elements, timelineId) {
-  if (!Array.isArray(elements) || !timelineId) return elements;
+async function resolveThumbnails(elements, storageId) {
+  if (!Array.isArray(elements) || !storageId) return elements;
+  const assetsRoot = await getAssetsRootDir();
+  const timelineAssetsDir = await getAssetsDir(storageId);
   return Promise.all(elements.map(async el => {
     if (!el.thumbnail) return el;
-    const filename = extractThumbnailFilename(el.thumbnail);
-    if (!filename) return el;
-    const url = await resolveThumbnailUrl(filename, timelineId);
+    const ref = extractThumbnailRef(el.thumbnail, assetsRoot, timelineAssetsDir);
+    if (!ref) return el;
+    const url = await resolveThumbnailRef(ref, assetsRoot, timelineAssetsDir);
     return url ? { ...el, thumbnail: url } : el;
   }));
+}
+
+// If the expected assets folder is missing but exactly one other folder
+// contains every referenced image, recover it: orphaned folders (pre-uid
+// rename) are renamed, folders owned by another timeline (pre-fix duplicate)
+// are copied
+async function healMissingAssets(elements, storageId, currentFilePath) {
+  if (!Array.isArray(elements) || !storageId) return;
+  const refs = [...new Set(
+    elements
+      .map(el => el.thumbnail)
+      .filter(t => t && typeof t === 'string' && !t.includes('://') && !/[\\/]/.test(t))
+  )];
+  if (refs.length === 0) return;
+
+  const dir = await getAssetsDir(storageId);
+  const root = await getAssetsRootDir();
+
+  try { await fs.access(dir); return; } catch {}
+
+  // In-place custom assets at the root already resolve, nothing to recover
+  let allAtRoot = true;
+  for (const ref of refs) {
+    try { await fs.access(path.join(root, ref)); } catch { allAtRoot = false; break; }
+  }
+  if (allAtRoot) return;
+
+  const timelinesDir = await getTimelinesDir();
+  const files = await listTimelineFilesRecursive(timelinesDir, timelinesDir);
+  const otherIds = new Set();
+  for (const f of files) {
+    if (path.normalize(f.fullPath) === path.normalize(currentFilePath)) continue;
+    otherIds.add(f.relativeId.split('/').pop());
+    try {
+      const d = JSON.parse(await fs.readFile(f.fullPath, 'utf8'));
+      const sid = deriveStorageId(d.file);
+      if (sid) otherIds.add(sid);
+    } catch {}
+  }
+
+  let match = null;
+  let matchOwned = false;
+  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const candidate = path.join(root, entry.name);
+    let containsAll = true;
+    for (const ref of refs) {
+      try { await fs.access(path.join(candidate, ref)); } catch { containsAll = false; break; }
+    }
+    if (containsAll) {
+      if (match) return; // multiple matches, don't guess
+      match = candidate;
+      matchOwned = otherIds.has(entry.name);
+    }
+  }
+  if (!match) return;
+
+  if (matchOwned) {
+    // Another timeline's folder: copy so both keep their images
+    await fs.cp(match, dir, { recursive: true });
+    console.log(`Copied assets folder: ${path.basename(match)} -> ${storageId}`);
+  } else {
+    await fs.rename(match, dir);
+    console.log(`Recovered orphaned assets folder: ${path.basename(match)} -> ${storageId}`);
+  }
 }
 
 async function importImageByPath(imagePath, timelineId) {
@@ -1305,8 +1429,10 @@ async function importImageByPath(imagePath, timelineId) {
     finalAssetPath = destPath;
   }
 
-  const assetUrl = `timelines-asset://asset?p=${encodeURIComponent(path.normalize(finalAssetPath))}`;
-  return { success: true, relativePath: path.basename(finalAssetPath), assetUrl };
+  const ref = toPosixRelative(timelineAssetsDir, finalAssetPath)
+    ?? toPosixRelative(assetsBase, finalAssetPath)
+    ?? path.basename(finalAssetPath);
+  return { success: true, relativePath: ref, assetUrl: toAssetUrl(finalAssetPath) };
 }
 
 ipcMain.handle('pick-and-import-image', async (event, { timelineId }) => {
@@ -1329,6 +1455,47 @@ ipcMain.handle('import-image-from-path', async (event, { timelineId, filePath })
     return await importImageByPath(filePath, timelineId);
   } catch (error) {
     console.error('Error importing dropped image:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('copy-timeline-storage', async (event, { sourceId, targetId }) => {
+  try {
+    if (!sourceId || !targetId) return { success: false, error: 'Missing sourceId or targetId' };
+    if (sourceId === targetId) return { success: true };
+    const pairs = [
+      [await getNotesDir(sourceId), await getNotesDir(targetId)],
+      [await getAssetsDir(sourceId), await getAssetsDir(targetId)],
+    ];
+    for (const [src, dest] of pairs) {
+      try {
+        await fs.cp(src, dest, { recursive: true });
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error copying timeline storage:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-asset', async (event, { timelineId, filename }) => {
+  try {
+    if (!timelineId || !filename) {
+      return { success: false, error: 'Missing timelineId or filename' };
+    }
+    const dir = await getAssetsDir(timelineId);
+    const filePath = path.normalize(path.join(dir, path.basename(filename)));
+    if (!filePath.startsWith(path.normalize(dir) + path.sep)) {
+      return { success: false, error: 'Invalid asset path' };
+    }
+    await fs.unlink(filePath);
+    return { success: true };
+  } catch (error) {
+    if (error.code === 'ENOENT') return { success: true };
+    console.error('Error deleting asset:', error);
     return { success: false, error: error.message };
   }
 });

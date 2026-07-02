@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('electron', {
   getAssetsBaseDir: () => ipcRenderer.invoke('get-assets-base-dir'),
   pickAndImportImage: (payload) => ipcRenderer.invoke('pick-and-import-image', payload),
   importImageFromPath: (payload) => ipcRenderer.invoke('import-image-from-path', payload),
+  copyTimelineStorage: (payload) => ipcRenderer.invoke('copy-timeline-storage', payload),
+  deleteAsset: (payload) => ipcRenderer.invoke('delete-asset', payload),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   chooseAssetsDir: () => ipcRenderer.invoke('choose-assets-dir'),
   openAssetsFolder: () => ipcRenderer.invoke('open-assets-folder'),

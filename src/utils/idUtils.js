@@ -16,6 +16,15 @@ export function generateIdFromTitle(title, type) {
 }
 
 
+/**
+ * Storage key for a timeline's notes/assets folders: the immutable file.uid,
+ * with fallback to the title-derived file.id for older timelines.
+ */
+export function getStorageId(file) {
+  return file?.uid ?? file?.id?.replace("-timeline", "") ?? null;
+}
+
+
 const RANDOM_ID_RETRY_LIMIT = 1024;
 
 const getRandomDigits = (length = 12) => {
