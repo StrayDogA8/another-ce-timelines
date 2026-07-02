@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useMemo } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
+import { getAppSettings, saveAppSettings } from "../utils/appSettings.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
   const [dest, setDest] = useState(null);
@@ -133,7 +134,8 @@ export default function HomePage({
   const [view, setView] = useState(settingsOnly ? "settings" : "home");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const [sortMode, setSortMode] = useState(() => localStorage.getItem("home-sort-mode") || "date");
+  const [sortMode, setSortMode] = useState("date");
+  useEffect(() => { getAppSettings().then(s => { if (s.homeSortMode) setSortMode(s.homeSortMode); }); }, []);
   const [currentFolder, setCurrentFolder] = useState("");
   const [allFolders, setAllFolders] = useState([]);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
@@ -633,7 +635,7 @@ export default function HomePage({
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <button
                 className="timeline-view-toggle timeline-sort-btn"
-                onClick={() => setSortMode(s => { const next = s === "date" ? "name" : s === "name" ? "name-desc" : "date"; localStorage.setItem("home-sort-mode", next); return next; })}
+                onClick={() => setSortMode(s => { const next = s === "date" ? "name" : s === "name" ? "name-desc" : "date"; saveAppSettings({ homeSortMode: next }); return next; })}
                 aria-label="Toggle sort"
                 title={sortMode === "date" ? "Sort: Date modified" : sortMode === "name" ? "Sort: A–Z" : "Sort: Z–A"}
               >
