@@ -22,11 +22,19 @@
   overflow: hidden;
   background-color: var(--app-bg);
   position: relative;
+  touch-action: none;
 }
 
 .timeline-scroll,
 .timeline {
   user-select: none;
+}
+
+/* Overlay controls keep native touch behavior (canvas gestures are JS-handled) */
+.timeline-scroll .timeline-canvas-bar,
+.timeline-scroll .timeline-slider-container,
+.timeline-scroll .timeline-context-menu {
+  touch-action: auto;
 }
 
 /* canvas */

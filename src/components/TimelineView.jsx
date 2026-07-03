@@ -1653,16 +1653,97 @@ const TimelineView = forwardRef(function TimelineView({
       }
     };
 
+    // No preventDefault on touchstart so taps still become clicks (selection)
+    const touchExcludeSelector = [
+      ".leaflet-container",
+      ".timeline-canvas-bar",
+      ".timeline-slider-container",
+      ".timeline-context-menu",
+      "input", "textarea", "button", "select", "a",
+    ].join(", ");
+    let touchPanning = false;
+    let pinching = false;
+    let lastTouch = { x: 0, y: 0 };
+    let pinchDist = 0;
+    let pinchMid = { x: 0, y: 0 };
+    const midpointOf = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    const distanceOf = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+    const applyTouchPan = (dx, dy) => {
+      translateRef.current.x += dx;
+      translateRef.current.y += dy;
+      const { minX, maxX, range } = getPanBounds(container);
+      translateRef.current.x = Math.min(maxX, Math.max(minX, translateRef.current.x));
+      applyTransform();
+      if (!isPlaying && range > 0) {
+        const panPercentage = ((maxX - translateRef.current.x) / range) * 100;
+        queueSliderValue(Math.min(100, Math.max(0, panPercentage)));
+      }
+    };
+
+    const handleTouchStart = (e) => {
+      if (e.target.closest(touchExcludeSelector)) return;
+      if (e.touches.length === 2) {
+        pinching = true;
+        touchPanning = false;
+        pinchDist = distanceOf(e.touches[0], e.touches[1]);
+        pinchMid = midpointOf(e.touches[0], e.touches[1]);
+      } else if (e.touches.length === 1) {
+        touchPanning = true;
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (pinching && e.touches.length >= 2) {
+        e.preventDefault();
+        const dist = distanceOf(e.touches[0], e.touches[1]);
+        const mid = midpointOf(e.touches[0], e.touches[1]);
+        if (pinchDist > 0 && dist > 0) {
+          zoomToPoint(dist / pinchDist, mid.x, mid.y, { commitState: false });
+        }
+        applyTouchPan(mid.x - pinchMid.x, mid.y - pinchMid.y);
+        pinchDist = dist;
+        pinchMid = mid;
+      } else if (touchPanning && e.touches.length === 1) {
+        e.preventDefault();
+        const t = e.touches[0];
+        applyTouchPan(t.clientX - lastTouch.x, t.clientY - lastTouch.y);
+        lastTouch = { x: t.clientX, y: t.clientY };
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (pinching && e.touches.length < 2) {
+        pinching = false;
+        setCurrentScale(scaleRef.current);
+        if (onZoomChange) onZoomChange(scaleRef.current);
+        if (e.touches.length === 1) {
+          touchPanning = true;
+          lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+      }
+      if (e.touches.length === 0) touchPanning = false;
+    };
+
     container.addEventListener("wheel", handleWheel, { passive: false });
     container.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    container.addEventListener("touchcancel", handleTouchEnd);
 
     return () => {
       container.removeEventListener("wheel", handleWheel);
       container.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchEnd);
     };
   }, [onZoomChange, timelineWidth, isPlaying]);
 

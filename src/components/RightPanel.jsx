@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
-import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText, BookOpen, ImagePlus, RotateCcw } from "lucide-react";
+import { Maximize2, Minimize2, Underline, Link, Trash2, Unlink, ChevronLeft, ChevronRight, ChevronDown, Pencil, ExternalLink, Calendar, FileText, BookOpen, ImagePlus, RotateCcw, X } from "lucide-react";
 import NoteEditor from "./NoteEditor";
 import WikiSection from "./WikiSection";
 import SourcesSection from "./SourcesSection";
@@ -51,6 +51,7 @@ export default function RightPanel({
   prevElement,
   nextElement,
   readOnly = false,
+  onClose,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -747,13 +748,23 @@ export default function RightPanel({
               {isEditMode ? <BookOpen size={18} /> : <Pencil size={18} />}
             </button>
           )}
-          <button
-            className="close-button"
-            onClick={onToggleMaximize}
-            title={isMaximized ? "Restore panel" : "Maximize panel"}
-          >
-            {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-          </button>
+          {onClose ? (
+            <button
+              className="close-button"
+              onClick={onClose}
+              title="Close panel"
+            >
+              <X size={18} />
+            </button>
+          ) : (
+            <button
+              className="close-button"
+              onClick={onToggleMaximize}
+              title={isMaximized ? "Restore panel" : "Maximize panel"}
+            >
+              {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
+          )}
         </div>
       </div>
 

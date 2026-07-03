@@ -11,6 +11,7 @@ const DEFAULT_GROUP_ID = "g-main";
 const SIDEBAR_WIDTH = 350;
 const SIDEBAR_COLLAPSED_WIDTH = 44;
 const RIGHT_PANEL_WIDTH = 340;
+const MIN_CANVAS_WIDTH = 280;
 
 // Written by the site's theme picker (same origin); only the landing screen follows it
 const WEBSITE_THEME_KEY = "timelines-website-theme";
@@ -140,7 +141,14 @@ export default function ViewerApp() {
   const [pinnedTags, setPinnedTags] = useState([]);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightMaximized, setIsRightMaximized] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     const themeConfig = loadThemeConfig();
@@ -437,6 +445,9 @@ export default function ViewerApp() {
   const selectedElement = timelineData.elements.find((el) => el.id === selectedId);
   const isRightPanelVisible = Boolean(selectedElement) && viewMode !== "spreadsheet";
   const currentLeftWidth = isLeftCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+  // Compact = both panels open would leave too little canvas to be usable
+  const isCompact = viewportWidth - currentLeftWidth - RIGHT_PANEL_WIDTH < MIN_CANVAS_WIDTH;
+  const rightMaximized = isRightPanelVisible && (isRightMaximized || isCompact);
   const tagColors = timelineData.file?.tagColors || {};
 
   return (
@@ -465,7 +476,7 @@ export default function ViewerApp() {
         </aside>
       )}
 
-      <main className="app-content" style={{ display: isRightMaximized ? "none" : "block" }}>
+      <main className="app-content" style={{ display: rightMaximized ? "none" : "block" }}>
         {viewMode === "spreadsheet" ? (
           <ErrorBoundary name="Spreadsheet">
             <SpreadsheetView
@@ -518,7 +529,9 @@ export default function ViewerApp() {
         <aside
           className="app-right overlay-right"
           style={{
-            width: isRightMaximized ? `calc(100% - ${currentLeftWidth}px)` : RIGHT_PANEL_WIDTH,
+            width: rightMaximized
+              ? isCompact ? "100%" : `calc(100% - ${currentLeftWidth}px)`
+              : RIGHT_PANEL_WIDTH,
           }}
         >
           <ErrorBoundary name="Right panel">
@@ -528,8 +541,9 @@ export default function ViewerApp() {
               selectedElement={selectedElement}
               onUpdate={() => {}}
               timelineData={timelineData}
-              isMaximized={isRightMaximized}
+              isMaximized={rightMaximized}
               onToggleMaximize={() => setIsRightMaximized((prev) => !prev)}
+              onClose={isCompact ? () => setSelectedId(null) : undefined}
               activeTags={activeTags}
               onToggleTag={handleToggleTag}
               tagColors={tagColors}
