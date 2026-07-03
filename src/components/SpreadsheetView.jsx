@@ -45,6 +45,7 @@ export default function SpreadsheetView({
   onClearTags,
   pinnedTags = [],
   onTogglePinnedTag,
+  readOnly = false,
 }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -389,7 +390,7 @@ export default function SpreadsheetView({
     const handler = (e) => {
       if (e.key === "Escape") { setSelectedCell(null); return; }
       if (editCell) return;
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (!readOnly && (e.key === "Delete" || e.key === "Backspace")) {
         const el = elements.find((x) => x.id === selectedCell.id);
         if (!el) return;
         const { field } = selectedCell;
@@ -415,7 +416,7 @@ export default function SpreadsheetView({
           ? JSON.stringify(el.sources ?? [])
           : (getCellDisplayValue(el, field) ?? "");
         navigator.clipboard?.writeText(text).catch(() => {});
-      } else if (e.key === "x") {
+      } else if (e.key === "x" && !readOnly) {
         e.preventDefault();
         if (field === "sources") {
           const text = JSON.stringify(el.sources ?? []);
@@ -429,7 +430,7 @@ export default function SpreadsheetView({
             if (updated) onUpdate(updated);
           }).catch(() => {});
         }
-      } else if (e.key === "v") {
+      } else if (e.key === "v" && !readOnly) {
         e.preventDefault();
         navigator.clipboard?.readText().then((text) => {
           if (field === "sources") {
@@ -450,7 +451,7 @@ export default function SpreadsheetView({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [selectedCell, editCell, elements, getCellDisplayValue, computeFieldUpdate, onUpdate]);
+  }, [selectedCell, editCell, elements, getCellDisplayValue, computeFieldUpdate, onUpdate, readOnly]);
 
   // Keep thead top in sync with sticky wrapper height
   useLayoutEffect(() => {
@@ -522,6 +523,7 @@ export default function SpreadsheetView({
   };
 
   const startEdit = (e, id, field) => {
+    if (readOnly) return;
     e.stopPropagation();
     if (editCell?.id === id && editCell?.field === field) return;
     const el = elements.find((x) => x.id === id);
@@ -799,6 +801,8 @@ export default function SpreadsheetView({
 
   const w = (key) => colWidths[key] ?? DEFAULT_WIDTHS[key] ?? 100;
 
+  const hasHeaderMenu = Boolean(onBackToHome) || (!readOnly && Boolean(onOpenSettings));
+
   const triggerDownload = (content, filename, type) => {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
@@ -1062,7 +1066,7 @@ export default function SpreadsheetView({
         <td key={field}
           className={`sheet-cell sheet-cell-center sheet-cell-editable${selClass}`}
           style={{ width: cellW }}
-          onClick={(e) => { selectCell(e, el.id, field); toggleHideYear(e, el); }}
+          onClick={(e) => { selectCell(e, el.id, field); if (!readOnly) toggleHideYear(e, el); }}
         >
           {el.hideYears && <Check size={13} className="sheet-check-icon" />}
         </td>
@@ -1247,6 +1251,7 @@ export default function SpreadsheetView({
       const timelineId = file.id?.replace("-timeline", "");
       const openPanel = (e) => {
         selectCell(e, el.id, field);
+        if (readOnly) return;
         if (!isPanelOpen) {
           const isRemote = el.thumbnail?.startsWith("http://") || el.thumbnail?.startsWith("https://");
           setThumbPanelCellId(el.id);
@@ -1552,7 +1557,7 @@ export default function SpreadsheetView({
 
   return (
     <div
-      className="sheet-container"
+      className={`sheet-container${readOnly ? " sheet-readonly" : ""}`}
       style={{
         paddingLeft: leftPanelWidth,
         paddingRight: isRightPanelOpen ? rightPanelWidth : 0,
@@ -1562,10 +1567,10 @@ export default function SpreadsheetView({
       <div ref={stickyTopRef} className="sheet-sticky-top">
       {/* Header bar: title/menu + search + new */}
       <div className="sheet-header">
-        <div className="sheet-header-title-wrap" ref={headerMenuRef} onClick={() => setHeaderMenuOpen((v) => !v)}>
-          <div className="sidebar-header" style={{ margin: 0, padding: 0, border: 'none', cursor: 'pointer' }}>
+        <div className="sheet-header-title-wrap" ref={headerMenuRef} onClick={() => { if (hasHeaderMenu) setHeaderMenuOpen((v) => !v); }}>
+          <div className="sidebar-header" style={{ margin: 0, padding: 0, border: 'none', cursor: hasHeaderMenu ? 'pointer' : 'default' }}>
             <h2 className="timeline-title">{displayName}</h2>
-            <ChevronDown size={16} className="sidebar-menu" strokeWidth={2} color="var(--text-primary)" />
+            {hasHeaderMenu && <ChevronDown size={16} className="sidebar-menu" strokeWidth={2} color="var(--text-primary)" />}
           </div>
           {file.title && (
             <div className="sidebar-info" style={{ padding: 0, border: 'none' }}>
@@ -1579,7 +1584,7 @@ export default function SpreadsheetView({
                   <ArrowLeft size={14} /><span>Back to Files</span>
                 </button>
               )}
-              {onOpenSettings && (
+              {!readOnly && onOpenSettings && (
                 <>
                   <div className="context-menu-separator" />
                   <button className="context-menu-item" onClick={() => { setHeaderMenuOpen(false); onOpenSettings(); }}>
@@ -1604,6 +1609,7 @@ export default function SpreadsheetView({
         </div>
 
         <div className="sheet-header-controls">
+          {!readOnly && (
           <div className="sb-new-wrapper" ref={exportMenuRef}>
             <button className="sb-new-btn" title="Export" onClick={() => setExportMenuOpen((v) => !v)}>
               <Download size={13} strokeWidth={2.5} />
@@ -1624,7 +1630,8 @@ export default function SpreadsheetView({
               </div>
             )}
           </div>
-          {(onAddEvent || onAddSpan || onAddEra) && (
+          )}
+          {!readOnly && (onAddEvent || onAddSpan || onAddEra) && (
             <div className="sb-new-wrapper" ref={newMenuRef}>
               <button className="sb-new-btn" onClick={() => setNewMenuOpen((v) => !v)}>
                 <Plus size={13} strokeWidth={2.5} />
@@ -1741,7 +1748,7 @@ export default function SpreadsheetView({
                 ref={(node) => { if (node) rowRefs.current[el.id] = node; else delete rowRefs.current[el.id]; }}
                 className={`sheet-row${selectedId === el.id ? " sheet-row-selected" : ""}`}
                 onClick={() => onSelect(el.id)}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id }); }}
+                onContextMenu={(e) => { if (readOnly) return; e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id }); }}
               >
                 {visibleCols.map((col) => renderCell(el, col))}
               </tr>

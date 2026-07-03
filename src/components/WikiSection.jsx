@@ -4,6 +4,19 @@ import DOMPurify from "dompurify";
 import { parseMediaWikiUrl } from "../utils/validation";
 import { fetchWikipedia } from "../utils/electronApi";
 
+// Outside Electron there is no IPC proxy; MediaWiki APIs allow direct
+// anonymous CORS requests when origin=* is appended.
+async function fetchWikiApi(url) {
+  if (window.electron !== undefined) return fetchWikipedia({ url });
+  try {
+    const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}origin=*`);
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+    return { success: true, html: await res.text() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 const WIKI_SANITIZE_VERSION = "collapsible-2";
 
 function sanitizeWikiHtml(html, host = "https://en.wikipedia.org") {
@@ -150,7 +163,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
 
       const resolveSectionIndex = async (base, title, anchor) => {
         const q = `?action=parse&page=${encodeURIComponent(title)}&prop=sections&format=json&formatversion=2`;
-        const result = await fetchWikipedia({ url: base + q });
+        const result = await fetchWikiApi(base + q);
         if (!result?.success) return null;
         const j = JSON.parse(result.html);
         const sections = j?.parse?.sections;
@@ -167,7 +180,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
       const tryApi = async (base, title, sectionIndex) => {
         let q = `?action=parse&page=${encodeURIComponent(title)}&prop=text&disabletoc=1&format=json&formatversion=2`;
         if (sectionIndex != null) q += `&section=${sectionIndex}`;
-        const result = await fetchWikipedia({ url: base + q });
+        const result = await fetchWikiApi(base + q);
         if (!result?.success) return null;
         const j = JSON.parse(result.html);
         let text = j?.parse?.text;
@@ -198,7 +211,7 @@ export default function WikiSection({ wikiUrl, useWiki, isEditMode, onUrlChange 
       }
 
       if (!data) {
-        const pageResult = await fetchWikipedia({ url });
+        const pageResult = await fetchWikiApi(url);
         if (pageResult?.success) {
           const pageDoc = new DOMParser().parseFromString(pageResult.html, "text/html");
           const editUri = pageDoc.querySelector('link[rel="EditURI"]')?.getAttribute("href");

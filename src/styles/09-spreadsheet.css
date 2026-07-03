@@ -272,6 +272,8 @@
 .sheet-cell-editable { cursor: default; }
 .sheet-cell-editable:hover { background: var(--inset-bg); }
 
+.sheet-readonly .sheet-cell-editable:hover { background: var(--surface); }
+
 .sheet-cell-muted {
   color: var(--text-subtle);
   font-size: var(--text-xs);

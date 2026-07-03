@@ -200,6 +200,7 @@ const TimelineView = forwardRef(function TimelineView({
   tagColors = {},
   keybinds = {},
   onSetViewMode,
+  readOnly = false,
 }, ref) {
   const isMac = navigator.userAgent?.includes("Mac");
   const fmtKey = (bind) => {
@@ -1787,6 +1788,7 @@ const TimelineView = forwardRef(function TimelineView({
   }, [contextMenu]);
 
   const handleContextMenu = (e) => {
+    if (readOnly) return;
     const target = e.target;
     if (target?.closest?.(".leaflet-container")) {
       return;
@@ -1827,6 +1829,7 @@ const TimelineView = forwardRef(function TimelineView({
   };
 
   const handleMapContextMenu = useCallback(({ x, y, lat, lng }) => {
+    if (readOnly) return;
     setContextMenu({
       x,
       y,
@@ -1836,7 +1839,7 @@ const TimelineView = forwardRef(function TimelineView({
       lat,
       lng,
     });
-  }, []);
+  }, [readOnly]);
 
   const handleMenuAction = (action) => {
     setContextMenu(null);
@@ -3750,15 +3753,17 @@ const TimelineView = forwardRef(function TimelineView({
         >
           <ListFilter size={16} />
         </button>
-        <button
-          type="button"
-          className="timeline-canvas-button"
-          onClick={onOpenSettings}
-          aria-label="Timeline settings"
-          data-tooltip="Settings"
-        >
-          <Settings size={16} />
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="timeline-canvas-button"
+            onClick={onOpenSettings}
+            aria-label="Timeline settings"
+            data-tooltip="Settings"
+          >
+            <Settings size={16} />
+          </button>
+        )}
       </div>
 
       {filterMenu && (

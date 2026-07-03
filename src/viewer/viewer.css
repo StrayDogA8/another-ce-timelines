@@ -1,0 +1,71 @@
+.viewer-landing {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--app-bg, var(--surface));
+}
+
+.viewer-landing-card {
+  max-width: 420px;
+  padding: 40px 44px;
+  text-align: center;
+  border: 1px dashed var(--border-color, var(--ui-muted));
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.viewer-landing-card.is-drag-over {
+  border-color: var(--accent-color);
+  background: var(--inset-bg, var(--surface));
+}
+
+.viewer-landing-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.viewer-landing-subtitle {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: var(--text-subtle, var(--text-muted));
+  line-height: 1.5;
+}
+
+.viewer-landing-browse {
+  display: inline-block;
+  padding: 8px 18px;
+  border: 1px solid var(--border-color, var(--ui-muted));
+  border-radius: 6px;
+  background: var(--inset-bg, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.viewer-landing-browse:hover {
+  border-color: var(--accent-color);
+}
+
+.viewer-landing-error {
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--danger, #e05561);
+}
+
+.viewer-badge {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  z-index: 200;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, var(--ui-muted));
+  background: var(--surface);
+  color: var(--text-subtle, var(--text-muted));
+  font-size: 11px;
+  opacity: 0.85;
+  pointer-events: none;
+}

@@ -1,0 +1,54 @@
+# Pushes the built viewer to timelines-website/public/viewer/ on release;
+# the website's own Pages workflow then serves it at timelines.studio/viewer/.
+# Requires the WEBSITE_PUSH_TOKEN secret: a fine-grained PAT with
+# Contents read/write access to sreegjl/timelines-website.
+name: Deploy Web Viewer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  push-to-website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build:viewer
+
+      - name: Checkout website repo
+        uses: actions/checkout@v4
+        with:
+          repository: sreegjl/timelines-website
+          token: ${{ secrets.WEBSITE_PUSH_TOKEN }}
+          path: website
+
+      - name: Copy viewer bundle into website
+        run: |
+          rm -rf website/public/viewer
+          mkdir -p website/public/viewer
+          cp -r dist-viewer/. website/public/viewer/
+
+      - name: Commit and push
+        working-directory: website
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/viewer
+          if git diff --cached --quiet; then
+            echo "Viewer unchanged — nothing to push."
+            exit 0
+          fi
+          git commit -m "Update web viewer (${{ github.event.release.tag_name || github.sha }})"
+          git push

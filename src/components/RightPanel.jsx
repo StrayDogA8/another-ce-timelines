@@ -50,6 +50,7 @@ export default function RightPanel({
   onSelectNext,
   prevElement,
   nextElement,
+  readOnly = false,
 }) {
   const [formData, setFormData] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -321,11 +322,12 @@ export default function RightPanel({
   }, []);
 
   useEffect(() => {
+    if (readOnly) return;
     if (!selectedElement || !editRequestId) return;
     if (selectedElement.id !== editRequestId) return;
     setIsEditMode(true);
     onEditRequestHandled?.();
-  }, [selectedElement, editRequestId, onEditRequestHandled]);
+  }, [selectedElement, editRequestId, onEditRequestHandled, readOnly]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -692,7 +694,7 @@ export default function RightPanel({
 
 
   useEffect(() => {
-    if (!selectedElement) return;
+    if (readOnly || !selectedElement) return;
     const handler = (e) => {
       if (e.key !== "e" && e.key !== "E") return;
       const target = e.target;
@@ -702,7 +704,7 @@ export default function RightPanel({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedElement, toggleEditMode]);
+  }, [selectedElement, toggleEditMode, readOnly]);
 
   const handleWikiUrlChange = (newUrl) => {
     const next = { ...formData };
@@ -735,14 +737,16 @@ export default function RightPanel({
       <div className="right-panel-header">
         <span className="rp-type-label">{formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}</span>
         <div className="right-panel-actions">
-          <button
-            className="close-button"
-            type="button"
-            onClick={toggleEditMode}
-            title={isEditMode ? "Switch to overview" : "Edit"}
-          >
-            {isEditMode ? <BookOpen size={18} /> : <Pencil size={18} />}
-          </button>
+          {!readOnly && (
+            <button
+              className="close-button"
+              type="button"
+              onClick={toggleEditMode}
+              title={isEditMode ? "Switch to overview" : "Edit"}
+            >
+              {isEditMode ? <BookOpen size={18} /> : <Pencil size={18} />}
+            </button>
+          )}
           <button
             className="close-button"
             onClick={onToggleMaximize}
@@ -921,7 +925,7 @@ export default function RightPanel({
                       if (e.target.tagName !== "INPUT" || e.target.type !== "checkbox") return;
                       e.preventDefault();
                       const idx = parseInt(e.target.getAttribute("data-idx"), 10);
-                      if (!isNaN(idx)) handleTaskToggle(idx);
+                      if (!isNaN(idx) && !readOnly) handleTaskToggle(idx);
                     }}
                   />
                 )}
@@ -2213,24 +2217,26 @@ export default function RightPanel({
               <ChevronRight size={15} />
             </button>
           </div>
-          <div className="rp-action-group">
-            <button
-              className="rp-action-edit"
-              type="button"
-              onClick={toggleEditMode}
-            >
-              <span>{isEditMode ? "Exit" : "Edit"}</span>
-              <span className="rp-action-key">E</span>
-            </button>
-            <button
-              className="rp-action-delete"
-              type="button"
-              onClick={() => onRequestDelete?.(formData.id)}
-              title="Delete"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="rp-action-group">
+              <button
+                className="rp-action-edit"
+                type="button"
+                onClick={toggleEditMode}
+              >
+                <span>{isEditMode ? "Exit" : "Edit"}</span>
+                <span className="rp-action-key">E</span>
+              </button>
+              <button
+                className="rp-action-delete"
+                type="button"
+                onClick={() => onRequestDelete?.(formData.id)}
+                title="Delete"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          )}
         </div>
     </div>
   );

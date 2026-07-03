@@ -210,6 +210,7 @@ export default function Sidebar({
   onEditElement,
   onPatchFile,
   keybinds = {},
+  readOnly = false,
 }) {
   const isMac = navigator.userAgent?.includes("Mac");
   const formatKeybind = (bind) => {
@@ -1043,14 +1044,16 @@ export default function Sidebar({
         {!isCollapsed && (
           <>
             <h2 className="timeline-title">{displayName}</h2>
-            <ChevronDown
-              className="sidebar-menu"
-              size={16}
-              color="var(--text-primary)"
-              strokeWidth={2}
-              onClick={handleTimelineMenuClick}
-              style={{ cursor: 'pointer' }}
-            />
+            {!readOnly && (
+              <ChevronDown
+                className="sidebar-menu"
+                size={16}
+                color="var(--text-primary)"
+                strokeWidth={2}
+                onClick={handleTimelineMenuClick}
+                style={{ cursor: 'pointer' }}
+              />
+            )}
           </>
         )}
         <button
@@ -1203,10 +1206,13 @@ export default function Sidebar({
             <button type="button" className={`sidebar-tab-button${sidebarTab === "tags" ? " is-active" : ""}`} onClick={() => setSidebarTab("tags")} aria-label="Tags tab" title="Tags">
               <Tag size={15} strokeWidth={2.2} />
             </button>
-            <button type="button" className={`sidebar-tab-button${sidebarTab === "groups" ? " is-active" : ""}`} onClick={() => setSidebarTab("groups")} aria-label="Groups tab" title="Groups">
-              <Layers3 size={15} strokeWidth={2.2} />
-            </button>
+            {!readOnly && (
+              <button type="button" className={`sidebar-tab-button${sidebarTab === "groups" ? " is-active" : ""}`} onClick={() => setSidebarTab("groups")} aria-label="Groups tab" title="Groups">
+                <Layers3 size={15} strokeWidth={2.2} />
+              </button>
+            )}
           </div>
+          {!readOnly && (
           <div className="sb-new-wrapper" ref={newMenuRef}>
             <button className="sb-new-btn" onClick={() => setNewMenuOpen((v) => !v)}>
               <Plus size={13} strokeWidth={2.5} />
@@ -1233,6 +1239,7 @@ export default function Sidebar({
               </div>
             )}
           </div>
+          )}
         </div>
 
         <div className="sb-search-and-sort">
@@ -1624,23 +1631,30 @@ export default function Sidebar({
                     onClick={() => onToggleTag?.(tag)}
                     title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
                   >
-                    <button
-                      type="button"
-                      className="sb-tag-swatch"
-                      style={{ background: tagColor || "var(--accent-color)" }}
-                      onClick={(e) => { e.stopPropagation(); openTagColorPicker(tag); }}
-                      title="Set tag color"
-                    >
-                      <input
-                        ref={(node) => { tagColorInputRefs.current[tag] = node; }}
-                        className="sidebar-group-inline-color-input"
-                        type="color"
-                        value={tagColor || "#808080"}
-                        onChange={(e) => onUpdateTagColor?.(tag, e.target.value)}
-                        tabIndex={-1}
-                        aria-hidden="true"
+                    {readOnly ? (
+                      <span
+                        className="sb-tag-swatch"
+                        style={{ background: tagColor || "var(--accent-color)" }}
                       />
-                    </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="sb-tag-swatch"
+                        style={{ background: tagColor || "var(--accent-color)" }}
+                        onClick={(e) => { e.stopPropagation(); openTagColorPicker(tag); }}
+                        title="Set tag color"
+                      >
+                        <input
+                          ref={(node) => { tagColorInputRefs.current[tag] = node; }}
+                          className="sidebar-group-inline-color-input"
+                          type="color"
+                          value={tagColor || "#808080"}
+                          onChange={(e) => onUpdateTagColor?.(tag, e.target.value)}
+                          tabIndex={-1}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    )}
                     <span className="sb-tag-name"><span className="sb-tag-hash">#</span>{tag}</span>
                     <span className="sb-tag-count">{count}</span>
                     <div className="sb-tag-actions">
@@ -1968,7 +1982,7 @@ export default function Sidebar({
         </>
       )}
 
-      {elementMenu?.element && (
+      {!readOnly && elementMenu?.element && (
         <div
           className="timeline-context-menu"
           style={{

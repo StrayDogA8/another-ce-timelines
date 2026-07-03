@@ -8,8 +8,10 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on tcp:5183 && cross-env NODE_ENV=development electron .\"",
+    "dev:viewer": "vite --config vite.viewer.config.js",
     "build": "vite build",
+    "build:viewer": "vite build --config vite.viewer.config.js && node -e \"require('fs').renameSync('dist-viewer/viewer.html','dist-viewer/index.html')\"",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on tcp:5183 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && electron-builder",
     "lint": "eslint ."
   },
