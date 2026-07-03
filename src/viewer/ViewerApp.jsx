@@ -48,17 +48,17 @@ function parseGitHubLink(input) {
 
 function viewerBasePath() {
   const { pathname } = window.location;
-  const i = pathname.indexOf("/ghu/");
+  const i = pathname.indexOf("/gh/");
   return i !== -1 ? pathname.slice(0, i + 1) : pathname;
 }
 
-// Deep links read /viewer/ghu/{user}/{repo}/{ref}/{path} or #ghu/… — the hash
+// Deep links read /viewer/gh/{user}/{repo}/{ref}/{path} or #gh/… — the hash
 // form is what static hosting can serve directly; the path form needs the
 // website's 404 page to rewrite it onto the hash form.
 function parseDeepLink() {
   const { pathname, hash } = window.location;
-  const i = pathname.indexOf("/ghu/");
-  const raw = i !== -1 ? pathname.slice(i + 5) : hash.startsWith("#ghu/") ? hash.slice(5) : null;
+  const i = pathname.indexOf("/gh/");
+  const raw = i !== -1 ? pathname.slice(i + 4) : hash.startsWith("#gh/") ? hash.slice(4) : hash.startsWith("#ghu/") ? hash.slice(5) : null;
   if (!raw) return null;
   const segments = raw.split("/").filter(Boolean).map((s) => {
     try { return decodeURIComponent(s); } catch { return s; }
@@ -67,7 +67,7 @@ function parseDeepLink() {
 }
 
 function deepLinkUrl(segments) {
-  const encoded = "ghu/" + segments.map(encodeURIComponent).join("/");
+  const encoded = "gh/" + segments.map(encodeURIComponent).join("/");
   const base = viewerBasePath();
   return base.endsWith("/") ? base + encoded : `${base}#${encoded}`;
 }
@@ -244,9 +244,21 @@ export default function ViewerApp() {
   }, [loadTimelineText]);
 
   useEffect(() => {
+    // Handoff from the website's landing page (same origin)
+    try {
+      const payload = window.sessionStorage.getItem("timelines-viewer-payload");
+      if (payload) {
+        window.sessionStorage.removeItem("timelines-viewer-payload");
+        loadTimelineText(payload);
+        return;
+      }
+    } catch (err) {
+      setLoadError(`Could not read timeline: ${err.message}`);
+      return;
+    }
     const segments = parseDeepLink();
     if (segments) loadFromGitHub(segments);
-  }, [loadFromGitHub]);
+  }, [loadFromGitHub, loadTimelineText]);
 
   // preventDefault on window keeps the browser from navigating to dropped files
   useEffect(() => {
