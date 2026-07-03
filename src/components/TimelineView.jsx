@@ -3912,17 +3912,15 @@ const TimelineView = forwardRef(function TimelineView({
                 return <><strong>{shown}</strong> shown</>;
               })()}
             </span>
-            <button
-              type="button"
+            <a
               className="fm-footer-syntax"
               title="Filter syntax help"
-              onClick={() => {
-                setFilterQuery((prev) => prev ? prev : "is:event ");
-                filterInputRef.current?.focus();
-              }}
+              href="https://www.timelines.studio/wiki/Searching"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               <HelpCircle size={11} /> syntax
-            </button>
+            </a>
           </div>
         </div>
       )}

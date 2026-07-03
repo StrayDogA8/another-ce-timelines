@@ -14,6 +14,62 @@ const RIGHT_PANEL_WIDTH = 340;
 
 // Written by the site's theme picker (same origin); only the landing screen follows it
 const WEBSITE_THEME_KEY = "timelines-website-theme";
+const GH_RAW_BASE = "https://raw.githubusercontent.com/";
+
+// Accepts raw.githubusercontent.com and github.com blob/raw links; returns
+// [user, repo, ref, ...path] or null
+function parseGitHubLink(input) {
+  let url;
+  try {
+    url = new URL(String(input).trim());
+  } catch {
+    return null;
+  }
+  const parts = url.pathname.split("/").filter(Boolean).map((s) => {
+    try { return decodeURIComponent(s); } catch { return s; }
+  });
+  if (url.hostname === "raw.githubusercontent.com") {
+    if (parts.length < 4) return null;
+    const [user, repo, ...rest] = parts;
+    if (rest[0] === "refs" && (rest[1] === "heads" || rest[1] === "tags") && rest.length >= 4) {
+      return [user, repo, rest[2], ...rest.slice(3)];
+    }
+    return [user, repo, ...rest];
+  }
+  if (url.hostname === "github.com" || url.hostname === "www.github.com") {
+    if (parts.length < 5) return null;
+    const [user, repo, kind, ref, ...path] = parts;
+    if (kind !== "blob" && kind !== "raw") return null;
+    return [user, repo, ref, ...path];
+  }
+  return null;
+}
+
+function viewerBasePath() {
+  const { pathname } = window.location;
+  const i = pathname.indexOf("/ghu/");
+  return i !== -1 ? pathname.slice(0, i + 1) : pathname;
+}
+
+// Deep links read /viewer/ghu/{user}/{repo}/{ref}/{path} or #ghu/… — the hash
+// form is what static hosting can serve directly; the path form needs the
+// website's 404 page to rewrite it onto the hash form.
+function parseDeepLink() {
+  const { pathname, hash } = window.location;
+  const i = pathname.indexOf("/ghu/");
+  const raw = i !== -1 ? pathname.slice(i + 5) : hash.startsWith("#ghu/") ? hash.slice(5) : null;
+  if (!raw) return null;
+  const segments = raw.split("/").filter(Boolean).map((s) => {
+    try { return decodeURIComponent(s); } catch { return s; }
+  });
+  return segments.length >= 4 ? segments : null;
+}
+
+function deepLinkUrl(segments) {
+  const encoded = "ghu/" + segments.map(encodeURIComponent).join("/");
+  const base = viewerBasePath();
+  return base.endsWith("/") ? base + encoded : `${base}#${encoded}`;
+}
 const MARKETPLACE_BASE = "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/refs/heads/main/";
 const FONT_FALLBACK = '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
@@ -75,6 +131,8 @@ export default function ViewerApp() {
   const [timelineData, setTimelineData] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [ghInput, setGhInput] = useState("");
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [viewMode, setViewMode] = useState("timeline");
   const [activeTags, setActiveTags] = useState([]);
@@ -124,6 +182,21 @@ export default function ViewerApp() {
     return () => { cancelled = true; };
   }, [timelineData]);
 
+  const loadTimelineText = useCallback((text) => {
+    const data = JSON.parse(text);
+    if (!data || !Array.isArray(data.elements)) {
+      throw new Error("no elements array found");
+    }
+    setTimelineData(sanitizeForBrowser(data));
+    setSelectedId(null);
+    setViewMode("timeline");
+    setActiveTags([]);
+    setHiddenTags([]);
+    setPinnedTags([]);
+    setIsRightMaximized(false);
+    setLoadError("");
+  }, []);
+
   const handleFile = useCallback((file) => {
     if (!file) return;
     if (!/\.(timeline|json)$/i.test(file.name)) {
@@ -133,25 +206,39 @@ export default function ViewerApp() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result);
-        if (!data || !Array.isArray(data.elements)) {
-          throw new Error("no elements array found");
-        }
-        setTimelineData(sanitizeForBrowser(data));
-        setSelectedId(null);
-        setViewMode("timeline");
-        setActiveTags([]);
-        setHiddenTags([]);
-        setPinnedTags([]);
-        setIsRightMaximized(false);
-        setLoadError("");
+        loadTimelineText(reader.result);
+        window.history.replaceState(null, "", viewerBasePath());
       } catch (err) {
         setLoadError(`Could not read timeline: ${err.message}`);
       }
     };
     reader.onerror = () => setLoadError("Could not read the dropped file.");
     reader.readAsText(file);
-  }, []);
+  }, [loadTimelineText]);
+
+  const loadFromGitHub = useCallback(async (segments) => {
+    if (!/\.(timeline|json)$/i.test(segments[segments.length - 1])) {
+      setLoadError("The link must point to a .timeline file.");
+      return;
+    }
+    setIsRemoteLoading(true);
+    setLoadError("");
+    try {
+      const res = await fetch(GH_RAW_BASE + segments.map(encodeURIComponent).join("/"));
+      if (!res.ok) throw new Error(res.status === 404 ? "file not found" : `HTTP ${res.status}`);
+      loadTimelineText(await res.text());
+      window.history.replaceState(null, "", deepLinkUrl(segments));
+    } catch (err) {
+      setLoadError(`Could not load from GitHub: ${err.message}`);
+    } finally {
+      setIsRemoteLoading(false);
+    }
+  }, [loadTimelineText]);
+
+  useEffect(() => {
+    const segments = parseDeepLink();
+    if (segments) loadFromGitHub(segments);
+  }, [loadFromGitHub]);
 
   // preventDefault on window keeps the browser from navigating to dropped files
   useEffect(() => {
@@ -320,6 +407,27 @@ export default function ViewerApp() {
             style={{ display: "none" }}
             onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }}
           />
+          <div className="viewer-landing-or">or</div>
+          <form
+            className="viewer-landing-gh"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const segments = parseGitHubLink(ghInput);
+              if (segments) loadFromGitHub(segments);
+              else setLoadError("That doesn't look like a GitHub file link.");
+            }}
+          >
+            <input
+              className="viewer-landing-gh-input"
+              placeholder="Paste a GitHub link to a .timeline file"
+              value={ghInput}
+              onChange={(e) => setGhInput(e.target.value)}
+              spellCheck={false}
+            />
+            <button type="submit" className="viewer-landing-browse" disabled={isRemoteLoading}>
+              {isRemoteLoading ? "Loading…" : "Load"}
+            </button>
+          </form>
           {loadError && <div className="viewer-landing-error">{loadError}</div>}
         </div>
       </div>
@@ -434,7 +542,6 @@ export default function ViewerApp() {
         </aside>
       )}
 
-      <div className="viewer-badge">Read-only viewer — drop a .timeline file to open another</div>
     </div>
   );
 }
