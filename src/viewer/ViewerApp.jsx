@@ -257,7 +257,14 @@ export default function ViewerApp() {
       return;
     }
     const segments = parseDeepLink();
-    if (segments) loadFromGitHub(segments);
+    if (segments) {
+      loadFromGitHub(segments);
+      return;
+    }
+    // keep the built-in landing outside /viewer/
+    if (window.location.pathname.startsWith("/viewer/")) {
+      window.location.replace("/viewer-landing/");
+    }
   }, [loadFromGitHub, loadTimelineText]);
 
   // preventDefault on window keeps the browser from navigating to dropped files
