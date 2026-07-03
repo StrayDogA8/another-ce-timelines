@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, Fragment, useCallback, lazy, Suspense, useDeferredValue } from "react";
+import { createPortal } from "react-dom";
 import {
   pickStep,
   buildSpanChildPlacement,
@@ -13,9 +14,55 @@ import {
 } from "../utils/timelineUtils";
 import { parseTimelineInput, snapToMonthGrid, snapToDayGrid, fractionalYearToDate, daysInMonth } from "../utils/dateUtils";
 import { withAlpha, blendColors } from "../utils/colorUtils";
-import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
-import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Target, Map as MapIcon, GanttChartSquare, Table2, ExternalLink, HelpCircle } from "lucide-react";
+import { parseFilterQuery, matchesFilter, tokenizeFilterQuery } from "../utils/filterUtils";
+import { FileJson, Image, Video, Settings, Plus, Minus, CopyPlus, Trash2, Edit2, ListFilter, Play, Pause, Tag, Eye, EyeOff, Target, Map as MapIcon, GanttChartSquare, Table2, ExternalLink, HelpCircle, Maximize2, X, History } from "lucide-react";
 import { ICON_MAP } from "../config/elementIcons";
+
+const FILTER_HISTORY_KEY = "timelines-filter-query-history";
+const FILTER_HISTORY_MAX = 8;
+
+const FILTER_TYPE_TERMS = ["is:event", "is:span", "is:era", "has:coords"];
+const FILTER_DATE_OPS = [[">", ">"], [">=", "≥"], ["<", "<"], ["<=", "≤"]];
+const FILTER_OP_GLYPH = { ">": ">", ">=": "≥", "<": "<", "<=": "≤" };
+
+const filterChipTerm = (chip) => {
+  let term;
+  if (chip.kind === "date") term = `${chip.op}${chip.value}`;
+  else if (chip.kind === "tag") term = `#${chip.value}`;
+  else if (chip.kind === "text") term = /[\s|()~"<>]/.test(chip.value) ? `"${chip.value}"` : chip.value;
+  else term = chip.value; // "type" kind holds the literal term: is:event / has:coords
+  return (chip.negated ? "~" : "") + term;
+};
+
+const filterChipLabel = (chip) =>
+  chip.kind === "date" ? `${FILTER_OP_GLYPH[chip.op] ?? chip.op} ${chip.value}`
+    : chip.kind === "tag" ? `#${chip.value}`
+    : chip.value;
+
+const buildChipQuery = (chips) =>
+  chips.map((c, i) => (i > 0 && c.join === "or" ? "| " : "") + filterChipTerm(c)).join(" ");
+
+const chipsFromQuery = (query, nextId) => {
+  const chips = [];
+  let join = "and";
+  let negated = false;
+  for (const tok of tokenizeFilterQuery(query)) {
+    if (tok.t === "OR") { join = "or"; continue; }
+    if (tok.t === "NOT") { negated = true; continue; }
+    if (tok.t !== "LEAF") continue;
+    let chip;
+    if (tok.kind === "type") chip = { kind: "type", value: `is:${tok.value}` };
+    else if (tok.kind === "has") chip = { kind: "type", value: `has:${tok.value}` };
+    else if (tok.kind === "tag") chip = { kind: "tag", value: tok.value };
+    else if (tok.kind === "date") chip = { kind: "date", op: tok.op, value: tok.value };
+    else if (tok.kind === "contains") chip = { kind: "text", value: `contains:${tok.value}` };
+    else chip = { kind: "text", value: tok.value };
+    chips.push({ id: nextId(), negated, join: chips.length === 0 ? "and" : join, ...chip });
+    join = "and";
+    negated = false;
+  }
+  return chips;
+};
 const MapView = lazy(() => import("./MapView"));
 import "../styles/04-timeline.css";
 import "../styles/07-modals-menus.css";
@@ -222,8 +269,34 @@ const TimelineView = forwardRef(function TimelineView({
   const lastPanPositionRef = useRef({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState(null);
   const [filterMenu, setFilterMenu] = useState(null);
-  const [filterQuery, setFilterQuery] = useState("");
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [filterChips, setFilterChips] = useState([]);
+  const [filterText, setFilterText] = useState("");
+  const [filterDateOp, setFilterDateOp] = useState(">=");
+  const [filterDateVal, setFilterDateVal] = useState("");
+  const [filterHistory, setFilterHistory] = useState(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(FILTER_HISTORY_KEY) ?? "[]");
+      return Array.isArray(stored) ? stored.filter((q) => typeof q === "string").slice(0, FILTER_HISTORY_MAX) : [];
+    } catch { return []; }
+  });
   const filterInputRef = useRef(null);
+  const filterQueryRef = useRef("");
+  const filterChipIdRef = useRef(0);
+
+  const chipsQuery = useMemo(() => buildChipQuery(filterChips), [filterChips]);
+  const parsedChipQuery = useMemo(() => parseFilterQuery(chipsQuery), [chipsQuery]);
+  const fullFilterQuery = useMemo(() => {
+    const extraTags = activeTags
+      .filter((t) => !filterChips.some((c) => c.kind === "tag" && !c.negated && c.value.toLowerCase() === t.toLowerCase()))
+      .map((t) => `#${t}`);
+    return [chipsQuery, ...extraTags].filter(Boolean).join(" ");
+  }, [chipsQuery, filterChips, activeTags]);
+  const shownElementCount = useMemo(() => {
+    const elements = timelineData?.elements ?? [];
+    return parsedChipQuery ? elements.filter((el) => matchesFilter(el, parsedChipQuery)).length : elements.length;
+  }, [timelineData?.elements, parsedChipQuery]);
+  const hasAnyFilter = filterChips.length > 0 || activeTags.length > 0 || hiddenTags.length > 0;
   const [showMap, setShowMap] = useState(false);
   const mapViewRef = useRef(null);
   const [sliderValue, setSliderValue] = useState(0);
@@ -265,9 +338,10 @@ const TimelineView = forwardRef(function TimelineView({
       (timelineData?.file?.groups ?? []).filter((g) => g.visible === false).map((g) => g.id)
     );
     return (timelineData?.elements ?? []).filter(
-      (el) => !el.groupId || !hiddenGroupIds.has(el.groupId)
+      (el) => (!el.groupId || !hiddenGroupIds.has(el.groupId)) &&
+        (!parsedChipQuery || matchesFilter(el, parsedChipQuery))
     );
-  }, [showMap, timelineData?.file?.groups, timelineData?.elements]);
+  }, [showMap, timelineData?.file?.groups, timelineData?.elements, parsedChipQuery]);
 
   const {
     file,
@@ -290,9 +364,10 @@ const TimelineView = forwardRef(function TimelineView({
     evFontSize,
   } = useMemo(() => {
     const file = timelineData.file;
-    const events = timelineData.elements.filter(e => e.type === "event");
-    const spans = timelineData.elements.filter(e => e.type === "span");
-    const eras = timelineData.elements.filter(e => e.type === "era");
+    const passesQuery = (el) => !parsedChipQuery || matchesFilter(el, parsedChipQuery);
+    const events = timelineData.elements.filter(e => e.type === "event" && passesQuery(e));
+    const spans = timelineData.elements.filter(e => e.type === "span" && passesQuery(e));
+    const eras = timelineData.elements.filter(e => e.type === "era" && passesQuery(e));
     const useCalendar = file?.useCalendar === true;
     const hasDayPrecision = (label) => {
       if (!label || typeof label !== "string") return false;
@@ -961,7 +1036,7 @@ const TimelineView = forwardRef(function TimelineView({
       decompressYear,
       evFontSize,
     };
-  }, [timelineData, pinnedTags, showMap]);
+  }, [timelineData, pinnedTags, showMap, parsedChipQuery]);
 
   const ticks = useMemo(() => {
     const minYear = file?.start;
@@ -1523,6 +1598,300 @@ const TimelineView = forwardRef(function TimelineView({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [filterMenu]);
+
+  useEffect(() => {
+    if (!filterModalOpen) return;
+    const handleKeyDown = (e) => { if (e.key === "Escape") setFilterModalOpen(false); };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [filterModalOpen]);
+
+  const commitFilterHistory = useCallback((q) => {
+    const query = (q ?? "").trim();
+    if (!query) return;
+    setFilterHistory((prev) => {
+      const next = [query, ...prev.filter((x) => x !== query)].slice(0, FILTER_HISTORY_MAX);
+      try { window.localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+      return next;
+    });
+  }, []);
+
+  const removeFilterHistory = useCallback((q) => {
+    setFilterHistory((prev) => {
+      const next = prev.filter((x) => x !== q);
+      try { window.localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => { filterQueryRef.current = chipsQuery; }, [chipsQuery]);
+  const filterUiOpen = Boolean(filterMenu) || filterModalOpen;
+  useEffect(() => {
+    if (!filterUiOpen && filterQueryRef.current.trim()) commitFilterHistory(filterQueryRef.current);
+  }, [filterUiOpen, commitFilterHistory]);
+
+  const nextChipId = () => { filterChipIdRef.current += 1; return `chip-${filterChipIdRef.current}`; };
+  const addFilterChip = (chip) =>
+    setFilterChips((prev) => [...prev, { id: nextChipId(), negated: false, join: "and", ...chip }]);
+  const removeFilterChip = (id) => setFilterChips((prev) => prev.filter((c) => c.id !== id));
+  const toggleChipNegate = (id) =>
+    setFilterChips((prev) => prev.map((c) => (c.id === id ? { ...c, negated: !c.negated } : c)));
+  const toggleChipJoin = (id) =>
+    setFilterChips((prev) => prev.map((c) => (c.id === id ? { ...c, join: c.join === "or" ? "and" : "or" } : c)));
+  const toggleTypeChip = (value) =>
+    setFilterChips((prev) =>
+      prev.some((c) => c.kind === "type" && c.value === value)
+        ? prev.filter((c) => !(c.kind === "type" && c.value === value))
+        : [...prev, { id: nextChipId(), kind: "type", value, negated: false, join: "and" }]);
+  const toggleTagChip = (tag) =>
+    setFilterChips((prev) =>
+      prev.some((c) => c.kind === "tag" && c.value.toLowerCase() === tag.toLowerCase())
+        ? prev.filter((c) => !(c.kind === "tag" && c.value.toLowerCase() === tag.toLowerCase()))
+        : [...prev, { id: nextChipId(), kind: "tag", value: tag, negated: false, join: "and" }]);
+  const addDateChip = () => {
+    const v = filterDateVal.trim();
+    if (!v) return;
+    addFilterChip({ kind: "date", op: filterDateOp, value: v });
+    setFilterDateVal("");
+  };
+  const clearFilterChips = () => { setFilterChips([]); setFilterText(""); setFilterDateVal(""); };
+  const clearAllFilters = () => { clearFilterChips(); onClearTags?.(); };
+
+  const renderFilterMenuContent = (isModal) => (
+    <>
+      <div className="fm-header">
+        <span className="fm-header-title"><ListFilter size={12} /> Filters</span>
+        {isModal ? (
+          <button
+            type="button"
+            className="fm-header-btn"
+            onClick={() => setFilterModalOpen(false)}
+            title="Close"
+            aria-label="Close filters"
+          >
+            <X size={14} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="fm-header-btn"
+            onClick={() => { setFilterMenu(null); setFilterModalOpen(true); }}
+            title="Expand"
+            aria-label="Open filters in a larger panel"
+          >
+            <Maximize2 size={16} />
+          </button>
+        )}
+      </div>
+      <div className="fm-query-section">
+        <div
+          className="fm-field"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) { e.preventDefault(); filterInputRef.current?.focus(); }
+          }}
+        >
+          {filterChips.map((chip, i) => (
+            <Fragment key={chip.id}>
+              {i > 0 && (
+                <button
+                  type="button"
+                  className="fm-join"
+                  title="Toggle AND / OR"
+                  onClick={() => toggleChipJoin(chip.id)}
+                >{chip.join === "or" ? "OR" : "AND"}</button>
+              )}
+              <span className={`fm-fchip fm-fchip-${chip.kind}${chip.negated ? " is-negated" : ""}`}>
+                <button
+                  type="button"
+                  className="fm-fchip-label"
+                  title={chip.negated ? "Include (remove ~)" : "Exclude (~)"}
+                  onClick={() => toggleChipNegate(chip.id)}
+                >{filterChipLabel(chip)}</button>
+                <button
+                  type="button"
+                  className="fm-fchip-remove"
+                  aria-label="Remove filter"
+                  onClick={() => removeFilterChip(chip.id)}
+                >×</button>
+              </span>
+            </Fragment>
+          ))}
+          <input
+            ref={filterInputRef}
+            autoFocus
+            className="fm-field-input"
+            placeholder={filterChips.length ? "Filter…" : "Filter elements…"}
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = filterText.trim().replace(/^"+|"+$/g, "");
+                if (v) { addFilterChip({ kind: "text", value: v }); setFilterText(""); }
+                return;
+              }
+              if (e.key === "Backspace" && !filterText && filterChips.length) {
+                setFilterChips((prev) => prev.slice(0, -1));
+                return;
+              }
+              if (e.key === "Escape" && filterText) { e.stopPropagation(); setFilterText(""); }
+            }}
+          />
+        </div>
+        <div className="fm-chip-row">
+          <span className="fm-chip-label">TYPE</span>
+          {FILTER_TYPE_TERMS.map((value) => {
+            const active = filterChips.some((c) => c.kind === "type" && c.value === value);
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`fm-chip${active ? " is-active" : ""}`}
+                aria-pressed={active}
+                onClick={() => toggleTypeChip(value)}
+              >{value.replace(":", ": ")}</button>
+            );
+          })}
+        </div>
+        <div className="fm-chip-row">
+          <span className="fm-chip-label">DATE</span>
+          <div className="fm-date-ops">
+            {FILTER_DATE_OPS.map(([op, glyph]) => (
+              <button
+                key={op}
+                type="button"
+                className={`fm-date-op${filterDateOp === op ? " is-active" : ""}`}
+                aria-pressed={filterDateOp === op}
+                onClick={() => setFilterDateOp(op)}
+              >{glyph}</button>
+            ))}
+          </div>
+          <input
+            className="fm-date-input"
+            placeholder="year / date"
+            value={filterDateVal}
+            onChange={(e) => setFilterDateVal(e.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            onKeyDown={(e) => { if (e.key === "Enter") addDateChip(); }}
+          />
+          <button
+            type="button"
+            className="fm-date-add"
+            title="Add date filter"
+            disabled={!filterDateVal.trim()}
+            onClick={addDateChip}
+          >+</button>
+        </div>
+        {filterHistory.length > 0 && (
+          <div className="fm-chip-row fm-history-row">
+            <span className="fm-chip-label fm-history-label"><History size={10} /> RECENT</span>
+            {filterHistory.map((q) => (
+              <span key={q} className="fm-history-chip" title={q}>
+                <button
+                  type="button"
+                  className="fm-history-chip-text"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setFilterChips(chipsFromQuery(q, nextChipId));
+                    setFilterText("");
+                    filterInputRef.current?.focus();
+                  }}
+                >{q}</button>
+                <button
+                  type="button"
+                  className="fm-history-chip-x"
+                  title="Remove from history"
+                  aria-label={`Remove "${q}" from history`}
+                  onMouseDown={(e) => { e.preventDefault(); removeFilterHistory(q); }}
+                >×</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="fm-tags-header">
+        <span className="fm-tags-title">TAGS</span>
+        <span className="fm-tags-subtitle">CLICK TO CHIP</span>
+        <span className="fm-tags-count">{allTags.length} tags</span>
+      </div>
+      <div className="filter-menu-dropdown">
+        {allTags.length === 0 && (
+          <div className="filter-menu-empty">No tags found</div>
+        )}
+        {allTags.map((tag) => {
+          const hasTagChip = filterChips.some((c) => c.kind === "tag" && c.value.toLowerCase() === tag.toLowerCase());
+          const isShown = activeTags.includes(tag);
+          const isHidden = hiddenTags.includes(tag);
+          const isPinned = pinnedTags.includes(tag);
+          const count = timelineData?.elements?.filter((el) => el.tags?.includes(tag)).length || 0;
+          return (
+            <div
+              key={tag}
+              className={`sb-tag-row${isHidden ? " is-hidden" : ""}${hasTagChip ? " is-selected" : ""}`}
+              onClick={() => toggleTagChip(tag)}
+              title={hasTagChip ? "Remove tag chip" : "Add tag chip"}
+            >
+              <span className="sb-tag-name"><span className="sb-tag-hash">#</span>{tag}</span>
+              <span className="sb-tag-count">{count}</span>
+              <div className="sb-tag-actions">
+                <button
+                  type="button"
+                  className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); onToggleHiddenTag?.(tag); }}
+                  title={isHidden ? "Show tag" : "Hide tag"}
+                >
+                  {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                </button>
+                <button
+                  type="button"
+                  className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); onToggleTag?.(tag); }}
+                  title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
+                >
+                  <Target size={12} />
+                </button>
+                <button
+                  type="button"
+                  className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); onTogglePinnedTag?.(tag); }}
+                  title={isPinned ? "Remove label" : "Use as label"}
+                >
+                  <Tag size={12} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="fm-preview">
+        <span className="fm-preview-label">QUERY</span>
+        <code className="fm-preview-text">{fullFilterQuery || "No active filter"}</code>
+      </div>
+      <div className="fm-footer">
+        <button
+          className="fm-footer-clear"
+          type="button"
+          onClick={clearAllFilters}
+        >
+          Clear
+        </button>
+        <span className="fm-footer-count">
+          <strong>{shownElementCount}</strong> shown
+        </span>
+        <a
+          className="fm-footer-syntax"
+          title="Filter syntax help"
+          href="https://www.timelines.studio/wiki/Searching"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <HelpCircle size={11} /> syntax
+        </a>
+      </div>
+    </>
+  );
 
   // Reset viewport when switching to a different timeline
   const prevFileIdRef = useRef(file?.id);
@@ -3826,7 +4195,7 @@ const TimelineView = forwardRef(function TimelineView({
         )}
         <button
           type="button"
-          className={`timeline-canvas-button${(activeTags.length > 0 || hiddenTags.length > 0) ? ' timeline-canvas-button-active' : ''}`}
+          className={`timeline-canvas-button${hasAnyFilter ? ' timeline-canvas-button-active' : ''}`}
           onClick={handleToggleFilterMenu}
           aria-label="Filter"
           data-tooltip="Filter"
@@ -3867,143 +4236,21 @@ const TimelineView = forwardRef(function TimelineView({
             e.stopPropagation();
           }}
         >
-          <div className="fm-query-section">
-            <div className="fm-query-input-row">
-              <ListFilter size={13} className="fm-query-icon" />
-              <input
-                ref={filterInputRef}
-                className="fm-query-input"
-                placeholder="Filter elements…"
-                value={filterQuery}
-                onChange={(e) => setFilterQuery(e.target.value)}
-                spellCheck={false}
-                autoComplete="off"
-                onKeyDown={(e) => { if (e.key === "Escape" && !filterQuery) setFilterMenu(null); else if (e.key === "Escape") setFilterQuery(""); }}
-              />
-              {filterQuery && <button type="button" className="fm-query-clear" onClick={() => { setFilterQuery(""); filterInputRef.current?.focus(); }}>×</button>}
-            </div>
-            {[
-              { label: "TYPE", chips: [
-                { text: "event", insert: "is:event " }, { text: "span", insert: "is:span " },
-                { text: "era", insert: "is:era " }, { text: "has:coords", insert: "has:coords " },
-              ]},
-              { label: "DATE", chips: [
-                { text: ">", insert: ">" }, { text: "≥", insert: ">=" },
-                { text: "<", insert: "<" }, { text: "≤", insert: "<=" },
-              ]},
-              { label: "LOGIC", chips: [
-                { text: "|", insert: "| " }, { text: "~", insert: "~" },
-                { text: "(  )", insert: "() ", cursor: -2 },
-                { text: '" "', insert: '"" ', cursor: -2 },
-              ]},
-            ].map((row) => (
-              <div key={row.label} className="fm-chip-row">
-                <span className="fm-chip-label">{row.label}</span>
-                {row.chips.map((chip) => (
-                  <button
-                    key={chip.text}
-                    type="button"
-                    className="fm-chip"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      const input = filterInputRef.current;
-                      if (!input) return;
-                      const pos = input.selectionStart ?? filterQuery.length;
-                      const next = filterQuery.slice(0, pos) + chip.insert + filterQuery.slice(pos);
-                      setFilterQuery(next);
-                      requestAnimationFrame(() => {
-                        input.focus();
-                        const newPos = pos + chip.insert.length + (chip.cursor || 0);
-                        input.setSelectionRange(newPos, newPos);
-                      });
-                    }}
-                  >{chip.text}</button>
-                ))}
-              </div>
-            ))}
-          </div>
-          <div className="fm-tags-header">
-            <span className="fm-tags-title">TAGS</span>
-            <span className="fm-tags-subtitle">SHOW ONLY</span>
-            <span className="fm-tags-count">{allTags.length} tags</span>
-          </div>
-          <div className="filter-menu-dropdown">
-            {allTags.length === 0 && (
-              <div className="filter-menu-empty">No tags found</div>
-            )}
-            {allTags.map((tag) => {
-              const isShown = activeTags.includes(tag);
-              const isHidden = hiddenTags.includes(tag);
-              const isPinned = pinnedTags.includes(tag);
-              const count = timelineData?.elements?.filter((el) => el.tags?.includes(tag)).length || 0;
-              return (
-                <div
-                  key={tag}
-                  className={`sb-tag-row${isHidden ? " is-hidden" : ""}`}
-                  onClick={() => onToggleTag?.(tag)}
-                  title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
-                >
-                  <span className="sb-tag-name"><span className="sb-tag-hash">#</span>{tag}</span>
-                  <span className="sb-tag-count">{count}</span>
-                  <div className="sb-tag-actions">
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-hide-btn${isHidden ? " is-active" : ""}`}
-                      onClick={(e) => { e.stopPropagation(); onToggleHiddenTag?.(tag); }}
-                      title={isHidden ? "Show tag" : "Hide tag"}
-                    >
-                      {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
-                    </button>
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-show-btn${isShown ? " is-active" : ""}`}
-                      onClick={(e) => { e.stopPropagation(); onToggleTag?.(tag); }}
-                      title={isShown ? "Disable spotlight filter" : "Spotlight this tag"}
-                    >
-                      <Target size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`filter-menu-icon-btn filter-menu-pin-btn${isPinned ? " is-pinned" : ""}`}
-                      onClick={(e) => { e.stopPropagation(); onTogglePinnedTag?.(tag); }}
-                      title={isPinned ? "Remove label" : "Use as label"}
-                    >
-                      <Tag size={12} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="fm-footer">
-            <button
-              className="fm-footer-clear"
-              type="button"
-              onClick={() => { onClearTags?.(); setFilterQuery(""); }}
-            >
-              Clear
-            </button>
-            <span className="fm-footer-count">
-              {(() => {
-                const parsed = parseFilterQuery(filterQuery);
-                const total = timelineData?.elements?.length || 0;
-                const shown = parsed
-                  ? timelineData?.elements?.filter((el) => matchesFilter(el, parsed)).length || 0
-                  : total;
-                return <><strong>{shown}</strong> shown</>;
-              })()}
-            </span>
-            <a
-              className="fm-footer-syntax"
-              title="Filter syntax help"
-              href="https://www.timelines.studio/wiki/Searching"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <HelpCircle size={11} /> syntax
-            </a>
-          </div>
+          {renderFilterMenuContent(false)}
         </div>
+      )}
+
+      {filterModalOpen && createPortal(
+        <div
+          className="fm-modal-backdrop"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setFilterModalOpen(false); }}
+          onWheelCapture={(e) => e.stopPropagation()}
+        >
+          <div className="fm-modal">
+            {renderFilterMenuContent(true)}
+          </div>
+        </div>,
+        document.body
       )}
 
       <div

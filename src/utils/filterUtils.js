@@ -203,6 +203,11 @@ function evalNode(node, el, noteContent) {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+export function tokenizeFilterQuery(query) {
+  const q = (query || '').trim();
+  return q ? tokenize(q) : [];
+}
+
 export function parseFilterQuery(query) {
   const q = (query || '').trim();
   if (!q) return null;
