@@ -452,7 +452,7 @@ export default function ViewerApp() {
 
   return (
     <div className="app-shell">
-      {viewMode !== "spreadsheet" && (
+      {viewMode !== "spreadsheet" && !(isCompact && isRightPanelVisible) && (
         <aside className="app-sidebar overlay-sidebar" style={{ width: currentLeftWidth }}>
           <ErrorBoundary name="Sidebar">
             <Sidebar
