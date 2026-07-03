@@ -259,6 +259,20 @@
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.marketplace-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+  position: relative;
+}
+
+.marketplace-bulk-trigger {
+  width: 30px;
+  height: 30px;
 }
 
 .marketplace-tabs-row {
@@ -414,6 +428,21 @@
   color: var(--app-bg);
 }
 
+.marketplace-bulk-menu {
+  left: auto;
+  right: 0;
+  min-width: 170px;
+}
+
+.marketplace-bulk-menu .marketplace-more-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.marketplace-bulk-menu .marketplace-more-item:disabled:hover {
+  background: transparent;
+}
+
 .marketplace-more-count {
   font-size: var(--text-3xs);
   opacity: 0.65;
@@ -562,6 +591,7 @@
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
 }
 
 .marketplace-card-author {
@@ -569,22 +599,36 @@
   color: var(--text-subtle);
 }
 
-.marketplace-card-type-tag {
-  display: inline-flex;
+.marketplace-card-meta {
+  display: flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-size: var(--text-3xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  width: fit-content;
+  gap: 8px;
+  min-height: 18px;
+  margin-top: 1px;
 }
 
-.marketplace-card-type-tag-dark,
-.marketplace-card-type-tag-light {
-  background: var(--accent-color);
-  color: var(--text-muted);
+.marketplace-card-meta .marketplace-card-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-card-collection {
+  display: inline-flex;
+  align-items: center;
+  max-width: 48%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color), var(--surface) 45%);
+  color: var(--text-subtle);
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .marketplace-card-description {

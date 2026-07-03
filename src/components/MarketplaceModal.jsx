@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Upload, X, Download, Check, Trash2, FolderOpen, Search, Moon, Sun, ChevronDown } from "lucide-react";
+import { ArrowLeft, Upload, X, Download, Check, Trash2, FolderOpen, Search, Moon, Sun, ChevronDown, MoreVertical } from "lucide-react";
 import { saveUserTheme, deleteUserTheme } from "../utils/electronApi";
 
 const MARKETPLACE_BASE = "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/refs/heads/main/";
+
+function formatCollectionName(collection) {
+  if (!collection) return "";
+  return String(collection)
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function MarketplaceModal({
   isOpen,
@@ -26,11 +35,14 @@ export default function MarketplaceModal({
   const [marketplaceDarkLight, setMarketplaceDarkLight] = useState("all");
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const bulkMenuRef = useRef(null);
   const [marketplaceTab, setMarketplaceTab] = useState("marketplace");
   const [localDragOver, setLocalDragOver] = useState(false);
   const localGridRef = useRef(null);
   const localDropHandlerRef = useRef(null);
   const [installedOriginFilter, setInstalledOriginFilter] = useState("all");
+  const [marketplaceBulkBusy, setMarketplaceBulkBusy] = useState("");
 
   const loadInstalledThemes = async () => {
     if (!window.electron?.listThemes) return;
@@ -70,6 +82,7 @@ export default function MarketplaceModal({
     setMarketplaceCollection(null);
     setMarketplaceDarkLight("all");
     setMoreMenuOpen(false);
+    setBulkMenuOpen(false);
     setMarketplaceTab("marketplace");
     setInstalledOriginFilter("all");
     loadMarketplace();
@@ -77,13 +90,14 @@ export default function MarketplaceModal({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!moreMenuOpen) return;
+    if (!moreMenuOpen && !bulkMenuOpen) return;
     const handler = (e) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target)) setBulkMenuOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [moreMenuOpen]);
+  }, [moreMenuOpen, bulkMenuOpen]);
 
   useEffect(() => {
     if (marketplaceTab !== "local") return;
@@ -107,15 +121,30 @@ export default function MarketplaceModal({
     };
   }, [marketplaceTab]);
 
+  const downloadThemeFile = async (theme) => {
+    if (!theme?.id || !theme?.paths?.theme) return false;
+    const response = await fetch(`${MARKETPLACE_BASE}${theme.paths.theme}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Failed to download theme (${response.status})`);
+    const content = await response.text();
+    const result = await saveUserTheme({ id: theme.id, content });
+    if (!result?.success) throw new Error(result?.error || "Failed to save theme");
+    return true;
+  };
+
+  const deleteThemeFile = async (theme) => {
+    if (!theme?.id) return false;
+    const result = await deleteUserTheme({ id: theme.id });
+    if (!result?.success && result?.error !== "NOT_FOUND") {
+      throw new Error(result?.error || "Failed to delete theme");
+    }
+    return true;
+  };
+
   const handleDownloadTheme = async (theme) => {
     if (!theme?.id || !theme?.paths?.theme) return;
     setMarketplaceBusyId(theme.id);
     try {
-      const response = await fetch(`${MARKETPLACE_BASE}${theme.paths.theme}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`Failed to download theme (${response.status})`);
-      const content = await response.text();
-      const result = await saveUserTheme({ id: theme.id, content });
-      if (!result?.success) throw new Error(result?.error || "Failed to save theme");
+      await downloadThemeFile(theme);
       await onRefreshThemes?.();
       await loadInstalledThemes();
     } catch (error) {
@@ -160,10 +189,7 @@ export default function MarketplaceModal({
     if (!theme?.id) return;
     setMarketplaceBusyId(theme.id);
     try {
-      const result = await deleteUserTheme({ id: theme.id });
-      if (!result?.success && result?.error !== "NOT_FOUND") {
-        throw new Error(result?.error || "Failed to delete theme");
-      }
+      await deleteThemeFile(theme);
       await onRefreshThemes?.();
       await loadInstalledThemes();
     } catch (error) {
@@ -196,6 +222,7 @@ export default function MarketplaceModal({
       id: key,
       name: theme.name || key,
       origin: "built-in",
+      collection: theme.collection || bundledThemes[key]?.collection || null,
       type: theme.type || null,
       author: "shipped",
       thumbnailUrl: bundledThemes[key]?.thumbnail || null,
@@ -209,6 +236,7 @@ export default function MarketplaceModal({
         id: key,
         name: theme.name || mktData?.name || key,
         origin: isMkt ? "marketplace" : "local",
+        collection: theme.collection || mktData?.collection || null,
         type: theme.type || mktData?.type || null,
         author: mktData?.author || (isMkt ? null : "you"),
         thumbnailUrl: mktData?.paths?.thumbnail ? `${MARKETPLACE_BASE}${mktData.paths.thumbnail}` : null,
@@ -223,6 +251,7 @@ export default function MarketplaceModal({
       id: key,
       name: theme.name || key,
       origin: "local",
+      collection: theme.collection || null,
       type: theme.type || null,
       author: "you",
       thumbnailUrl: null,
@@ -232,7 +261,7 @@ export default function MarketplaceModal({
   const searchFilter = (theme) => {
     const q = marketplaceSearch.trim().toLowerCase();
     if (!q) return true;
-    return [theme.name, theme.author, theme.description].filter(Boolean).join(" ").toLowerCase().includes(q);
+    return [theme.name, theme.author, theme.description, theme.collection].filter(Boolean).join(" ").toLowerCase().includes(q);
   };
   const typeFilter = (theme) => marketplaceDarkLight === "all" || theme.type === marketplaceDarkLight;
 
@@ -253,6 +282,15 @@ export default function MarketplaceModal({
   ).sort((a, b) => (a.id || "").localeCompare(b.id || ""));
   const filteredLocal = allLocalThemes.filter(t => searchFilter(t) && typeFilter(t))
     .sort((a, b) => (a.id || "").localeCompare(b.id || ""));
+  const downloadableMarketplaceThemes = filteredMarketplace.filter((theme) => {
+    const themeId = String(theme.id || "").toLowerCase();
+    return !(installedThemeIds.has(themeId) || userThemeIds.has(themeId));
+  });
+  const removableMarketplaceThemes = filteredMarketplace.filter((theme) => {
+    const themeId = String(theme.id || "").toLowerCase();
+    return installedThemeIds.has(themeId) || userThemeIds.has(themeId);
+  });
+  const removableInstalledThemes = filteredInstalled.filter((theme) => theme.origin !== "built-in");
 
   const originCounts = {
     all: allInstalledThemes.length,
@@ -261,11 +299,111 @@ export default function MarketplaceModal({
     "built-in": allInstalledThemes.filter(t => t.origin === "built-in").length,
   };
 
+  const renderBulkMenu = () => {
+    if (marketplaceTab !== "marketplace" && marketplaceTab !== "installed") return null;
+    const canDownloadAll = marketplaceTab === "marketplace" && !marketplaceLoading && downloadableMarketplaceThemes.length > 0 && marketplaceBulkBusy !== "remove";
+    const canRemoveAll = (
+      (marketplaceTab === "marketplace" && removableMarketplaceThemes.length > 0) ||
+      (marketplaceTab === "installed" && removableInstalledThemes.length > 0)
+    ) && marketplaceBulkBusy !== "download";
+    return (
+      <div className="marketplace-bulk-actions" ref={bulkMenuRef}>
+        <button
+          className="marketplace-icon-button marketplace-bulk-trigger"
+          type="button"
+          aria-label="Bulk theme actions"
+          title="Bulk theme actions"
+          onClick={() => setBulkMenuOpen((open) => !open)}
+        >
+          <MoreVertical size={15} />
+        </button>
+        {bulkMenuOpen && (
+          <div className="marketplace-more-menu marketplace-bulk-menu">
+            <button
+              className="marketplace-more-item"
+              type="button"
+              disabled={!canDownloadAll}
+              onClick={async () => {
+                setBulkMenuOpen(false);
+                await handleDownloadAllThemes();
+              }}
+            >
+              <span>Download All</span>
+              <Download size={13} />
+            </button>
+            <button
+              className="marketplace-more-item"
+              type="button"
+              disabled={!canRemoveAll}
+              onClick={async () => {
+                setBulkMenuOpen(false);
+                await handleRemoveAllThemes();
+              }}
+            >
+              <span>Remove All</span>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const handleDownloadAllThemes = async () => {
+    if (!downloadableMarketplaceThemes.length) return;
+    setMarketplaceBulkBusy("download");
+    setMarketplaceError("");
+    let failed = 0;
+    try {
+      for (const theme of downloadableMarketplaceThemes) {
+        try {
+          await downloadThemeFile(theme);
+        } catch (error) {
+          failed += 1;
+          console.error("Failed to download theme:", error);
+        }
+      }
+      await onRefreshThemes?.();
+      await loadInstalledThemes();
+      if (failed > 0) setMarketplaceError(`Failed to download ${failed} theme(s).`);
+    } finally {
+      setMarketplaceBulkBusy("");
+    }
+  };
+
+  const handleRemoveAllThemes = async () => {
+    const themesToRemove = marketplaceTab === "marketplace" ? removableMarketplaceThemes : removableInstalledThemes;
+    if (!themesToRemove.length) return;
+    setMarketplaceBulkBusy("remove");
+    setMarketplaceError("");
+    let failed = 0;
+    try {
+      const activeThemeId = String(appThemeKey || "").toLowerCase();
+      if (themesToRemove.some((theme) => String(theme.id || "").toLowerCase() === activeThemeId)) {
+        onAppThemeChange?.(defaultThemeKey || "parchment_v2");
+      }
+      for (const theme of themesToRemove) {
+        try {
+          await deleteThemeFile(theme);
+        } catch (error) {
+          failed += 1;
+          console.error("Failed to delete theme:", error);
+        }
+      }
+      await onRefreshThemes?.();
+      await loadInstalledThemes();
+      if (failed > 0) setMarketplaceError(`Failed to remove ${failed} theme(s).`);
+    } finally {
+      setMarketplaceBulkBusy("");
+    }
+  };
+
   const renderCard = (theme, showEdit = false) => {
     const themeId = String(theme.id || "").toLowerCase();
     const isActive = String(appThemeKey || "").toLowerCase() === themeId;
     const isBuiltIn = theme.origin === "built-in";
     const isBusy = marketplaceBusyId === theme.id;
+    const collectionName = formatCollectionName(theme.collection);
     return (
       <div key={theme.id} className="marketplace-card">
         <div className="marketplace-thumbnail">
@@ -277,12 +415,16 @@ export default function MarketplaceModal({
         <div className="marketplace-card-body">
           <div className="marketplace-card-title-row">
             <div className="marketplace-card-title">{theme.name}</div>
-            {theme.type && (
-              <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>{theme.type}</span>
+            {collectionName && (
+              <span className="marketplace-card-collection" title={collectionName}>
+                {collectionName}
+              </span>
             )}
           </div>
-          <div className="marketplace-card-author">
-            {theme.author === "shipped" ? "shipped" : theme.author ? `by ${theme.author}` : ""}
+          <div className="marketplace-card-meta">
+            <div className="marketplace-card-author">
+              {theme.author === "shipped" ? "shipped" : theme.author ? `by ${theme.author}` : ""}
+            </div>
           </div>
           {theme.description && <div className="marketplace-card-description">{theme.description}</div>}
         </div>
@@ -438,6 +580,7 @@ export default function MarketplaceModal({
                 );
               })()}
             </div>
+            {renderBulkMenu()}
           </div>
         )}
 
@@ -459,6 +602,7 @@ export default function MarketplaceModal({
                 </button>
               ))}
             </div>
+            {renderBulkMenu()}
           </div>
         )}
 
@@ -477,6 +621,7 @@ export default function MarketplaceModal({
                 const isActive = String(appThemeKey || "").toLowerCase() === themeId;
                 const isBusy = marketplaceBusyId === theme.id;
                 const thumbnailUrl = theme?.paths?.thumbnail ? `${MARKETPLACE_BASE}${theme.paths.thumbnail}` : "";
+                const collectionName = formatCollectionName(theme.collection);
                 return (
                   <div key={theme.id} className="marketplace-card">
                     <div className="marketplace-thumbnail">
@@ -485,11 +630,15 @@ export default function MarketplaceModal({
                     <div className="marketplace-card-body">
                       <div className="marketplace-card-title-row">
                         <div className="marketplace-card-title">{theme.name || theme.id}</div>
-                        {theme.type && (
-                          <span className={`marketplace-card-type-tag marketplace-card-type-tag-${theme.type}`}>{theme.type}</span>
+                        {collectionName && (
+                          <span className="marketplace-card-collection" title={collectionName}>
+                            {collectionName}
+                          </span>
                         )}
                       </div>
-                      <div className="marketplace-card-author">{theme.author ? `by ${theme.author}` : ""}</div>
+                      <div className="marketplace-card-meta">
+                        <div className="marketplace-card-author">{theme.author ? `by ${theme.author}` : ""}</div>
+                      </div>
                       <div className="marketplace-card-description">{theme.description}</div>
                     </div>
                     <div className="marketplace-card-actions">
