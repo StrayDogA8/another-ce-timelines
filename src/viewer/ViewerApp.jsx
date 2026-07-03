@@ -12,6 +12,46 @@ const SIDEBAR_WIDTH = 350;
 const SIDEBAR_COLLAPSED_WIDTH = 44;
 const RIGHT_PANEL_WIDTH = 340;
 
+// Written by the site's theme picker (same origin); only the landing screen follows it
+const WEBSITE_THEME_KEY = "timelines-website-theme";
+const MARKETPLACE_BASE = "https://raw.githubusercontent.com/sreegjl/timelines-marketplace/refs/heads/main/";
+const FONT_FALLBACK = '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+// Colors plus the font handling App.jsx does outside applyTheme (theme font
+// stylesheet + --app-font-family, overridable by file.font)
+function applyViewerTheme(themes, key, fileFont) {
+  applyTheme({ themes, activeTheme: key }, key);
+
+  const themeFont = themes[key]?.font;
+  const useFileFont = fileFont && String(fileFont).toLowerCase() !== "default";
+  const family = useFileFont ? String(fileFont) : themeFont?.family;
+  const cssUrl = useFileFont ? null : themeFont?.cssUrl;
+
+  const linkId = "theme-font-css";
+  const existing = document.getElementById(linkId);
+  if (cssUrl) {
+    if (existing) {
+      if (existing.getAttribute("href") !== cssUrl) existing.setAttribute("href", cssUrl);
+    } else {
+      const link = document.createElement("link");
+      link.id = linkId;
+      link.rel = "stylesheet";
+      link.href = cssUrl;
+      document.head.appendChild(link);
+    }
+  } else if (existing) {
+    existing.remove();
+  }
+
+  let stack = FONT_FALLBACK;
+  if (family && String(family).toLowerCase() === "system") {
+    stack = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  } else if (family) {
+    stack = `"${String(family).replace(/([\\"])/g, "\\$1")}", ${FONT_FALLBACK}`;
+  }
+  document.documentElement.style.setProperty("--app-font-family", stack);
+}
+
 // Local thumbnails and notes live in desktop-only folders and can't resolve in
 // the browser, so drop those references. Remote thumbnails and wiki links work.
 function sanitizeForBrowser(data) {
@@ -46,8 +86,43 @@ export default function ViewerApp() {
 
   useEffect(() => {
     const themeConfig = loadThemeConfig();
-    applyTheme(themeConfig, getInitialThemeKey(themeConfig));
-  }, []);
+    const bundled = themeConfig.themes || {};
+    const defaultKey = getInitialThemeKey(themeConfig);
+
+    if (!timelineData) {
+      let siteTheme = null;
+      try {
+        siteTheme = window.localStorage.getItem(WEBSITE_THEME_KEY);
+      } catch { /* storage unavailable */ }
+      applyViewerTheme(bundled, siteTheme && bundled[siteTheme] ? siteTheme : defaultKey, null);
+      return;
+    }
+
+    const fileFont = timelineData.file?.font;
+    const requested = timelineData.file?.theme;
+    const lower = requested ? String(requested).toLowerCase() : "";
+    const bundledMatch = Object.keys(bundled).find((k) => k.toLowerCase() === lower);
+    if (!requested || lower === "default" || bundledMatch) {
+      applyViewerTheme(bundled, bundledMatch || defaultKey, fileFont);
+      return;
+    }
+
+    // Marketplace themes aren't bundled; fetch by id from the marketplace repo
+    let cancelled = false;
+    (async () => {
+      try {
+        const index = await (await fetch(`${MARKETPLACE_BASE}index.json`)).json();
+        const entry = (index.themes || []).find((t) => String(t.id).toLowerCase() === lower);
+        if (!entry?.paths?.theme) throw new Error("not in marketplace");
+        const theme = await (await fetch(MARKETPLACE_BASE + entry.paths.theme)).json();
+        if (!theme?.colors) throw new Error("unsupported theme format");
+        if (!cancelled) applyViewerTheme({ [requested]: theme }, requested, fileFont);
+      } catch {
+        if (!cancelled) applyViewerTheme(bundled, defaultKey, fileFont);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [timelineData]);
 
   const handleFile = useCallback((file) => {
     if (!file) return;
