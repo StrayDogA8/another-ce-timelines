@@ -126,31 +126,31 @@ export default function SpreadsheetView({
 
   const COLS = useMemo(() => {
     const cols = [
-      { key: "type",       label: "Type",        sortable: true  },
-      { key: "title",      label: "Title",        sortable: true  },
-      { key: "description", label: "Description", sortable: false },
-      { key: "date",       label: "Date / Start", sortable: true  },
-      { key: "end",        label: "End",          sortable: true  },
-      { key: "parent",     label: "Parent",       sortable: false },
-      { key: "parentType", label: "Parent Type",  sortable: false },
-      { key: "mergeInto",  label: "Merge Into",   sortable: false },
-      { key: "group",      label: "Group",        sortable: false },
-      { key: "tags",       label: "Tags",         sortable: false },
-      { key: "icon",        label: "Icon",         sortable: false },
-      { key: "hideYear",    label: "Hide Year",    sortable: false },
-      { key: "hideDetails", label: "Hide Details", sortable: false },
-      { key: "color",       label: "Color",        sortable: false },
-      { key: "size",        label: "Size",         sortable: false },
-      { key: "lineStyle",   label: "Line Style",   sortable: false },
-      { key: "borderStyle",    label: "Border Style",    sortable: false },
-      { key: "thumbnail",      label: "Thumbnail",       sortable: false },
-      { key: "thumbnailStyle", label: "Thumbnail Style", sortable: false },
+      { key: "type",       label: "Type"         },
+      { key: "title",      label: "Title"        },
+      { key: "description", label: "Description" },
+      { key: "date",       label: "Date / Start" },
+      { key: "end",        label: "End"          },
+      { key: "parent",     label: "Parent"       },
+      { key: "parentType", label: "Parent Type"  },
+      { key: "mergeInto",  label: "Merge Into"   },
+      { key: "group",      label: "Group"        },
+      { key: "tags",       label: "Tags"         },
+      { key: "icon",        label: "Icon"         },
+      { key: "hideYear",    label: "Hide Year"    },
+      { key: "hideDetails", label: "Hide Details" },
+      { key: "color",       label: "Color"        },
+      { key: "size",        label: "Size"         },
+      { key: "lineStyle",   label: "Line Style"   },
+      { key: "borderStyle",    label: "Border Style"    },
+      { key: "thumbnail",      label: "Thumbnail"       },
+      { key: "thumbnailStyle", label: "Thumbnail Style" },
     ];
-    if (useMaps)      cols.push({ key: "coords", label: "Coordinates", sortable: false });
-    if (useWiki) cols.push({ key: "wiki",   label: "Wiki",        sortable: false });
+    if (useMaps)      cols.push({ key: "coords", label: "Coordinates" });
+    if (useWiki) cols.push({ key: "wiki",   label: "Wiki"        });
     cols.push(
-      { key: "note",    label: "Note",    sortable: false },
-      { key: "sources", label: "Sources", sortable: false },
+      { key: "note",    label: "Note"    },
+      { key: "sources", label: "Sources" },
     );
     return cols;
   }, [useMaps, useWiki]);
@@ -232,13 +232,19 @@ export default function SpreadsheetView({
   const sortedElements = useMemo(() => {
     return [...searchedElements].sort((a, b) => {
       let cmp = 0;
-      if      (sortField === "date")  cmp = numDate(a) - numDate(b);
-      else if (sortField === "end")   cmp = (a.end ?? a.date ?? 0) - (b.end ?? b.date ?? 0);
-      else if (sortField === "title") cmp = (a.title ?? "").localeCompare(b.title ?? "");
-      else if (sortField === "type")  cmp = (a.type ?? "").localeCompare(b.type ?? "");
+      if      (sortField === "date")    cmp = numDate(a) - numDate(b);
+      else if (sortField === "end")     cmp = (a.end ?? a.date ?? 0) - (b.end ?? b.date ?? 0);
+      else if (sortField === "sources") cmp = (a.sources?.length ?? 0) - (b.sources?.length ?? 0);
+      else {
+        const av = getCellDisplayValue(a, sortField);
+        const bv = getCellDisplayValue(b, sortField);
+        // empty cells always sort last regardless of direction
+        if (!av || !bv) return !av && !bv ? 0 : (av ? -1 : 1);
+        cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
+      }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [searchedElements, sortField, sortDir]);
+  }, [searchedElements, sortField, sortDir, getCellDisplayValue]);
 
   // Column resize
   const startResize = (e, key) => {
@@ -1723,12 +1729,12 @@ export default function SpreadsheetView({
             {visibleCols.map((col) => (
               <th
                 key={col.key}
-                className={`sheet-th${col.sortable ? " sheet-th-sortable" : ""}${sortField === col.key ? " sheet-th-active" : ""}`}
+                className={`sheet-th sheet-th-sortable${sortField === col.key ? " sheet-th-active" : ""}`}
                 style={{ width: w(col.key) }}
-                onClick={col.sortable ? () => handleSortClick(col.key) : undefined}
+                onClick={() => handleSortClick(col.key)}
               >
                 {col.label}
-                {col.sortable && <SortIcon field={col.key} />}
+                <SortIcon field={col.key} />
                 <div className="sheet-resize-handle" onMouseDown={(e) => startResize(e, col.key)} onClick={(e) => e.stopPropagation()} />
               </th>
             ))}
