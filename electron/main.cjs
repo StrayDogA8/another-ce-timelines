@@ -341,7 +341,8 @@ ipcMain.handle('download-update', async () => {
 });
 
 ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall();
+  // Silent install; non-silent would re-open the assisted installer wizard on every update
+  autoUpdater.quitAndInstall(true, true);
 });
 
 app.whenReady().then(async () => {

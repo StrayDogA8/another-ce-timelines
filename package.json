@@ -32,6 +32,11 @@
       ],
       "icon": "public/favicon/favicon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true
+    },
     "mac": {
       "target": [
         "dmg"
