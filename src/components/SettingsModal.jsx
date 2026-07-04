@@ -33,6 +33,8 @@ export default function SettingsModal({
   layoutOptions = [],
 }) {
   const [title, setTitle] = useState("");
+  // Title drives the filename on disk, so it only commits on blur/Enter/close, not per keystroke
+  const [committedTitle, setCommittedTitle] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [detailLevel, setDetailLevel] = useState(1);
@@ -162,12 +164,21 @@ export default function SettingsModal({
     setTickDensityTooltipLeft(left);
   }, [tickDensitySlider]);
 
+  const commitTitle = useCallback(() => {
+    setCommittedTitle((prev) => (title.trim() && sanitizeTitle(title) ? title : prev));
+  }, [title]);
+
+  const handleClose = useCallback(() => {
+    commitTitle();
+    onClose();
+  }, [commitTitle, onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e) => { if (e.key === "Escape") onClose(); };
+    const handleKeyDown = (e) => { if (e.key === "Escape") handleClose(); };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   useEffect(() => {
     updateDetailTooltipPosition();
@@ -185,6 +196,7 @@ export default function SettingsModal({
         setNestEraSubGroups(Boolean(timelineData.file.nestEraSubGroups));
       } else {
         setTitle(timelineData.file.title || "");
+        setCommittedTitle(timelineData.file.title || "");
         setStart(String(timelineData.file.startLabel ?? timelineData.file.start ?? ""));
         setEnd(String(timelineData.file.endLabel ?? timelineData.file.end ?? ""));
         const rawDetail = Number(timelineData.file.detailLevel);
@@ -300,7 +312,7 @@ export default function SettingsModal({
       const parsedScaleSections = saveScaleSections(scaleSections);
       if (onUpdateTimeline) {
         onUpdateTimeline({
-          title,
+          title: committedTitle,
           start: startValue,
           end: endValue,
           detailLevel: Number(detailLevel),
@@ -352,6 +364,7 @@ export default function SettingsModal({
     };
   }, [
     title,
+    committedTitle,
     start,
     end,
     detailLevel,
@@ -422,7 +435,7 @@ export default function SettingsModal({
 
   const handleBackdropMouseUp = (e) => {
     if (backdropPointerDownRef.current && e.target === e.currentTarget) {
-      onClose();
+      handleClose();
     }
     backdropPointerDownRef.current = false;
   };
@@ -437,7 +450,7 @@ export default function SettingsModal({
         <div className="settings-header">
           <button
             className="settings-back-button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close settings"
           >
             <ArrowLeft size={20} strokeWidth={2} />
@@ -524,6 +537,8 @@ export default function SettingsModal({
                   setTitle(e.target.value);
                   if (validationErrors.length) setValidationErrors([]);
                 }}
+                onBlur={commitTitle}
+                onKeyDown={(e) => { if (e.key === "Enter") commitTitle(); }}
                 placeholder="Enter timeline name"
                 maxLength={100}
               />

@@ -446,9 +446,17 @@ function App() {
   // Keep ref in sync so saveTimeline can read it inside stale closures
   useEffect(() => { currentTimelineIdRef.current = currentTimelineId; }, [currentTimelineId]);
 
+  // Serialize renames/saves so an in-flight save can't land after a rename and recreate the old file
+  const persistQueueRef = useRef(Promise.resolve());
+  const enqueuePersist = (task) => {
+    const next = persistQueueRef.current.catch(() => {}).then(task);
+    persistQueueRef.current = next.catch(console.error);
+    return next;
+  };
+
   const saveTimeline = async (data, localId) => {
-    const id = currentTimelineIdRef.current;
-    return saveTimelineToFile(data, id || localId);
+    const id = currentTimelineIdRef.current || localId;
+    return enqueuePersist(() => saveTimelineToFile(data, id));
   };
 
   const undoTimeline = () => {
@@ -1201,10 +1209,11 @@ function App() {
       };
 
       if (nextTimelineId !== oldTimelineId) {
-        renameTimeline({ oldId: oldTimelineId, newId: nextTimelineId }).catch(console.error);
+        // The effect syncing this ref runs post-render, too late for the save below
+        currentTimelineIdRef.current = nextTimelineId;
+        enqueuePersist(() => renameTimeline({ oldId: oldTimelineId, newId: nextTimelineId })).catch(console.error);
         setCurrentTimelineId(nextTimelineId);
       }
-
       saveTimeline(updatedData, nextTimelineId).catch(console.error);
 
       return updatedData;
