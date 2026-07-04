@@ -3,6 +3,7 @@ import { renderNoteMarkdown } from "../utils/noteUtils";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage, importImageFromPath } from "../utils/electronApi";
 import { isSafeNoteFilename } from "../utils/validation";
 import { getStorageId } from "../utils/idUtils";
+import { resolvePackageAssetSrc } from "../utils/viewerPackageStore";
 
 export function useNoteManagement({ selectedElement, timelineData, formData, setFormData, onUpdate }) {
   const timelineId = getStorageId(timelineData?.file);
@@ -100,7 +101,8 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     : "";
 
   const renderedNoteHtml = useMemo(
-    () => renderNoteMarkdown(noteInitialContent, isNoteLoading, noteFileBaseUrl, notesBasePath, assetsBasePath, assetsTimelineDir),
+    // resolvePackageAssetSrc serves images bundled in a packaged .timeline (web viewer); it is a no-op on desktop
+    () => renderNoteMarkdown(noteInitialContent, isNoteLoading, noteFileBaseUrl, notesBasePath, assetsBasePath, assetsTimelineDir, resolvePackageAssetSrc),
     [noteInitialContent, isNoteLoading, noteFileBaseUrl, notesBasePath, assetsBasePath, assetsTimelineDir]
   );
 

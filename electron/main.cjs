@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const http = require('http');
 const { autoUpdater } = require('electron-updater');
+const { isZipBuffer, readPackage, buildPackage, strToU8 } = require('./timelinePackage.cjs');
 const DEFAULT_THEME_KEY = 'parchment';
 
 // Force sRGB color profile to prevent washed-out appearance in screenshots/screenshare on HDR displays
@@ -482,8 +483,13 @@ ipcMain.handle('list-timelines', async () => {
     const timelines = (await Promise.all(
       files.map(async ({ fullPath, relativeId }) => {
         try {
-          const content = await fs.readFile(fullPath, 'utf8');
-          const data = JSON.parse(content);
+          const content = await fs.readFile(fullPath);
+          // Packages copied into the library folder are listed too; opening
+          // one runs the transparent import (see import-timeline)
+          const isPackage = isZipBuffer(content);
+          const data = isPackage
+            ? JSON.parse(readPackage(content).timelineJson)
+            : JSON.parse(content.toString('utf8'));
           const stat = await fs.stat(fullPath);
           const parts = relativeId.split('/');
           const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
@@ -493,6 +499,7 @@ ipcMain.handle('list-timelines', async () => {
             modifiedAt: stat.mtimeMs,
             eventCount: Array.isArray(data.elements) ? data.elements.length : 0,
             folder,
+            ...(isPackage ? { isPackage: true, packagePath: fullPath } : {}),
           };
         } catch (err) {
           console.warn(`Skipping corrupt timeline ${relativeId}:`, err.message);
@@ -563,33 +570,311 @@ ipcMain.handle('export-timeline', async (event, { data, suggestedName }) => {
   }
 });
 
-ipcMain.handle('import-timeline', async () => {
+// Image/video refs inside note markdown: ![alt](src) tokens and src="..." attributes
+function extractNoteImageSrcs(markdown) {
+  const srcs = new Set();
+  const md = String(markdown || '');
+  for (const m of md.matchAll(/!\[[^\]]*\]\(\s*<?([^)\s>]+)/g)) srcs.add(m[1]);
+  for (const m of md.matchAll(/\bsrc\s*=\s*["']([^"']+)["']/gi)) srcs.add(m[1]);
+  return [...srcs];
+}
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const rewriteNoteSrc = (content, oldSrc, newSrc) => content
+  .split(`](${oldSrc})`).join(`](${newSrc})`)
+  .replace(new RegExp(`(src\\s*=\\s*["'])${escapeRegExp(oldSrc)}(["'])`, 'gi'), `$1${newSrc}$2`);
+
+ipcMain.handle('export-timeline-package', async (event, { data, suggestedName }) => {
   try {
-    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openFile'],
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: suggestedName,
       filters: [
-        { name: 'Timeline Files', extensions: ['timeline', 'json'] },
+        { name: 'Timeline Package', extensions: ['timeline'] },
         { name: 'All Files', extensions: ['*'] },
       ],
     });
+    if (canceled || !filePath) return { success: false, canceled: true };
 
-    if (canceled || filePaths.length === 0) {
-      return { success: false, canceled: true };
-    }
+    const storageId = deriveStorageId(data.file);
+    const elements = await stripThumbnails(data.elements, storageId);
+    const dataToExport = { ...data, elements };
+    const elementsArr = Array.isArray(elements) ? elements : [];
 
-    const content = await fs.readFile(filePaths[0], 'utf8');
-    const data = JSON.parse(content);
-    if (data.file && !data.file.uid) {
-      data.file.uid = data.file.id?.replace('-timeline', '')
-        || path.basename(filePaths[0]).replace(/\.(timeline|json)$/i, '');
-    }
-    const resolvedData = { ...data, elements: await resolveThumbnails(data.elements, deriveStorageId(data.file)) };
+    const assetsRoot = await getAssetsRootDir();
+    const timelineAssetsDir = storageId ? await getAssetsDir(storageId) : null;
 
-    return {
-      success: true,
-      data: resolvedData,
-      filename: path.basename(filePaths[0]),
+    const files = {}; // zip entry -> Uint8Array
+    const skipped = [];
+
+    const buffersEqual = (a, b) => a.length === b.length && Buffer.compare(a, b) === 0;
+
+    // Adds bytes under the desired entry name, suffixing on collision with
+    // different content; returns the entry name used
+    const addAssetBytes = (desiredEntry, bytes) => {
+      const ext = path.posix.extname(desiredEntry);
+      const stem = desiredEntry.slice(0, desiredEntry.length - ext.length);
+      let entry = desiredEntry;
+      let counter = 1;
+      while (files[entry] !== undefined && !buffersEqual(files[entry], bytes)) {
+        entry = `${stem}-${counter}${ext}`;
+        counter++;
+      }
+      if (files[entry] === undefined) files[entry] = bytes;
+      return entry;
     };
+
+    // Element thumbnails keep their stored refs, so they claim entry names first
+    for (const el of elementsArr) {
+      const ref = el.thumbnail;
+      if (!ref || typeof ref !== 'string' || ref.includes('://')) continue;
+      const abs = await findThumbnailFile(ref, assetsRoot, timelineAssetsDir);
+      if (!abs) { skipped.push(ref); continue; }
+      try {
+        files[`assets/${ref.replace(/\\/g, '/')}`] = new Uint8Array(await fs.readFile(abs));
+      } catch {
+        skipped.push(ref);
+      }
+    }
+
+    for (const el of elementsArr) {
+      if (!el.noteFile || typeof el.noteFile !== 'string') continue;
+      let content = null;
+      try {
+        const notePath = storageId ? await resolveNotePath(storageId, el.noteFile) : null;
+        if (notePath) content = await fs.readFile(notePath, 'utf8');
+      } catch {}
+      if (content === null) { skipped.push(el.noteFile); continue; }
+
+      for (const src of extractNoteImageSrcs(content)) {
+        if (src.startsWith('timelines-asset://')) {
+          const decoded = decodeAssetUrl(src);
+          const normalizedRoot = path.normalize(assetsRoot);
+          if (!decoded || !path.normalize(decoded).startsWith(normalizedRoot + path.sep)) {
+            skipped.push(src);
+            continue;
+          }
+          let bytes;
+          try { bytes = new Uint8Array(await fs.readFile(decoded)); } catch { skipped.push(src); continue; }
+          // Absolute asset URLs don't travel; store flat and point the note copy at the bare name
+          const entry = addAssetBytes(`assets/${path.basename(decoded)}`, bytes);
+          content = rewriteNoteSrc(content, src, entry.slice('assets/'.length));
+          continue;
+        }
+        if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(src)) continue; // external URL / other scheme
+        if (src.includes('/') || src.includes('\\')) continue; // only bare refs resolve in notes
+        const abs = await findThumbnailFile(src, assetsRoot, timelineAssetsDir);
+        if (!abs) { skipped.push(src); continue; }
+        let bytes;
+        try { bytes = new Uint8Array(await fs.readFile(abs)); } catch { skipped.push(src); continue; }
+        const entry = addAssetBytes(`assets/${src}`, bytes);
+        if (entry !== `assets/${src}`) {
+          content = rewriteNoteSrc(content, src, entry.slice('assets/'.length));
+        }
+      }
+
+      const hasSlash = el.noteFile.includes('/') || el.noteFile.includes('\\');
+      const noteRef = hasSlash ? el.noteFile.replace(/\\/g, '/') : sanitizeNoteFilename(el.noteFile);
+      files[`notes/${noteRef}`] = strToU8(content);
+    }
+
+    const zip = buildPackage(JSON.stringify(dataToExport, null, 2), files);
+    await fs.writeFile(filePath, Buffer.from(zip));
+    return { success: true, path: filePath, skipped: [...new Set(skipped)] };
+  } catch (error) {
+    console.error('Error exporting timeline package:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+async function findTimelineByUid(uid) {
+  if (!uid) return null;
+  const timelinesDir = await getTimelinesDir();
+  const files = await listTimelineFilesRecursive(timelinesDir, timelinesDir);
+  for (const file of files) {
+    try {
+      const data = JSON.parse(await fs.readFile(file.fullPath, 'utf8'));
+      if (deriveStorageId(data.file) === uid) return file;
+    } catch {}
+  }
+  return null;
+}
+
+// Writes bytes (or text) under baseDir/rel, deduping filename collisions with
+// different content; returns the relative path actually used
+async function writeExtractedFile(baseDir, rel, contents) {
+  const bytes = typeof contents === 'string' ? Buffer.from(contents, 'utf8') : Buffer.from(contents);
+  const parts = rel.split('/');
+  const filename = parts.pop();
+  const dir = path.join(baseDir, ...parts);
+  await fs.mkdir(dir, { recursive: true });
+  const ext = path.extname(filename);
+  const stem = path.basename(filename, ext);
+  let candidate = filename;
+  let counter = 1;
+  for (;;) {
+    const target = path.join(dir, candidate);
+    let existing = null;
+    try { existing = await fs.readFile(target); } catch {}
+    if (existing === null) {
+      await fs.writeFile(target, bytes);
+      break;
+    }
+    if (Buffer.compare(existing, bytes) === 0) break; // identical, reuse
+    candidate = `${stem}-${counter}${ext}`;
+    counter++;
+  }
+  return [...parts, candidate].join('/');
+}
+
+// Opening a package (or bare timeline) is a transparent import: extract into
+// the library and the configured assets/notes dirs, then open normally
+ipcMain.handle('import-timeline', async (event, payload) => {
+  try {
+    const resolution = payload?.resolution || null; // null | 'open-existing' | 'copy'
+    let sourcePath = payload?.sourcePath || null;
+    if (!sourcePath) {
+      const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile'],
+        filters: [
+          { name: 'Timeline Files', extensions: ['timeline', 'json'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (canceled || filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+      sourcePath = filePaths[0];
+    }
+
+    const buf = await fs.readFile(sourcePath);
+    let pkg = null;
+    let data;
+    if (isZipBuffer(buf)) {
+      pkg = readPackage(buf);
+      data = JSON.parse(pkg.timelineJson);
+    } else {
+      data = JSON.parse(buf.toString('utf8'));
+    }
+    if (!data || typeof data !== 'object' || !Array.isArray(data.elements)) {
+      return { success: false, error: 'Not a valid timeline file' };
+    }
+
+    data.file = data.file && typeof data.file === 'object' ? data.file : {};
+    if (!data.file.uid) {
+      data.file.uid = data.file.id?.replace('-timeline', '')
+        || safeName(path.basename(sourcePath).replace(/\.(timeline|json)$/i, ''))
+        || `timeline-${Date.now()}`;
+    }
+
+    const existing = await findTimelineByUid(data.file.uid);
+    if (existing) {
+      if (resolution === 'open-existing') {
+        return { success: true, openedExisting: true, id: existing.relativeId };
+      }
+      if (resolution === 'copy') {
+        let candidate;
+        let counter = 1;
+        do {
+          candidate = `${data.file.uid}-copy${counter > 1 ? `-${counter}` : ''}`;
+          counter++;
+        } while (await findTimelineByUid(candidate));
+        data.file.uid = candidate;
+        if (data.file.title) data.file.title = `${data.file.title} (Copy)`;
+      } else {
+        return {
+          success: false,
+          conflict: true,
+          sourcePath,
+          existingId: existing.relativeId,
+          title: data.file.title || existing.relativeId,
+        };
+      }
+    }
+
+    const storageId = data.file.uid;
+    const skipped = [];
+
+    if (pkg) {
+      // Assets first, tracking collision renames so refs can follow
+      const assetsDir = await getAssetsDir(storageId);
+      const assetRenames = new Map();
+      for (const [rel, bytes] of Object.entries(pkg.assets)) {
+        try {
+          const written = await writeExtractedFile(assetsDir, rel, bytes);
+          if (written !== rel) assetRenames.set(rel, written);
+        } catch {
+          skipped.push(rel);
+        }
+      }
+      if (assetRenames.size > 0) {
+        data.elements = data.elements.map((el) => {
+          if (!el.thumbnail || typeof el.thumbnail !== 'string') return el;
+          const ref = el.thumbnail.replace(/\\/g, '/');
+          return assetRenames.has(ref) ? { ...el, thumbnail: assetRenames.get(ref) } : el;
+        });
+      }
+
+      const notesDir = await getNotesDir(storageId);
+      const noteRenames = new Map();
+      for (const [rel, rawContent] of Object.entries(pkg.notes)) {
+        let content = rawContent;
+        for (const [oldRef, newRef] of assetRenames) {
+          content = rewriteNoteSrc(content, oldRef, newRef);
+        }
+        try {
+          const written = await writeExtractedFile(notesDir, rel, content);
+          if (written !== rel) noteRenames.set(rel, written);
+        } catch {
+          skipped.push(rel);
+        }
+      }
+      data.elements = data.elements.map((el) => {
+        if (!el.noteFile || typeof el.noteFile !== 'string') return el;
+        const hasSlash = el.noteFile.includes('/') || el.noteFile.includes('\\');
+        let ref = hasSlash ? el.noteFile.replace(/\\/g, '/') : sanitizeNoteFilename(el.noteFile);
+        if (noteRenames.has(ref)) ref = noteRenames.get(ref);
+        // Slash refs resolve against the notes root, so anchor them to this timeline's folder
+        if (ref.includes('/')) ref = `${sanitizeTimelinePath(storageId)}/${ref}`;
+        return ref === el.noteFile ? el : { ...el, noteFile: ref };
+      });
+    }
+
+    // Install into the library; the renderer then opens it like any other timeline
+    const timelinesDir = await getTimelinesDir();
+    await fs.mkdir(timelinesDir, { recursive: true });
+
+    // A package sitting inside the library folder is converted in place:
+    // once extracted, the installed bare timeline replaces the zip
+    const samePath = (a, b) => process.platform === 'win32'
+      ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
+      : path.resolve(a) === path.resolve(b);
+    const sourceRel = path.relative(path.resolve(timelinesDir), path.resolve(sourcePath));
+    const sourceInLibrary = Boolean(pkg)
+      && /\.timeline$/i.test(sourcePath)
+      && !sourceRel.startsWith('..')
+      && !path.isAbsolute(sourceRel);
+    // Keep a library package's folder placement when converting it
+    const sourceFolder = sourceInLibrary ? path.dirname(sourceRel.replace(/\\/g, '/')) : '';
+    const folderPrefix = sourceFolder && sourceFolder !== '.' ? `${sanitizeTimelinePath(sourceFolder)}/` : '';
+
+    const baseName = safeName(data.file.title) || sanitizeId(storageId, 'timeline');
+    let relId = `${folderPrefix}${baseName}`;
+    let counter = 1;
+    let targetPath = path.join(timelinesDir, `${relId}.timeline`);
+    // The source zip's own name is free to reuse; writing there replaces it
+    while (fsSync.existsSync(targetPath) && !(sourceInLibrary && samePath(targetPath, sourcePath))) {
+      relId = `${folderPrefix}${baseName}-${counter}`;
+      counter++;
+      targetPath = path.join(timelinesDir, `${relId}.timeline`);
+    }
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, JSON.stringify(data, null, 2), 'utf8');
+    if (sourceInLibrary && !samePath(targetPath, sourcePath)) {
+      await fs.unlink(sourcePath).catch((e) => console.warn('Could not remove imported package:', e.message));
+    }
+
+    return { success: true, id: relId, imported: true, skipped: [...new Set(skipped)] };
   } catch (error) {
     console.error('Error importing timeline:', error);
     return {
@@ -1270,25 +1555,35 @@ const toPosixRelative = (from, to) => {
   return rel.split(path.sep).join('/');
 };
 
+// Absolute path encoded in a timelines-asset:// URL, or null
+const decodeAssetUrl = (value) => {
+  try {
+    const url = new URL(value);
+    const p = url.searchParams.get('p');
+    let assetPath = p !== null ? p : decodeURIComponent(url.pathname.slice(1));
+    if (process.platform !== 'win32' && assetPath && !path.isAbsolute(assetPath)) {
+      assetPath = '/' + assetPath;
+    }
+    return assetPath;
+  } catch { return null; }
+};
+
 // Storage ref for a thumbnail: bare filename (in the timeline's assets folder)
 // or slash path (relative to the assets root)
 function extractThumbnailRef(thumbnail, assetsRoot, timelineAssetsDir) {
   if (!thumbnail || typeof thumbnail !== 'string') return null;
   if (thumbnail.startsWith('timelines-asset://')) {
-    try {
-      const url = new URL(thumbnail);
-      const p = url.searchParams.get('p');
-      const decoded = p !== null ? p : decodeURIComponent(url.pathname.slice(1));
-      if (timelineAssetsDir) {
-        const rel = toPosixRelative(timelineAssetsDir, decoded);
-        if (rel) return rel;
-      }
-      if (assetsRoot) {
-        const rel = toPosixRelative(assetsRoot, decoded);
-        if (rel) return rel;
-      }
-      return path.basename(decoded);
-    } catch { return null; }
+    const decoded = decodeAssetUrl(thumbnail);
+    if (!decoded) return null;
+    if (timelineAssetsDir) {
+      const rel = toPosixRelative(timelineAssetsDir, decoded);
+      if (rel) return rel;
+    }
+    if (assetsRoot) {
+      const rel = toPosixRelative(assetsRoot, decoded);
+      if (rel) return rel;
+    }
+    return path.basename(decoded);
   }
   if (!thumbnail.includes('://')) return thumbnail; // already a stored ref
   return null; // external URL, don't touch
@@ -1296,22 +1591,34 @@ function extractThumbnailRef(thumbnail, assetsRoot, timelineAssetsDir) {
 
 // Bare refs prefer the timeline folder, slash refs the assets root;
 // whichever exists on disk wins, so legacy refs keep resolving either way
-async function resolveThumbnailRef(ref, assetsRoot, timelineAssetsDir) {
-  if (!ref) return null;
+function thumbnailCandidatePaths(ref, assetsRoot, timelineAssetsDir) {
   const hasSlash = ref.includes('/') || ref.includes('\\');
-  const candidates = hasSlash
-    ? [path.join(assetsRoot, ref), path.join(timelineAssetsDir, ref)]
-    : [path.join(timelineAssetsDir, ref), path.join(assetsRoot, ref)];
+  const dirs = hasSlash
+    ? [assetsRoot, timelineAssetsDir]
+    : [timelineAssetsDir, assetsRoot];
   const normalizedRoot = path.normalize(assetsRoot);
-  const contained = candidates
-    .map((candidate) => path.normalize(candidate))
+  return dirs
+    .filter(Boolean)
+    .map((dir) => path.normalize(path.join(dir, ref)))
     .filter((candidate) => candidate.startsWith(normalizedRoot + path.sep));
-  for (const candidate of contained) {
+}
+
+async function findThumbnailFile(ref, assetsRoot, timelineAssetsDir) {
+  if (!ref) return null;
+  for (const candidate of thumbnailCandidatePaths(ref, assetsRoot, timelineAssetsDir)) {
     try {
       await fs.access(candidate);
-      return toAssetUrl(candidate);
+      return candidate;
     } catch {}
   }
+  return null;
+}
+
+async function resolveThumbnailRef(ref, assetsRoot, timelineAssetsDir) {
+  if (!ref) return null;
+  const existing = await findThumbnailFile(ref, assetsRoot, timelineAssetsDir);
+  if (existing) return toAssetUrl(existing);
+  const contained = thumbnailCandidatePaths(ref, assetsRoot, timelineAssetsDir);
   return contained.length > 0 ? toAssetUrl(contained[0]) : null;
 }
 

@@ -25,6 +25,8 @@ import {
   deleteAsset,
   renameTimeline,
   copyTimelineStorage,
+  exportTimelinePackage,
+  importTimeline,
 } from "./utils/electronApi";
 import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle, getStorageId } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
@@ -178,6 +180,7 @@ function App() {
   const [currentTimelineId, setCurrentTimelineId] = useState(null);
   const currentTimelineIdRef = useRef(null);
   const [isNewTimelineModalOpen, setIsNewTimelineModalOpen] = useState(false);
+  const [importConflict, setImportConflict] = useState(null); // { title, sourcePath }
   const [isExportPngModalOpen, setIsExportPngModalOpen] = useState(false);
   const [exportPngOptions, setExportPngOptions] = useState(null);
   const [isExportVideoModalOpen, setIsExportVideoModalOpen] = useState(false);
@@ -1245,6 +1248,74 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPackage = async () => {
+    const baseName = timelineData.file?.uid || timelineData.file?.id?.replace("-timeline", "") || "timeline";
+    const result = await exportTimelinePackage(timelineData, `${baseName}.timeline`);
+    if (result?.success && result.skipped?.length > 0) {
+      alert(`Package exported, but ${result.skipped.length} referenced file(s) could not be found and were skipped:\n\n${result.skipped.join("\n")}`);
+    } else if (result && !result.success && !result.canceled) {
+      alert(`Failed to export package: ${result.error || "unknown error"}`);
+    }
+  };
+
+  const finishImport = async (result) => {
+    if (result?.success && result.id) {
+      if (result.skipped?.length > 0) {
+        alert(`Imported, but ${result.skipped.length} bundled file(s) could not be written:\n\n${result.skipped.join("\n")}`);
+      }
+      await handleLoadTimeline(result.id);
+    } else if (result && !result.success && !result.canceled) {
+      alert(`Failed to import timeline: ${result.error || "unknown error"}`);
+    }
+  };
+
+  // sourcePath skips the file picker
+  const handleImportTimeline = async (sourcePath) => {
+    const result = await importTimeline(
+      typeof sourcePath === "string" && sourcePath ? { sourcePath } : undefined
+    );
+    if (result?.conflict) {
+      setImportConflict({ title: result.title, sourcePath: result.sourcePath });
+      return;
+    }
+    await finishImport(result);
+  };
+
+  const handleResolveImportConflict = async (resolution) => {
+    const conflict = importConflict;
+    setImportConflict(null);
+    if (!conflict) return;
+    await finishImport(await importTimeline({ sourcePath: conflict.sourcePath, resolution }));
+  };
+
+  const importConflictModal = importConflict && (
+    <div className="settings-backdrop" onClick={() => setImportConflict(null)}>
+      <div className="settings-modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-header">
+          <h2 className="settings-title">ALREADY IN LIBRARY</h2>
+        </div>
+        <div className="confirm-content">
+          <p className="confirm-text">
+            This file looks like "{importConflict.title}", a timeline that is already in
+            your library. You can open your existing timeline, or import this file as a
+            separate copy alongside it.
+          </p>
+        </div>
+        <div className="confirm-actions">
+          <button className="settings-folder-button" onClick={() => setImportConflict(null)}>
+            Cancel
+          </button>
+          <button className="settings-folder-button" onClick={() => handleResolveImportConflict("copy")}>
+            Import as Copy
+          </button>
+          <button className="settings-folder-button" onClick={() => handleResolveImportConflict("open-existing")}>
+            Open Existing
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const handleDownloadPNG = () => {
     // Open the export PNG modal
     setIsExportPngModalOpen(true);
@@ -1917,6 +1988,7 @@ function App() {
           <HomePage
             onSelectTimeline={handleLoadTimeline}
             onCreateTimeline={handleCreateTimeline}
+            onImportTimeline={handleImportTimeline}
             appThemeKey={appThemeKey}
             themes={themeConfig.themes}
             onAppThemeChange={handleAppThemeChange}
@@ -1951,6 +2023,7 @@ function App() {
             onKeybindsChange={setKeybinds}
           />
         </div>
+        {importConflictModal}
       </>
     );
   }
@@ -2026,6 +2099,7 @@ function App() {
               onAddEra={handleAddEra}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onDownloadJson={handleDownloadJSON}
+              onDownloadPackage={handleDownloadPackage}
               onDownloadPng={handleDownloadPNG}
               onDownloadVideo={handleDownloadVideo}
               onLoadTimeline={handleLoadTimeline}
@@ -2331,6 +2405,7 @@ function App() {
         onSelect={handleSearchSelect}
         fileSettings={timelineData?.file}
       />
+      {importConflictModal}
       </div>
       {screenshotToast && (
         <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#1a7a4a', borderRadius: '8px', padding: '8px 14px', zIndex: 9999, fontSize: 'var(--text-sm)', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', pointerEvents: 'none' }}>

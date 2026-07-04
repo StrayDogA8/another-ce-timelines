@@ -1,3 +1,5 @@
+import { getPackageNote } from './viewerPackageStore';
+
 // Check if running in Electron
 const isElectron = () => {
   return window.electron !== undefined;
@@ -74,14 +76,28 @@ export async function exportTimeline(timelineData, suggestedName) {
   }
 }
 
-export async function importTimeline() {
+export async function exportTimelinePackage(timelineData, suggestedName) {
   if (!isElectron()) {
     console.warn('Not running in Electron');
     return { success: false, error: 'Not in Electron environment' };
   }
 
   try {
-    const result = await window.electron.importTimeline();
+    return await window.electron.exportTimelinePackage(timelineData, suggestedName);
+  } catch (error) {
+    console.error('Error exporting timeline package:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function importTimeline(payload) {
+  if (!isElectron()) {
+    console.warn('Not running in Electron');
+    return { success: false, error: 'Not in Electron environment' };
+  }
+
+  try {
+    const result = await window.electron.importTimeline(payload);
     return result;
   } catch (error) {
     console.error('Error importing timeline:', error);
@@ -119,6 +135,9 @@ export async function addExistingNote({ timelineId }) {
 
 export async function readNote({ timelineId, filename }) {
   if (!isElectron()) {
+    // The web viewer serves notes bundled in a packaged .timeline from memory
+    const packaged = getPackageNote(filename);
+    if (packaged !== null) return { success: true, content: packaged };
     console.warn('Not running in Electron');
     return { success: false, error: 'Not in Electron environment' };
   }

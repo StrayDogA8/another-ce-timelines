@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef, useMemo } from "react";
-import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search } from "lucide-react";
+import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Import } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
 import { getAppSettings, saveAppSettings } from "../utils/appSettings.js";
 
@@ -94,6 +94,7 @@ export default function HomePage({
   reuseExistingBackdrop = false,
   onSelectTimeline,
   onCreateTimeline,
+  onImportTimeline,
   appThemeKey,
   appFontFamily,
   appFontSize,
@@ -353,6 +354,11 @@ export default function HomePage({
   const handleCreateTimeline = (timelineConfig) => {
     setIsNewTimelineModalOpen(false);
     onCreateTimeline({ ...timelineConfig, folder: currentFolder || '' });
+  };
+
+  const openTimelineFile = (file) => {
+    if (file.isPackage) onImportTimeline?.(file.packagePath);
+    else onSelectTimeline(file.id);
   };
 
   const handleContextMenu = (e, file) => {
@@ -639,6 +645,14 @@ export default function HomePage({
               <FolderPlus size={14} strokeWidth={2.5} />
               New Folder
             </button>
+            <button
+              className="timeline-new-btn timeline-new-btn-secondary toolbar-btn-equal"
+              onClick={() => onImportTimeline?.()}
+              title="Import a .timeline or .json file into your library"
+            >
+              <Import size={14} strokeWidth={2.5} />
+              Import
+            </button>
           </div>
           <div className="timeline-toolbar-right">
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -753,11 +767,14 @@ export default function HomePage({
               <div
                 key={file.id}
                 className="timeline-item"
-                onClick={() => onSelectTimeline(file.id)}
+                onClick={() => openTimelineFile(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
                 <div className="timeline-item-body">
                   <span className="timeline-item-title">{file.name}</span>
+                  {file.isPackage && (
+                    <span className="timeline-item-folder" title="Packaged timeline; opening it imports it into your library">Package</span>
+                  )}
                   {normalizedQuery && file.folder && (
                     <span className="timeline-item-folder">{file.folder}</span>
                   )}
@@ -783,7 +800,7 @@ export default function HomePage({
               <div
                 key={file.id}
                 className="timeline-card"
-                onClick={() => onSelectTimeline(file.id)}
+                onClick={() => openTimelineFile(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
                 <div className="timeline-item-icon">
@@ -796,6 +813,9 @@ export default function HomePage({
                 </div>
                 <div className="timeline-card-body">
                   <span className="timeline-item-title">{file.name}</span>
+                  {file.isPackage && (
+                    <span className="timeline-item-folder" title="Packaged timeline; opening it imports it into your library">Package</span>
+                  )}
                   {normalizedQuery && file.folder && (
                     <span className="timeline-item-folder">{file.folder}</span>
                   )}
@@ -1389,27 +1409,31 @@ export default function HomePage({
         >
           <button
             className="context-menu-item"
-            onClick={() => handleMenuAction(() => onSelectTimeline(contextMenu.file.id))}
+            onClick={() => handleMenuAction(() => openTimelineFile(contextMenu.file))}
           >
             <File size={16} />
-            <span>Open</span>
+            <span>{contextMenu.file.isPackage ? 'Import' : 'Open'}</span>
           </button>
 
-          <button
-            className="context-menu-item"
-            onClick={() => handleMenuAction(() => handleDuplicate(contextMenu.file))}
-          >
-            <Copy size={16} />
-            <span>Duplicate</span>
-          </button>
+          {!contextMenu.file.isPackage && (
+            <button
+              className="context-menu-item"
+              onClick={() => handleMenuAction(() => handleDuplicate(contextMenu.file))}
+            >
+              <Copy size={16} />
+              <span>Duplicate</span>
+            </button>
+          )}
 
-          <button
-            className="context-menu-item"
-            onClick={() => handleMenuAction(() => { setRenameTarget({ type: 'timeline', id: contextMenu.file.id, currentName: contextMenu.file.name }); setRenameName(contextMenu.file.name); })}
-          >
-            <Pencil size={16} />
-            <span>Rename</span>
-          </button>
+          {!contextMenu.file.isPackage && (
+            <button
+              className="context-menu-item"
+              onClick={() => handleMenuAction(() => { setRenameTarget({ type: 'timeline', id: contextMenu.file.id, currentName: contextMenu.file.name }); setRenameName(contextMenu.file.name); })}
+            >
+              <Pencil size={16} />
+              <span>Rename</span>
+            </button>
+          )}
           <button
             className="context-menu-item"
             onClick={() => handleMenuAction(() => handleOpenMoveDialog(contextMenu.file))}

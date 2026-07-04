@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect, Fragment } from "react";
 import { parseFilterQuery, matchesFilter } from "../utils/filterUtils";
-import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed, ArrowUpDown, Check } from "lucide-react";
+import { PanelLeft, PanelRight, ChevronDown, FilePlus, File, Copy, FileJson, Image, Video, Settings, ChevronRight, ArrowLeft, Edit2, Trash2, Plus, Tag, Eye, EyeOff, Target, List, Layers3, Search, MoreVertical, Square, SquareDashed, ArrowUpDown, Check, Package } from "lucide-react";
 import { formatYear } from "../utils/timelineUtils";
 import { ICON_MAP as iconMap } from "../config/elementIcons";
 import "../styles/07-modals-menus.css";
@@ -199,6 +199,7 @@ export default function Sidebar({
   onAddEra,
   onOpenSettings,
   onDownloadJson,
+  onDownloadPackage,
   onDownloadPng,
   onDownloadVideo,
   onLoadTimeline,
@@ -1126,9 +1127,18 @@ export default function Sidebar({
           <button
             className="context-menu-item"
             onClick={() => handleMenuAction(() => onDownloadJson?.())}
+            title="Timeline data only; images and notes stay on this computer"
           >
             <FileJson size={16} />
-            <span>Download .json</span>
+            <span>Download .json (data only)</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => handleMenuAction(() => onDownloadPackage?.())}
+            title="One shareable file bundling the timeline with its images and notes"
+          >
+            <Package size={16} />
+            <span>Export .timeline (images & notes)</span>
           </button>
           <button
             className="context-menu-item"
@@ -1169,7 +1179,8 @@ export default function Sidebar({
           onMouseEnter={handleSubmenuMouseEnter}
           onMouseLeave={handleCloseSubmenu}
         >
-          {timelineFiles.map((file) => (
+          {/* Packages aren't loadable directly; they import from the home page */}
+          {timelineFiles.filter((file) => !file.isPackage).map((file) => (
             <button
               key={file.id}
               className="context-menu-item"

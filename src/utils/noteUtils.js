@@ -1,7 +1,10 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
-export function sanitizeNoteHtml(html, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "") {
+// resolveLocalSrc: optional (src) => url hook so environments without
+// filesystem access (the web viewer reading a packaged .timeline) can serve
+// stored asset refs, e.g. as blob URLs
+export function sanitizeNoteHtml(html, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "", resolveLocalSrc = null) {
   const normalizeFsPath = (inputPath) => {
     if (!inputPath) return "";
     let value = decodeURIComponent(String(inputPath)).replace(/\\/g, "/");
@@ -50,6 +53,10 @@ export function sanitizeNoteHtml(html, baseUrl = "", basePath = "", assetsBasePa
   const normalizeSrc = (rawValue) => {
     const value = String(rawValue || "").trim();
     if (!value) return null;
+    if (resolveLocalSrc) {
+      const resolved = resolveLocalSrc(value);
+      if (resolved) return resolved;
+    }
     if (/^https:\/\//i.test(value)) return value;
     if (/^timelines-asset:\/\//i.test(value)) return value;
     if (/^file:\/\//i.test(value)) {
@@ -153,7 +160,7 @@ export function sanitizeNoteHtml(html, baseUrl = "", basePath = "", assetsBasePa
   return doc.body.innerHTML;
 }
 
-export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "") {
+export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = "", assetsBasePath = "", assetsTimelineDir = "", resolveLocalSrc = null) {
   const raw = isLoading ? "_Loading note..._" : content || "";
 
   let frontmatterHtml = "";
@@ -207,5 +214,5 @@ export function renderNoteMarkdown(content, isLoading, baseUrl = "", basePath = 
   };
 
   const html = marked.parse(withHighlight, { renderer });
-  return sanitizeNoteHtml(frontmatterHtml + html, baseUrl, basePath, assetsBasePath, assetsTimelineDir);
+  return sanitizeNoteHtml(frontmatterHtml + html, baseUrl, basePath, assetsBasePath, assetsTimelineDir, resolveLocalSrc);
 }

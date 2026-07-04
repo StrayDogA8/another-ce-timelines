@@ -6,6 +6,8 @@ import RightPanel from "../components/RightPanel";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { applyTheme, getInitialThemeKey } from "../utils/theme";
 import { loadThemeConfig } from "../utils/themeLoader";
+import { isZipBuffer, readPackage } from "../utils/packageReader";
+import { setViewerPackage, getPackageNote, resolvePackageAssetSrc } from "../utils/viewerPackageStore";
 
 const DEFAULT_GROUP_ID = "g-main";
 const SIDEBAR_WIDTH = 350;
@@ -110,16 +112,23 @@ function applyViewerTheme(themes, key, fileFont) {
 }
 
 // Local thumbnails and notes live in desktop-only folders and can't resolve in
-// the browser, so drop those references. Remote thumbnails and wiki links work.
+// the browser. When a packaged .timeline is loaded they're served from the
+// in-memory package store (blob URLs / zipped markdown); otherwise those
+// references are dropped. Remote thumbnails and wiki links always work.
 function sanitizeForBrowser(data) {
   const elements = (data.elements ?? []).map((el) => {
     let next = el;
     const thumb = next.thumbnail ? String(next.thumbnail) : "";
     if (thumb && !/^https?:\/\//i.test(thumb) && !thumb.startsWith("data:")) {
-      const { thumbnail: _thumbnail, ...rest } = next;
-      next = rest;
+      const packaged = thumb.includes("://") ? null : resolvePackageAssetSrc(thumb);
+      if (packaged) {
+        next = { ...next, thumbnail: packaged };
+      } else {
+        const { thumbnail: _thumbnail, ...rest } = next;
+        next = rest;
+      }
     }
-    if (next.noteFile) {
+    if (next.noteFile && getPackageNote(next.noteFile) === null) {
       const { noteFile: _noteFile, ...rest } = next;
       next = rest;
     }
@@ -190,8 +199,7 @@ export default function ViewerApp() {
     return () => { cancelled = true; };
   }, [timelineData]);
 
-  const loadTimelineText = useCallback((text) => {
-    const data = JSON.parse(text);
+  const applyTimelineData = useCallback((data) => {
     if (!data || !Array.isArray(data.elements)) {
       throw new Error("no elements array found");
     }
@@ -205,6 +213,22 @@ export default function ViewerApp() {
     setLoadError("");
   }, []);
 
+  const loadTimelineText = useCallback((text) => {
+    setViewerPackage(null);
+    applyTimelineData(JSON.parse(text));
+  }, [applyTimelineData]);
+
+  const loadTimelineBuffer = useCallback((buffer) => {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    if (isZipBuffer(bytes)) {
+      const pkg = readPackage(bytes);
+      setViewerPackage(pkg);
+      applyTimelineData(JSON.parse(pkg.timelineJson));
+    } else {
+      loadTimelineText(new TextDecoder().decode(bytes));
+    }
+  }, [applyTimelineData, loadTimelineText]);
+
   const handleFile = useCallback((file) => {
     if (!file) return;
     if (!/\.(timeline|json)$/i.test(file.name)) {
@@ -214,15 +238,15 @@ export default function ViewerApp() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        loadTimelineText(reader.result);
+        loadTimelineBuffer(reader.result);
         window.history.replaceState(null, "", viewerBasePath());
       } catch (err) {
         setLoadError(`Could not read timeline: ${err.message}`);
       }
     };
     reader.onerror = () => setLoadError("Could not read the dropped file.");
-    reader.readAsText(file);
-  }, [loadTimelineText]);
+    reader.readAsArrayBuffer(file);
+  }, [loadTimelineBuffer]);
 
   const loadFromGitHub = useCallback(async (segments) => {
     if (!/\.(timeline|json)$/i.test(segments[segments.length - 1])) {
@@ -234,18 +258,28 @@ export default function ViewerApp() {
     try {
       const res = await fetch(GH_RAW_BASE + segments.map(encodeURIComponent).join("/"));
       if (!res.ok) throw new Error(res.status === 404 ? "file not found" : `HTTP ${res.status}`);
-      loadTimelineText(await res.text());
+      loadTimelineBuffer(await res.arrayBuffer());
       window.history.replaceState(null, "", deepLinkUrl(segments));
     } catch (err) {
       setLoadError(`Could not load from GitHub: ${err.message}`);
     } finally {
       setIsRemoteLoading(false);
     }
-  }, [loadTimelineText]);
+  }, [loadTimelineBuffer]);
 
   useEffect(() => {
-    // Handoff from the website's landing page (same origin)
+    // Handoff from the website's landing page (same origin): bare timelines
+    // arrive as text, packaged ones base64-encoded under a separate key
     try {
+      const packed = window.sessionStorage.getItem("timelines-viewer-package");
+      if (packed) {
+        window.sessionStorage.removeItem("timelines-viewer-package");
+        const binary = window.atob(packed);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        loadTimelineBuffer(bytes);
+        return;
+      }
       const payload = window.sessionStorage.getItem("timelines-viewer-payload");
       if (payload) {
         window.sessionStorage.removeItem("timelines-viewer-payload");
@@ -265,7 +299,7 @@ export default function ViewerApp() {
     if (window.location.pathname.startsWith("/viewer/")) {
       window.location.replace("/viewer-landing/");
     }
-  }, [loadFromGitHub, loadTimelineText]);
+  }, [loadFromGitHub, loadTimelineText, loadTimelineBuffer]);
 
   // preventDefault on window keeps the browser from navigating to dropped files
   useEffect(() => {
