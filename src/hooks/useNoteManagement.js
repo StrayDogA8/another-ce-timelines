@@ -18,6 +18,8 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
   const noteRenderRef = useRef(null);
 
   useEffect(() => {
+    if (window.electron === undefined) return;
+
     let isMounted = true;
     Promise.all([getNotesBaseDir(), getAssetsBaseDir()]).then(([notesResult, assetsResult]) => {
       if (!isMounted) return;

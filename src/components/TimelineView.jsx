@@ -1922,6 +1922,10 @@ const TimelineView = forwardRef(function TimelineView({
 
     // Zoom to cursor with transforms
     const handleWheel = (e) => {
+      if (e.target?.closest?.(".timeline-context-menu")) {
+        return;
+      }
+
       const insideLeaflet = e.target.closest(".leaflet-container");
       if (insideLeaflet) {
         if (e.altKey) {
@@ -4226,14 +4230,6 @@ const TimelineView = forwardRef(function TimelineView({
             top: `${filterMenu.y}px`,
             opacity: filterMenu.ready ? 1 : 0,
             pointerEvents: filterMenu.ready ? "auto" : "none",
-          }}
-          onWheel={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onWheelCapture={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
           }}
         >
           {renderFilterMenuContent(false)}

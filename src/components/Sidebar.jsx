@@ -595,24 +595,24 @@ export default function Sidebar({
 
   // Fetch timeline files on mount
   useEffect(() => {
+    if (readOnly || !window.electron?.listTimelines) {
+      setTimelineFiles([]);
+      return;
+    }
+
     const loadTimelineList = async () => {
-      if (window.electron?.listTimelines) {
-        // Load from Electron (AppData)
-        try {
-          const files = await window.electron.listTimelines();
-          setTimelineFiles(files);
-        } catch (error) {
-          console.error('Failed to list timelines:', error);
-          setTimelineFiles([]);
-        }
-      } else {
-        console.warn("Timeline listing is only available in the desktop app.");
+      // Load from Electron (AppData)
+      try {
+        const files = await window.electron.listTimelines();
+        setTimelineFiles(files);
+      } catch (error) {
+        console.error('Failed to list timelines:', error);
         setTimelineFiles([]);
       }
     };
 
     loadTimelineList();
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     if (!sortMenuOpen) return;
