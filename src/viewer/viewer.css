@@ -79,6 +79,11 @@
   border-color: var(--accent-color);
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle, var(--text-muted));
+}
+
 .viewer-landing-error {
   margin-top: 18px;
   font-size: 12px;

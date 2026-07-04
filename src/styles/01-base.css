@@ -72,3 +72,8 @@ button:focus-visible,
   box-shadow: none;
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle);
+}
+

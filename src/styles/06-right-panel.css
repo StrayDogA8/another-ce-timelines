@@ -470,10 +470,6 @@
   transition: background 0.12s ease, border-bottom-color 0.12s ease;
 }
 
-.edit-input::placeholder {
-  color: var(--text-subtle);
-}
-
 .edit-input:focus {
   background: color-mix(in srgb, var(--accent-color), transparent 50%) !important;
   border-bottom-color: var(--text-primary);
