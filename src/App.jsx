@@ -782,34 +782,37 @@ function App() {
 
   const handleRequestDelete = (elementId) => {
     if (!timelineData?.elements) return;
-    const element = timelineData.elements.find((el) => el.id === elementId);
-    if (!element) return;
-    setDeleteElementDialog(element);
+    const ids = new Set(Array.isArray(elementId) ? elementId : [elementId]);
+    const targets = timelineData.elements.filter((el) => ids.has(el.id));
+    if (!targets.length) return;
+    setDeleteElementDialog(targets);
     setDeleteElementWithNotes(false);
     setDeleteElementWithImage(false);
   };
 
   const handleConfirmDeleteElement = async () => {
-    const element = deleteElementDialog;
-    if (!element) return;
+    const targets = deleteElementDialog;
+    if (!targets?.length) return;
     const timelineId = getStorageId(timelineData?.file) || 'timeline';
-    if (deleteElementWithNotes && element.noteFile) {
-      await deleteNote({ timelineId, filename: element.noteFile }).catch(console.error);
-    }
-    if (deleteElementWithImage) {
-      const filename = getLocalThumbnailFilename(element.thumbnail);
-      // Don't delete the file if another element still references the same image
-      const sharedWithOtherElement = filename && timelineData?.elements?.some(
-        (el) => el.id !== element.id && getLocalThumbnailFilename(el.thumbnail) === filename
-      );
-      if (filename && !sharedWithOtherElement) {
-        await deleteAsset({ timelineId, filename }).catch(console.error);
+    const deletedIds = new Set(targets.map((el) => el.id));
+    const removedImages = new Set();
+    for (const element of targets) {
+      if (deleteElementWithNotes && element.noteFile) {
+        await deleteNote({ timelineId, filename: element.noteFile }).catch(console.error);
+      }
+      if (deleteElementWithImage) {
+        const filename = getLocalThumbnailFilename(element.thumbnail);
+        // Don't delete the file if a surviving element still references the same image
+        const sharedWithSurvivor = filename && timelineData?.elements?.some(
+          (el) => !deletedIds.has(el.id) && getLocalThumbnailFilename(el.thumbnail) === filename
+        );
+        if (filename && !sharedWithSurvivor && !removedImages.has(filename)) {
+          removedImages.add(filename);
+          await deleteAsset({ timelineId, filename }).catch(console.error);
+        }
       }
     }
-    handleDelete(element.id);
-    if (selectedId === element.id) {
-      setSelectedId(null);
-    }
+    handleDelete([...deletedIds]);
     setDeleteElementDialog(null);
   };
 
@@ -1012,23 +1015,23 @@ function App() {
   };
 
   const handleDelete = (elementId) => {
+    const toDelete = new Set(Array.isArray(elementId) ? elementId : [elementId]);
     setTimelineData((prevData) => {
-      const toDelete = new Set([elementId]);
       const filteredElements = prevData.elements.filter((el) => !toDelete.has(el.id));
 
       const cleanedElements = filteredElements.map(el => {
-        if (el.type === "event" && el.parents?.includes(elementId)) {
+        if (el.type === "event" && el.parents?.some((id) => toDelete.has(id))) {
           return {
             ...el,
-            parents: el.parents.filter(id => id !== elementId),
+            parents: el.parents.filter((id) => !toDelete.has(id)),
           };
         }
 
-        if (el.type === "span" && (el.parent === elementId || el.extendFrom === elementId || el.mergeParent === elementId)) {
+        if (el.type === "span" && (toDelete.has(el.parent) || toDelete.has(el.extendFrom) || toDelete.has(el.mergeParent))) {
           const cleaned = { ...el };
-          if (cleaned.parent === elementId) delete cleaned.parent;
-          if (cleaned.extendFrom === elementId) delete cleaned.extendFrom;
-          if (cleaned.mergeParent === elementId) delete cleaned.mergeParent;
+          if (toDelete.has(cleaned.parent)) delete cleaned.parent;
+          if (toDelete.has(cleaned.extendFrom)) delete cleaned.extendFrom;
+          if (toDelete.has(cleaned.mergeParent)) delete cleaned.mergeParent;
           return cleaned;
         }
 
@@ -2324,7 +2327,11 @@ function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="settings-header">
-              <h2 className="settings-title">DELETE {deleteElementDialog.type?.toUpperCase()}</h2>
+              <h2 className="settings-title">
+                {deleteElementDialog.length > 1
+                  ? `DELETE ${deleteElementDialog.length} ELEMENTS`
+                  : `DELETE ${deleteElementDialog[0].type?.toUpperCase()}`}
+              </h2>
               <button
                 className="settings-back-button"
                 onClick={() => setDeleteElementDialog(null)}
@@ -2336,26 +2343,27 @@ function App() {
 
             <div className="confirm-content">
               <p className="confirm-text">
-                Are you sure you want to delete "{deleteElementDialog.title}"? This cannot be
-                undone.
+                {deleteElementDialog.length > 1
+                  ? `Are you sure you want to delete these ${deleteElementDialog.length} elements? This cannot be undone.`
+                  : `Are you sure you want to delete "${deleteElementDialog[0].title}"? This cannot be undone.`}
               </p>
               <label className="confirm-checkbox">
                 <input
                   type="checkbox"
                   checked={deleteElementWithNotes}
-                  disabled={!deleteElementDialog.noteFile}
+                  disabled={!deleteElementDialog.some((el) => el.noteFile)}
                   onChange={(e) => setDeleteElementWithNotes(e.target.checked)}
                 />
-                Also delete linked note file
+                Also delete linked note file{deleteElementDialog.filter((el) => el.noteFile).length > 1 ? "s" : ""}
               </label>
               <label className="confirm-checkbox">
                 <input
                   type="checkbox"
                   checked={deleteElementWithImage}
-                  disabled={!getLocalThumbnailFilename(deleteElementDialog.thumbnail)}
+                  disabled={!deleteElementDialog.some((el) => getLocalThumbnailFilename(el.thumbnail))}
                   onChange={(e) => setDeleteElementWithImage(e.target.checked)}
                 />
-                Also delete image file
+                Also delete image file{deleteElementDialog.filter((el) => getLocalThumbnailFilename(el.thumbnail)).length > 1 ? "s" : ""}
               </label>
             </div>
 

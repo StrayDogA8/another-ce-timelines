@@ -49,7 +49,10 @@ export default function SpreadsheetView({
 }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState("");
-  const [selectedCell, setSelectedCell] = useState(null); // { id, field }
+  const [selectedCell, setSelectedCell] = useState(null); // { id, field } selection anchor
+  const [selEnd, setSelEnd] = useState(null); // { id, field } far corner of selection
+  const dragSelRef = useRef(false);
+  const didDragRef = useRef(false);
   const [sortField, setSortField] = useState("date");
   const [sortDir, setSortDir] = useState("asc");
   const [colWidths, setColWidths] = useState({});
@@ -246,6 +249,36 @@ export default function SpreadsheetView({
     });
   }, [searchedElements, sortField, sortDir, getCellDisplayValue]);
 
+  const rowIndexById = useMemo(() => {
+    const m = {};
+    sortedElements.forEach((el, i) => { m[el.id] = i; });
+    return m;
+  }, [sortedElements]);
+
+  const colIndexByKey = useMemo(() => {
+    const m = {};
+    visibleCols.forEach((c, i) => { m[c.key] = i; });
+    return m;
+  }, [visibleCols]);
+
+  const selRect = useMemo(() => {
+    if (!selectedCell || !selEnd) return null;
+    const r1 = rowIndexById[selectedCell.id], r2 = rowIndexById[selEnd.id];
+    const c1 = colIndexByKey[selectedCell.field], c2 = colIndexByKey[selEnd.field];
+    if (r1 == null || r2 == null || c1 == null || c2 == null) return null;
+    return { top: Math.min(r1, r2), bottom: Math.max(r1, r2), left: Math.min(c1, c2), right: Math.max(c1, c2) };
+  }, [selectedCell, selEnd, rowIndexById, colIndexByKey]);
+
+  const selectedCellSet = useMemo(() => {
+    const set = new Set();
+    if (selRect) {
+      for (let r = selRect.top; r <= selRect.bottom; r++)
+        for (let c = selRect.left; c <= selRect.right; c++)
+          set.add(`${sortedElements[r].id}|${visibleCols[c].key}`);
+    }
+    return set;
+  }, [selRect, sortedElements, visibleCols]);
+
   // Column resize
   const startResize = (e, key) => {
     e.preventDefault();
@@ -390,74 +423,106 @@ export default function SpreadsheetView({
     return JSON.stringify(el) !== JSON.stringify(updated) ? updated : null;
   }, [elements, groups]);
 
-  // Ctrl+C/X/V on selected cell, Escape to deselect
+  // Ctrl+C/X/V and Delete on the selected cell(s), Escape to deselect
   useEffect(() => {
     if (!selectedCell) return;
+
+    const getSelection = () => {
+      if (selRect) {
+        return {
+          rows: sortedElements.slice(selRect.top, selRect.bottom + 1),
+          fields: visibleCols.slice(selRect.left, selRect.right + 1).map((c) => c.key),
+        };
+      }
+      const el = elements.find((x) => x.id === selectedCell.id);
+      return el ? { rows: [el], fields: [selectedCell.field] } : { rows: [], fields: [] };
+    };
+
+    const clearCells = (rows, fields) => {
+      rows.forEach((orig) => {
+        let el = orig;
+        let changed = false;
+        fields.forEach((field) => {
+          if (field === "sources" || field === "thumbnail") {
+            if (el[field] !== undefined) { el = { ...el }; delete el[field]; changed = true; }
+          } else {
+            const u = computeFieldUpdate(el, field, "");
+            if (u) { el = u; changed = true; }
+          }
+        });
+        if (changed) onUpdate(el);
+      });
+    };
+
+    const cellText = (el, field) =>
+      field === "sources" ? JSON.stringify(el.sources ?? []) : (getCellDisplayValue(el, field) ?? "");
+
     const handler = (e) => {
-      if (e.key === "Escape") { setSelectedCell(null); return; }
+      if (e.key === "Escape") { setSelectedCell(null); setSelEnd(null); return; }
       if (editCell) return;
       if (!readOnly && (e.key === "Delete" || e.key === "Backspace")) {
-        const el = elements.find((x) => x.id === selectedCell.id);
-        if (!el) return;
-        const { field } = selectedCell;
-        if (field === "sources") {
-          const updated = { ...el }; delete updated.sources; onUpdate(updated);
-        } else if (field === "thumbnail") {
-          const updated = { ...el }; delete updated.thumbnail; onUpdate(updated);
-        } else {
-          const updated = computeFieldUpdate(el, field, "");
-          if (updated) onUpdate(updated);
-        }
+        const { rows, fields } = getSelection();
+        if (!rows.length) return;
+        clearCells(rows, fields);
         e.preventDefault();
         e.stopPropagation();
         return;
       }
       if (!(e.ctrlKey || e.metaKey)) return;
-      const el = elements.find((x) => x.id === selectedCell.id);
-      if (!el) return;
-      const { field } = selectedCell;
+      const { rows, fields } = getSelection();
+      if (!rows.length) return;
+      const copyText = () =>
+        rows.length === 1 && fields.length === 1
+          ? cellText(rows[0], fields[0])
+          : rows.map((el) => fields.map((f) => cellText(el, f).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
       if (e.key === "c") {
         e.preventDefault();
-        const text = field === "sources"
-          ? JSON.stringify(el.sources ?? [])
-          : (getCellDisplayValue(el, field) ?? "");
-        navigator.clipboard?.writeText(text).catch(() => {});
+        navigator.clipboard?.writeText(copyText()).catch(() => {});
       } else if (e.key === "x" && !readOnly) {
         e.preventDefault();
-        if (field === "sources") {
-          const text = JSON.stringify(el.sources ?? []);
-          navigator.clipboard?.writeText(text).then(() => {
-            const updated = { ...el }; delete updated.sources; onUpdate(updated);
-          }).catch(() => {});
-        } else {
-          const val = getCellDisplayValue(el, field) ?? "";
-          navigator.clipboard?.writeText(val).then(() => {
-            const updated = computeFieldUpdate(el, field, "");
-            if (updated) onUpdate(updated);
-          }).catch(() => {});
-        }
+        navigator.clipboard?.writeText(copyText()).then(() => clearCells(rows, fields)).catch(() => {});
       } else if (e.key === "v" && !readOnly) {
         e.preventDefault();
-        navigator.clipboard?.readText().then((text) => {
-          if (field === "sources") {
-            try {
-              const parsed = JSON.parse(text.trim());
-              if (Array.isArray(parsed)) {
-                const updated = { ...el, sources: parsed };
-                if (!parsed.length) delete updated.sources;
-                onUpdate(updated);
-              }
-            } catch { /* not a sources payload, ignore */ }
-          } else {
-            const updated = computeFieldUpdate(el, field, text.trim());
-            if (updated) onUpdate(updated);
+        navigator.clipboard?.readText().then((raw) => {
+          const grid = raw.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n").map((line) => line.split("\t"));
+          if (!grid.length || !grid[0].length) return;
+          let tRows = rows, tFields = fields;
+          if (rows.length === 1 && fields.length === 1 && (grid.length > 1 || grid[0].length > 1)) {
+            const r0 = rowIndexById[rows[0].id];
+            const c0 = colIndexByKey[fields[0]];
+            if (r0 != null && c0 != null) {
+              tRows = sortedElements.slice(r0, r0 + grid.length);
+              tFields = visibleCols.slice(c0, c0 + grid[0].length).map((c) => c.key);
+            }
           }
+          tRows.forEach((orig, ri) => {
+            let el = orig;
+            let changed = false;
+            tFields.forEach((field, ci) => {
+              const val = grid[ri % grid.length]?.[ci % grid[0].length];
+              if (val === undefined) return;
+              if (field === "sources") {
+                try {
+                  const parsed = JSON.parse(val.trim());
+                  if (Array.isArray(parsed)) {
+                    el = { ...el };
+                    if (parsed.length) el.sources = parsed; else delete el.sources;
+                    changed = true;
+                  }
+                } catch { /* not a sources payload, ignore */ }
+              } else {
+                const u = computeFieldUpdate(el, field, val.trim());
+                if (u) { el = u; changed = true; }
+              }
+            });
+            if (changed) onUpdate(el);
+          });
         }).catch(() => {});
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [selectedCell, editCell, elements, getCellDisplayValue, computeFieldUpdate, onUpdate, readOnly]);
+  }, [selectedCell, selRect, editCell, elements, sortedElements, visibleCols, rowIndexById, colIndexByKey, getCellDisplayValue, computeFieldUpdate, onUpdate, readOnly]);
 
   // Keep thead top in sync with sticky wrapper height
   useLayoutEffect(() => {
@@ -563,6 +628,7 @@ export default function SpreadsheetView({
 
   const toggleHideYear = (e, el) => {
     e.stopPropagation();
+    if (e.shiftKey) return;
     const updated = { ...el };
     if (el.hideYears) delete updated.hideYears; else updated.hideYears = true;
     onUpdate(updated);
@@ -850,8 +916,13 @@ export default function SpreadsheetView({
 
   const selectCell = (e, id, field) => {
     e.stopPropagation();
+    if (e.shiftKey && selectedCell) {
+      setSelEnd({ id, field });
+      return;
+    }
     onSelect(id);
     setSelectedCell({ id, field });
+    setSelEnd(null);
     if (editCell && (editCell.id !== id || editCell.field !== field)) {
       clearAllMenus();
     }
@@ -860,12 +931,63 @@ export default function SpreadsheetView({
     }
   };
 
+  const cellFromEvent = (e) => {
+    const td = e.target.closest?.("td.sheet-cell");
+    if (!td) return null;
+    const id = td.closest("tr")?.dataset.rowId;
+    const field = visibleCols[td.cellIndex]?.key;
+    return id && field ? { id, field } : null;
+  };
+
+  const handleTableMouseDown = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest?.("input, select, button, textarea")) return;
+    const cell = cellFromEvent(e);
+    if (!cell) return;
+    didDragRef.current = false;
+    dragSelRef.current = true;
+    if (e.shiftKey && selectedCell) {
+      setSelEnd(cell);
+      return;
+    }
+    onSelect(cell.id);
+    setSelectedCell(cell);
+    setSelEnd(null);
+  };
+
+  const handleTableMouseOver = (e) => {
+    if (!dragSelRef.current) return;
+    const cell = cellFromEvent(e);
+    if (!cell) return;
+    if (selectedCell && (cell.id !== selectedCell.id || cell.field !== selectedCell.field)) {
+      if (!didDragRef.current) {
+        didDragRef.current = true;
+        window.getSelection()?.removeAllRanges();
+        document.body.style.userSelect = "none";
+      }
+    }
+    setSelEnd((prev) =>
+      prev && prev.id === cell.id && prev.field === cell.field ? prev : cell
+    );
+  };
+
+  useEffect(() => {
+    const onUp = () => {
+      dragSelRef.current = false;
+      document.body.style.userSelect = "";
+      setTimeout(() => { didDragRef.current = false; }, 0);
+    };
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, []);
+
   const renderCell = (el, col) => {
     const { key: field } = col;
     const isEditing = editCell?.id === el.id && editCell?.field === field;
     const isSel = selectedCell?.id === el.id && selectedCell?.field === field;
+    const inRange = selectedCellSet.has(`${el.id}|${field}`);
     const cellW = w(field);
-    const selClass = isSel ? " sheet-cell-selected" : "";
+    const selClass = isSel ? " sheet-cell-selected" : inRange ? " sheet-cell-range" : "";
 
     if (field === "type") {
       return (
@@ -924,6 +1046,7 @@ export default function SpreadsheetView({
       const isExtend = !!el.extendFrom;
       const toggleParentType = (e) => {
         e.stopPropagation();
+        if (e.shiftKey) return;
         const updated = { ...el };
         if (isExtend) {
           updated.parent = el.extendFrom;
@@ -1158,6 +1281,7 @@ export default function SpreadsheetView({
       }
       const toggleHideDetails = (e) => {
         e.stopPropagation();
+        if (e.shiftKey) return;
         const updated = { ...el };
         if (el.hideDetails) delete updated.hideDetails; else updated.hideDetails = true;
         onUpdate(updated);
@@ -1257,7 +1381,7 @@ export default function SpreadsheetView({
       const timelineId = file.id?.replace("-timeline", "");
       const openPanel = (e) => {
         selectCell(e, el.id, field);
-        if (readOnly) return;
+        if (readOnly || e.shiftKey) return;
         if (!isPanelOpen) {
           const isRemote = el.thumbnail?.startsWith("http://") || el.thumbnail?.startsWith("https://");
           setThumbPanelCellId(el.id);
@@ -1717,7 +1841,10 @@ export default function SpreadsheetView({
       </div>
       </div>{/* end sheet-sticky-top */}
 
-      <div ref={scrollRef} className="sheet-scroll-x" onClick={() => { setSelectedCell(null); clearAllMenus(); }}>
+      <div ref={scrollRef} className="sheet-scroll-x" onClick={() => {
+        if (didDragRef.current) { didDragRef.current = false; return; }
+        setSelectedCell(null); setSelEnd(null); clearAllMenus();
+      }}>
       <table className="sheet-table" style={{ width: visibleCols.reduce((s, c) => s + w(c.key), 0) }}>
         <colgroup>
           {visibleCols.map((col) => (
@@ -1740,7 +1867,7 @@ export default function SpreadsheetView({
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody onMouseDown={handleTableMouseDown} onMouseOver={handleTableMouseOver}>
           {sortedElements.length === 0 ? (
             <tr>
               <td colSpan={visibleCols.length} className="sheet-empty">
@@ -1751,10 +1878,20 @@ export default function SpreadsheetView({
             sortedElements.map((el) => (
               <tr
                 key={el.id}
+                data-row-id={el.id}
                 ref={(node) => { if (node) rowRefs.current[el.id] = node; else delete rowRefs.current[el.id]; }}
                 className={`sheet-row${selectedId === el.id ? " sheet-row-selected" : ""}`}
                 onClick={() => onSelect(el.id)}
-                onContextMenu={(e) => { if (readOnly) return; e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id }); }}
+                onContextMenu={(e) => {
+                  if (readOnly) return;
+                  e.preventDefault();
+                  let ids = [el.id];
+                  const r = rowIndexById[el.id];
+                  if (selRect && r != null && r >= selRect.top && r <= selRect.bottom) {
+                    ids = sortedElements.slice(selRect.top, selRect.bottom + 1).map((x) => x.id);
+                  }
+                  setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id, ids });
+                }}
               >
                 {visibleCols.map((col) => renderCell(el, col))}
               </tr>
@@ -1778,8 +1915,9 @@ export default function SpreadsheetView({
             </button>
           )}
           {onDelete && (
-            <button className="context-menu-item context-menu-item-danger" onClick={() => { onDelete(ctxMenu.id); setCtxMenu(null); }}>
-              Delete
+            <button className="context-menu-item context-menu-item-danger"
+              onClick={() => { onDelete(ctxMenu.ids?.length > 1 ? ctxMenu.ids : ctxMenu.id); setCtxMenu(null); }}>
+              {ctxMenu.ids?.length > 1 ? `Delete ${ctxMenu.ids.length} elements` : "Delete"}
             </button>
           )}
         </div>

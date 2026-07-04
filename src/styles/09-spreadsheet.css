@@ -302,6 +302,11 @@
   box-shadow: inset 0 0 0 2px var(--link-color) !important;
 }
 
+.sheet-cell-range {
+  background: color-mix(in srgb, var(--link-color), transparent 86%) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link-color), transparent 60%) !important;
+}
+
 .sheet-cell-editing {
   padding: 0;
   overflow: visible;
