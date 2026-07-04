@@ -1442,3 +1442,24 @@
   color: var(--ui-muted);
   margin: 0;
 }
+
+.homepage-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.homepage-drop-card {
+  padding: 18px 28px;
+  border: 2px dashed var(--accent-color);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}

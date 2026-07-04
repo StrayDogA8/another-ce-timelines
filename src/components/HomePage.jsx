@@ -150,6 +150,7 @@ export default function HomePage({
   const [moveFolderTarget, setMoveFolderTarget] = useState(null);
   const [showAllFolders, setShowAllFolders] = useState(false);
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [deleteDialogFile, setDeleteDialogFile] = useState(null);
   const [deleteDialogWithNotes, setDeleteDialogWithNotes] = useState(false);
   const [deleteDialogWithAssets, setDeleteDialogWithAssets] = useState(false);
@@ -360,6 +361,36 @@ export default function HomePage({
     if (file.isPackage) onImportTimeline?.(file.packagePath);
     else onSelectTimeline(file.id);
   };
+
+  // preventDefault on window keeps Electron from navigating to dropped files
+  useEffect(() => {
+    if (settingsOnly) return undefined;
+    const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+    const onDragOver = (e) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      setIsDragOver(true);
+    };
+    const onDragLeave = (e) => {
+      if (!e.relatedTarget) setIsDragOver(false);
+    };
+    const onDrop = (e) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (!file || !/\.(timeline|json)$/i.test(file.name)) return;
+      const sourcePath = window.electron?.getPathForFile?.(file);
+      if (sourcePath) onImportTimeline?.(sourcePath);
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [settingsOnly, onImportTimeline]);
 
   const handleContextMenu = (e, file) => {
     e.preventDefault();
@@ -585,6 +616,11 @@ export default function HomePage({
 
   return (
     <div className={`homepage${settingsOnly ? " homepage-settings-only" : ""}`}>
+      {!settingsOnly && isDragOver && (
+        <div className="homepage-drop-overlay">
+          <div className="homepage-drop-card">Drop a .timeline file to import it</div>
+        </div>
+      )}
       {!settingsOnly && (
         <>
           <div className="homepage-container">
