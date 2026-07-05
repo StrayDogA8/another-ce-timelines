@@ -5,14 +5,14 @@ const isElectron = () => {
   return window.electron !== undefined;
 };
 
-export async function saveTimelineToFile(timelineData, filename = 'ancient-greece') {
+export async function saveTimelineToFile(timelineData, filename = 'ancient-greece', options = {}) {
   if (!isElectron()) {
     console.warn('Not running in Electron, skipping file save');
     return { success: false, error: 'Not in Electron environment' };
   }
 
   try {
-    const result = await window.electron.saveTimeline(timelineData, filename);
+    const result = await window.electron.saveTimeline(timelineData, filename, options);
     return result;
   } catch (error) {
     console.error('Error saving timeline:', error);

@@ -268,7 +268,7 @@ export default function Sidebar({
   const displayName = useMemo(() => {
     if (!file) return "";
     if (file.id?.endsWith("-timeline")) {
-      return file.id.replace("-timeline", ".timeline");
+      return file.id.replace(/-timeline$/, ".timeline");
     }
     return file.title || file.id || "";
   }, [file]);

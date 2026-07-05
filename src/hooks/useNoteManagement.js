@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { renderNoteMarkdown } from "../utils/noteUtils";
 import { createNote, addExistingNote, readNote, writeNote, deleteNote, getNotesBaseDir, getAssetsBaseDir, pickAndImportImage, importImageFromPath } from "../utils/electronApi";
-import { isSafeNoteFilename } from "../utils/validation";
+import { isSafeNoteRef } from "../utils/validation";
 import { getStorageId } from "../utils/idUtils";
 import { resolvePackageAssetSrc } from "../utils/viewerPackageStore";
 
@@ -114,7 +114,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
   }, [renderedNoteHtml]);
 
   const handleNoteSave = useCallback(async (content) => {
-    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
+    if (!formData?.noteFile || !isSafeNoteRef(formData.noteFile)) return;
     const timelineId = getStorageId(timelineData?.file);
     if (!timelineId) return;
     await writeNote({ timelineId, filename: formData.noteFile, content });
@@ -165,7 +165,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
   }, [formData, timelineData?.file?.id, onUpdate, setFormData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteNote = useCallback(async () => {
-    if (!formData?.noteFile || !isSafeNoteFilename(formData.noteFile)) return;
+    if (!formData?.noteFile || !isSafeNoteRef(formData.noteFile)) return;
     const confirmed = window.confirm("Delete this note? This cannot be undone.");
     if (!confirmed) return;
     const timelineId = getStorageId(timelineData?.file);
@@ -187,7 +187,7 @@ export function useNoteManagement({ selectedElement, timelineData, formData, set
     setNoteInitialContent("");
     setNoteExists(false);
     onUpdate?.(next);
-  }, [formData, onUpdate, setFormData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [formData, onUpdate, setFormData]);
 
   const handlePickLocalImage = useCallback(async () => {
     if (!timelineId) return null;

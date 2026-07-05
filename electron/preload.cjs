@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
-  saveTimeline: (data, filename) => ipcRenderer.invoke('save-timeline', { data, filename }),
+  saveTimeline: (data, filename, options) => ipcRenderer.invoke('save-timeline', { data, filename, create: options?.create === true }),
   listTimelines: () => ipcRenderer.invoke('list-timelines'),
   loadTimeline: (filename) => ipcRenderer.invoke('load-timeline', filename),
   exportTimeline: (data, suggestedName) => ipcRenderer.invoke('export-timeline', { data, suggestedName }),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Heading1, Heading2, Heading3, Bold, Italic, Strikethrough, Underline, Highlighter, Link2, Trash2, Unlink, ImagePlay, Paperclip } from "lucide-react";
 
 const NoteEditor = forwardRef(function NoteEditor(
@@ -9,14 +9,51 @@ const NoteEditor = forwardRef(function NoteEditor(
   const noteContentRef = useRef(noteContent);
   const textareaRef = useRef(null);
   noteContentRef.current = noteContent;
+  const savedContentRef = useRef(initialContent ?? "");
+  const saveTimerRef = useRef(null);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  const flushSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (noteContentRef.current === savedContentRef.current) return;
+    savedContentRef.current = noteContentRef.current;
+    onSaveRef.current(noteContentRef.current);
+  }, []);
 
   useEffect(() => {
-    setNoteContent(initialContent ?? "");
+    const next = initialContent ?? "";
+    // A save echoes back through this prop; resetting on it would clobber keystrokes typed meanwhile
+    if (next === savedContentRef.current) return;
+    savedContentRef.current = next;
+    setNoteContent(next);
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
   }, [initialContent]);
 
+  // Debounced autosave for every edit path (typing and toolbar insertions)
+  useEffect(() => {
+    if (noteContent === savedContentRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushSave, 2000);
+  }, [noteContent, flushSave]);
+
+  useEffect(() => {
+    window.addEventListener("beforeunload", flushSave);
+    return () => {
+      window.removeEventListener("beforeunload", flushSave);
+      flushSave();
+    };
+  }, [flushSave]);
+
   useImperativeHandle(ref, () => ({
-    save: () => onSave(noteContentRef.current),
-  }), [onSave]);
+    save: flushSave,
+  }), [flushSave]);
 
   const wrapSelection = (prefix, suffix = prefix) => {
     const textarea = textareaRef.current;
@@ -146,7 +183,7 @@ const NoteEditor = forwardRef(function NoteEditor(
         className="note-textarea"
         value={noteContent}
         onChange={(e) => setNoteContent(e.target.value)}
-        onBlur={() => onSave(noteContentRef.current)}
+        onBlur={flushSave}
         placeholder={isNoteLoading ? "Loading note..." : "Write your note..."}
         rows={8}
       />

@@ -23,6 +23,8 @@ export default function SettingsModal({
   isCovered = false,
   timelineData,
   onUpdateTimeline,
+  renameErrorMessage = "",
+  onClearRenameError,
   themeKey,
   defaultThemeKey,
   themes,
@@ -86,8 +88,10 @@ export default function SettingsModal({
   const saveTimeoutRef = useRef(null);
   const detailSliderRef = useRef(null);
   const tickDensitySliderRef = useRef(null);
+  const titleInputRef = useRef(null);
   const lastFilePathRef = useRef(null);
   const backdropPointerDownRef = useRef(false);
+  const onUpdateTimelineRef = useRef(onUpdateTimeline);
 
   // Convert editable scale sections (strings) to numeric for saving
   const saveScaleSections = (editable = []) => {
@@ -174,6 +178,10 @@ export default function SettingsModal({
   }, [commitTitle, onClose]);
 
   useEffect(() => {
+    onUpdateTimelineRef.current = onUpdateTimeline;
+  }, [onUpdateTimeline]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => { if (e.key === "Escape") handleClose(); };
     document.addEventListener("keydown", handleKeyDown);
@@ -254,6 +262,18 @@ export default function SettingsModal({
   }, [timelineData, defaultThemeKey]);
 
   useEffect(() => {
+    if (!renameErrorMessage || !timelineData?.file) return;
+    const restoredTitle = timelineData.file.title || "";
+    setTitle(restoredTitle);
+    setCommittedTitle(restoredTitle);
+    const timeoutId = window.setTimeout(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [renameErrorMessage, timelineData]);
+
+  useEffect(() => {
     if (!layoutOptions.some((option) => option.value === layout)) {
       setLayout("Horizontal");
     }
@@ -261,7 +281,7 @@ export default function SettingsModal({
 
   // Debounced auto-save whenever values change (but not on initial load)
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isOpen || !isInitialized) return;
 
     // Clear existing timeout
     if (saveTimeoutRef.current) {
@@ -310,8 +330,8 @@ export default function SettingsModal({
           ? snapToMonthGrid(parsedEnd.value)
           : parsedEnd.value;
       const parsedScaleSections = saveScaleSections(scaleSections);
-      if (onUpdateTimeline) {
-        onUpdateTimeline({
+      if (onUpdateTimelineRef.current) {
+        onUpdateTimelineRef.current({
           title: committedTitle,
           start: startValue,
           end: endValue,
@@ -403,7 +423,7 @@ export default function SettingsModal({
     mapSpanMarker,
     mapEraMarker,
     isInitialized,
-    onUpdateTimeline,
+    isOpen,
   ]);
 
   if (!isOpen) return null;
@@ -458,8 +478,13 @@ export default function SettingsModal({
           <h2 className="settings-title">SETTINGS</h2>
         </div>
 
-        {validationErrors.length > 0 && (
+        {(renameErrorMessage || validationErrors.length > 0) && (
           <div className="settings-errors">
+            {renameErrorMessage && (
+              <div className="settings-error">
+                {renameErrorMessage}
+              </div>
+            )}
             {validationErrors.map((error, index) => (
               <div key={index} className="settings-error">
                 {error}
@@ -530,11 +555,13 @@ export default function SettingsModal({
             </div>
             <div className="settings-row-right">
               <input
+                ref={titleInputRef}
                 type="text"
                 className="settings-input"
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value);
+                  if (renameErrorMessage) onClearRenameError?.();
                   if (validationErrors.length) setValidationErrors([]);
                 }}
                 onBlur={commitTitle}

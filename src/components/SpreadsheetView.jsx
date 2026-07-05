@@ -109,7 +109,7 @@ export default function SpreadsheetView({
 
   const displayName = useMemo(() => {
     if (!file.id && !file.title) return "";
-    if (file.id?.endsWith("-timeline")) return file.id.replace("-timeline", ".timeline");
+    if (file.id?.endsWith("-timeline")) return file.id.replace(/-timeline$/, ".timeline");
     return file.title || file.id || "";
   }, [file.id, file.title]);
 
@@ -1378,7 +1378,7 @@ export default function SpreadsheetView({
         ? (() => { try { return decodeURIComponent(el.thumbnail).split(/[/\\]/).pop() || el.thumbnail; } catch { return el.thumbnail.split("/").pop() || el.thumbnail; } })()
         : null;
       const isPanelOpen = thumbPanelCellId === el.id;
-      const timelineId = file.id?.replace("-timeline", "");
+      const timelineId = file.id?.replace(/-timeline$/, "");
       const openPanel = (e) => {
         selectCell(e, el.id, field);
         if (readOnly || e.shiftKey) return;

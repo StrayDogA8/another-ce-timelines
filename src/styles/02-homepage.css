@@ -1338,6 +1338,10 @@
   font-weight: 700;
 }
 
+.folder-modal-error {
+  color: #c53b3b;
+}
+
 .folder-modal-input {
   width: 100%;
   box-sizing: border-box;

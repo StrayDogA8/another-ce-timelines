@@ -6,9 +6,10 @@ export const isValidIdValue = (value) => /^[a-z0-9_-]+$/i.test(value);
 
 export const isValidTagValue = (value) => /^[a-z0-9 _-]+$/i.test(value);
 
-export const isSafeNoteFilename = (name) => {
-  if (!name || typeof name !== "string") return false;
-  return /^[a-z0-9_-]+\.md$/i.test(name) && !name.includes("..");
+// Bare filename or notes-root-relative slash path, matching what resolveNotePath accepts in main
+export const isSafeNoteRef = (name) => {
+  if (!name || typeof name !== "string" || name.includes("..")) return false;
+  return /^[\w.-]+(\/[\w.-]+)*\.md$/i.test(name);
 };
 
 export const normalizeTagValue = (value) => value.trim().replace(/\s+/g, " ");

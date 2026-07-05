@@ -21,9 +21,14 @@ export function generateIdFromTitle(title, type) {
  * with fallback to the title-derived file.id for older timelines.
  */
 export function getStorageId(file) {
-  return file?.uid ?? file?.id?.replace("-timeline", "") ?? null;
+  return file?.uid ?? file?.id?.replace(/-timeline$/, "") ?? null;
 }
 
+
+// Storage uid: title slug plus random digits so same-titled timelines never share notes/assets folders
+export function generateStorageUid(base) {
+  return `${String(base || "timeline")}-${getRandomDigits(6)}`;
+}
 
 const RANDOM_ID_RETRY_LIMIT = 1024;
 

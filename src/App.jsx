@@ -27,8 +27,9 @@ import {
   copyTimelineStorage,
   exportTimelinePackage,
   importTimeline,
+  updateTimelineTitle,
 } from "./utils/electronApi";
-import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle, getStorageId } from "./utils/idUtils";
+import { updateElementWithNewId, generateUniqueRandomElementId, generateIdFromTitle, generateStorageUid, getStorageId } from "./utils/idUtils";
 import { applyTheme, getInitialThemeKey } from "./utils/theme";
 import { loadThemeConfig } from "./utils/themeLoader";
 import { countOldFormatThemes, isOldFormatTheme, migrateThemeColors } from "./utils/themeMigration";
@@ -171,6 +172,7 @@ function App() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsRenameError, setSettingsRenameError] = useState("");
   const [screenshotToast, setScreenshotToast] = useState(false);
   const [deleteElementDialog, setDeleteElementDialog] = useState(null);
   const [deleteElementWithNotes, setDeleteElementWithNotes] = useState(false);
@@ -443,21 +445,98 @@ function App() {
     prevTimelineRef.current = timelineData;
   }, [timelineData]);
 
-  // Keep ref in sync so saveTimeline can read it inside stale closures
+  // Keep ref in sync so saveCurrentTimeline can read it inside stale closures
   useEffect(() => { currentTimelineIdRef.current = currentTimelineId; }, [currentTimelineId]);
 
   // Serialize renames/saves so an in-flight save can't land after a rename and recreate the old file
   const persistQueueRef = useRef(Promise.resolve());
-  const enqueuePersist = (task) => {
+  const enqueuePersist = useCallback((task) => {
     const next = persistQueueRef.current.catch(() => {}).then(task);
     persistQueueRef.current = next.catch(console.error);
     return next;
-  };
+  }, []);
 
-  const saveTimeline = async (data, localId) => {
-    const id = currentTimelineIdRef.current || localId;
+  // Saves the open timeline where it currently lives; explicit-path writes use saveTimelineToFile via enqueuePersist
+  const saveCurrentTimeline = useCallback(async (data) => {
+    const id = currentTimelineIdRef.current || data?.file?.id?.replace(/-timeline$/, '') || 'timeline';
     return enqueuePersist(() => saveTimelineToFile(data, id));
-  };
+  }, [enqueuePersist]);
+
+  const handleCloseSettings = useCallback(() => {
+    setSettingsRenameError("");
+    setIsSettingsOpen(false);
+  }, []);
+
+  const handleLibraryTimelineRenamed = useCallback(({ oldId, newId, title, fileId }) => {
+    if (!oldId || !newId || currentTimelineIdRef.current !== oldId) return;
+    currentTimelineIdRef.current = newId;
+    setCurrentTimelineId(newId);
+    setTimelineData((prevData) => {
+      if (!prevData) return prevData;
+      return {
+        ...prevData,
+        file: {
+          ...prevData.file,
+          id: fileId || `${newId.split('/').pop() || 'timeline'}-timeline`,
+          title: title ?? prevData.file?.title,
+        },
+      };
+    });
+  }, []);
+
+  const handleRenameTimelineFromLibrary = useCallback(async (id, title) => {
+    if (!id) return { success: false, error: 'Missing timeline id' };
+    if (!title || !String(title).trim()) return { success: false, error: 'INVALID_TITLE' };
+
+    if (currentTimelineIdRef.current !== id || !timelineData) {
+      const result = await updateTimelineTitle(id, title);
+      if (result?.success) handleLibraryTimelineRenamed(result);
+      return result;
+    }
+
+    const oldPathId = currentTimelineIdRef.current;
+    const nextTimelineId = generateIdFromTitle(title, "timeline").replace(/^timeline-/, "");
+    if (!nextTimelineId) return { success: false, error: 'INVALID_TITLE' };
+
+    const folderPrefix = oldPathId.includes('/')
+      ? oldPathId.slice(0, oldPathId.lastIndexOf('/') + 1)
+      : '';
+    const nextPathId = `${folderPrefix}${nextTimelineId}`;
+    const updatedData = {
+      ...timelineData,
+      file: {
+        ...timelineData.file,
+        id: `${nextTimelineId}-timeline`,
+        title,
+      },
+    };
+
+    if (nextPathId === oldPathId) {
+      setTimelineData(updatedData);
+      const result = await enqueuePersist(() => saveTimelineToFile(updatedData, oldPathId));
+      if (!result?.success) return result;
+      return { success: true, oldId: oldPathId, newId: nextPathId, title, fileId: updatedData.file.id };
+    }
+
+    currentTimelineIdRef.current = nextPathId;
+    setCurrentTimelineId(nextPathId);
+    setTimelineData(updatedData);
+
+    const result = await enqueuePersist(async () => {
+      const renameResult = await renameTimeline({ oldId: oldPathId, newId: nextPathId });
+      if (!renameResult?.success) return renameResult;
+      return saveTimelineToFile(updatedData, nextPathId);
+    });
+
+    if (!result?.success) {
+      currentTimelineIdRef.current = oldPathId;
+      setCurrentTimelineId(oldPathId);
+      setTimelineData(timelineData);
+      return result;
+    }
+
+    return { success: true, oldId: oldPathId, newId: nextPathId, title, fileId: updatedData.file.id };
+  }, [enqueuePersist, handleLibraryTimelineRenamed, timelineData]);
 
   const undoTimeline = () => {
     if (!timelineData) return;
@@ -473,9 +552,7 @@ function App() {
     historyLockRef.current = true;
     setTimelineData(previous);
 
-    const timelineId =
-      previous.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
-    saveTimeline(previous, timelineId).catch(console.error);
+    saveCurrentTimeline(previous).catch(console.error);
   };
 
   const redoTimeline = () => {
@@ -492,9 +569,7 @@ function App() {
     historyLockRef.current = true;
     setTimelineData(next);
 
-    const timelineId =
-      next.file?.id?.replace("-timeline", "") || currentTimelineId || "timeline";
-    saveTimeline(next, timelineId).catch(console.error);
+    saveCurrentTimeline(next).catch(console.error);
   };
 
   useEffect(() => {
@@ -647,8 +722,7 @@ function App() {
         },
       };
 
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -672,8 +746,7 @@ function App() {
           groups: finalGroups,
         },
       };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -697,8 +770,7 @@ function App() {
         el.id === elementId ? { ...el, groupId: group.id } : el
       );
       const updatedData = { ...prevData, file: { ...prevData.file, groups: updatedGroups }, elements: updatedElements };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -714,8 +786,7 @@ function App() {
         ...prevData,
         file: { ...prevData.file, tagColors: nextTagColors },
       };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -751,8 +822,7 @@ function App() {
         },
         elements: nextElements,
       };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -777,8 +847,7 @@ function App() {
         delete nextFile.pinnedTags;
       }
       const updatedData = { ...prevData, file: nextFile };
-      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -839,8 +908,7 @@ function App() {
       const updatedData = updateElementWithNewId(prevData, nextElement, originalId);
 
       
-      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId)
+      saveCurrentTimeline(updatedData)
         .then(() => {
           console.log('Timeline saved to file successfully');
         })
@@ -881,8 +949,7 @@ function App() {
         elements: [...prevData.elements, newEvent],
       };
 
-            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
 
       return updatedData;
     });
@@ -923,8 +990,7 @@ function App() {
         elements: [...prevData.elements, newSpan],
       };
 
-            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
 
       return updatedData;
     });
@@ -980,8 +1046,7 @@ function App() {
         elements: [...prevData.elements, newEra],
       };
 
-            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
 
       return updatedData;
     });
@@ -1015,8 +1080,7 @@ function App() {
         elements: [...prevData.elements, baseCopy],
       };
 
-      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
 
       return updatedData;
     });
@@ -1051,8 +1115,7 @@ function App() {
         elements: cleanedElements,
       };
 
-            const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
 
       return updatedData;
     });
@@ -1060,7 +1123,7 @@ function App() {
     setSelectedId(null);
   };
 
-  const handleUpdateTimeline = ({
+  const handleUpdateTimeline = useCallback(({
     title,
     start,
     end,
@@ -1105,7 +1168,7 @@ function App() {
     const parsedStart = parseTimelineInput(start);
     const parsedEnd = parseTimelineInput(end);
     setTimelineData((prevData) => {
-      const oldTimelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
+      const oldTimelineId = prevData.file?.id?.replace(/-timeline$/, '') || 'timeline';
       const nextTimelineId = title
         ? generateIdFromTitle(title, "timeline").replace(/^timeline-/, "")
         : oldTimelineId;
@@ -1208,17 +1271,38 @@ function App() {
         file: nextFile,
       };
 
-      if (nextTimelineId !== oldTimelineId) {
+      // The physical file lives at currentTimelineId, which carries the folder; file.id never does
+      const oldPathId = currentTimelineIdRef.current || oldTimelineId;
+      const folderPrefix = oldPathId.includes('/') ? oldPathId.slice(0, oldPathId.lastIndexOf('/') + 1) : '';
+      const nextPathId = `${folderPrefix}${nextTimelineId}`;
+
+      // Rename only on an actual title edit; a HomePage rename legitimately leaves title and filename out of sync
+      const titleChanged = title !== prevData.file?.title;
+      if (titleChanged && nextPathId !== oldPathId) {
         // The effect syncing this ref runs post-render, too late for the save below
-        currentTimelineIdRef.current = nextTimelineId;
-        enqueuePersist(() => renameTimeline({ oldId: oldTimelineId, newId: nextTimelineId })).catch(console.error);
-        setCurrentTimelineId(nextTimelineId);
+        currentTimelineIdRef.current = nextPathId;
+        setCurrentTimelineId(nextPathId);
+        const oldTitle = prevData.file?.title;
+        enqueuePersist(async () => {
+          const result = await renameTimeline({ oldId: oldPathId, newId: nextPathId });
+          if (result?.error === 'EXISTS') {
+            setSettingsRenameError(`A timeline named "${title}" already exists. Keeping the name "${oldTitle}".`);
+            const revertedData = { ...updatedData, file: { ...updatedData.file, id: `${oldTimelineId}-timeline`, title: oldTitle } };
+            currentTimelineIdRef.current = oldPathId;
+            setCurrentTimelineId(oldPathId);
+            setTimelineData(revertedData);
+            return saveTimelineToFile(revertedData, oldPathId);
+          }
+          setSettingsRenameError("");
+          return saveTimelineToFile(updatedData, nextPathId);
+        }).catch(console.error);
+      } else {
+        saveCurrentTimeline(updatedData).catch(console.error);
       }
-      saveTimeline(updatedData, nextTimelineId).catch(console.error);
 
       return updatedData;
     });
-  };
+  }, [enqueuePersist, saveCurrentTimeline]);
 
   const handlePatchFile = (patch) => {
     setTimelineData((prevData) => {
@@ -1226,8 +1310,7 @@ function App() {
       if (!nextFile.panelGroupMode || nextFile.panelGroupMode === "default") delete nextFile.panelGroupMode;
       if (!nextFile.nestEraSubGroups) delete nextFile.nestEraSubGroups;
       const updatedData = { ...prevData, file: nextFile };
-      const timelineId = prevData.file?.id?.replace("-timeline", "") || "timeline";
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -1241,8 +1324,7 @@ function App() {
           groups: nextGroups,
         },
       };
-      const timelineId = prevData.file?.id?.replace('-timeline', '') || 'timeline';
-      saveTimeline(updatedData, timelineId).catch(console.error);
+      saveCurrentTimeline(updatedData).catch(console.error);
       return updatedData;
     });
   };
@@ -1261,7 +1343,7 @@ function App() {
   };
 
   const handleDownloadPackage = async () => {
-    const baseName = timelineData.file?.uid || timelineData.file?.id?.replace("-timeline", "") || "timeline";
+    const baseName = timelineData.file?.uid || timelineData.file?.id?.replace(/-timeline$/, "") || "timeline";
     const result = await exportTimelinePackage(timelineData, `${baseName}.timeline`);
     if (result?.success && result.skipped?.length > 0) {
       alert(`Package exported, but ${result.skipped.length} referenced file(s) could not be found and were skipped:\n\n${result.skipped.join("\n")}`);
@@ -1375,15 +1457,14 @@ function App() {
     setIsNewTimelineModalOpen(true);
   };
 
+  // Failures return { error } for inline display; native alerts break input focus in Electron
   const handleCreateTimeline = async (timelineConfig) => {
-    setIsNewTimelineModalOpen(false);
-
     // Create new timeline data structure
     const timelineId = generateIdFromTitle(timelineConfig.title, "timeline").replace(/^timeline-/, "");
     const newTimeline = {
       file: {
         id: `${timelineId}-timeline`,
-        uid: timelineId,
+        uid: generateStorageUid(timelineId),
         type: "timeline",
         title: timelineConfig.title,
         appVersion: "0.6.0-alpha.1",
@@ -1406,15 +1487,24 @@ function App() {
     // Save to file system
     const saveId = timelineConfig.folder ? `${timelineConfig.folder}/${timelineId}` : timelineId;
     try {
-      await saveTimelineToFile(newTimeline, saveId);
+      const result = await enqueuePersist(() => saveTimelineToFile(newTimeline, saveId, { create: true }));
+      if (!result?.success) {
+        if (result?.error === 'EXISTS') {
+          return { error: `A timeline named "${timelineConfig.title}" already exists${timelineConfig.folder ? ' in that folder' : ''}. Choose a different name.` };
+        }
+        throw new Error(result?.error || 'Save failed');
+      }
 
       // Load the newly created timeline
+      setIsNewTimelineModalOpen(false);
+      currentTimelineIdRef.current = saveId;
       setTimelineData(newTimeline);
       setCurrentTimelineId(saveId);
       setSelectedId(null);
+      return { success: true };
     } catch (error) {
       console.error('Failed to create timeline:', error);
-      alert(`Failed to create timeline: ${error.message}`);
+      return { error: `Failed to create timeline: ${error.message}` };
     }
   };
 
@@ -1422,29 +1512,42 @@ function App() {
     if (!timelineData || !currentTimelineId) return;
 
     try {
-      // Create duplicate with new name
-      const duplicateName = `${timelineData.file.title} Copy`;
-      const duplicateId = generateIdFromTitle(duplicateName, "timeline").replace(/^timeline-/, "");
+      const folderPrefix = currentTimelineId.includes('/')
+        ? currentTimelineId.slice(0, currentTimelineId.lastIndexOf('/') + 1)
+        : '';
 
-      const duplicateData = {
-        ...timelineData,
-        file: {
-          ...timelineData.file,
-          id: `${duplicateId}-timeline`,
-          uid: duplicateId,
-          title: duplicateName,
-        },
-      };
-
-      // Save the duplicate
-      await saveTimeline(duplicateData, duplicateId);
+      let duplicateData = null;
+      let saveId = null;
+      for (let counter = 1; counter <= 50; counter++) {
+        const duplicateName = `${timelineData.file.title} Copy${counter > 1 ? ` ${counter}` : ''}`;
+        const duplicateId = generateIdFromTitle(duplicateName, "timeline").replace(/^timeline-/, "");
+        const candidateData = {
+          ...timelineData,
+          file: {
+            ...timelineData.file,
+            id: `${duplicateId}-timeline`,
+            uid: generateStorageUid(duplicateId),
+            title: duplicateName,
+          },
+        };
+        const candidateId = `${folderPrefix}${duplicateId}`;
+        const result = await enqueuePersist(() => saveTimelineToFile(candidateData, candidateId, { create: true }));
+        if (result?.success) {
+          duplicateData = candidateData;
+          saveId = candidateId;
+          break;
+        }
+        if (result?.error !== 'EXISTS') throw new Error(result?.error || 'Save failed');
+      }
+      if (!duplicateData) throw new Error('Could not find a free name for the copy');
 
       const sourceId = getStorageId(timelineData.file) || 'timeline';
-      await copyTimelineStorage({ sourceId, targetId: duplicateId });
+      await copyTimelineStorage({ sourceId, targetId: getStorageId(duplicateData.file) });
 
       // Load the newly created duplicate
+      currentTimelineIdRef.current = saveId;
       setTimelineData(duplicateData);
-      setCurrentTimelineId(duplicateId);
+      setCurrentTimelineId(saveId);
       setSelectedId(null);
     } catch (error) {
       console.error('Failed to duplicate timeline:', error);
@@ -1999,6 +2102,8 @@ function App() {
         <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
           <HomePage
             onSelectTimeline={handleLoadTimeline}
+            onRenameTimeline={handleRenameTimelineFromLibrary}
+            onTimelineRenamed={handleLibraryTimelineRenamed}
             onCreateTimeline={handleCreateTimeline}
             onImportTimeline={handleImportTimeline}
             appThemeKey={appThemeKey}
@@ -2203,11 +2308,13 @@ function App() {
 
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={handleCloseSettings}
         onOpenAppSettings={handleOpenAppSettingsFromProject}
         isCovered={isProjectSettingsCovered}
         timelineData={timelineData}
         onUpdateTimeline={handleUpdateTimeline}
+        renameErrorMessage={settingsRenameError}
+        onClearRenameError={() => setSettingsRenameError("")}
         themeKey={themeKey}
         defaultThemeKey={defaultThemeKey}
         themes={themeConfig.themes}
@@ -2222,6 +2329,8 @@ function App() {
           settingsOnly
           reuseExistingBackdrop={returnToProjectSettings}
           onSelectTimeline={handleLoadTimeline}
+          onRenameTimeline={handleRenameTimelineFromLibrary}
+          onTimelineRenamed={handleLibraryTimelineRenamed}
           onCreateTimeline={handleCreateTimeline}
           appThemeKey={appThemeKey}
           themes={themeConfig.themes}

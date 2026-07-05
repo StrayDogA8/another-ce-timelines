@@ -14,6 +14,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [validationErrors, setValidationErrors] = useState([]);
   const detailSliderRef = useRef(null);
+  const titleInputRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,7 +55,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       .replace(/^-|-$/g, '');
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const errors = [];
     if (!title.trim()) {
       errors.push("Please enter a timeline name.");
@@ -87,7 +88,7 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       return;
     }
 
-    onCreate({
+    const result = await onCreate({
       title: title.trim(),
       start: startValue,
       end: endValue,
@@ -95,6 +96,20 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       startLabel: parsedStart.label,
       endLabel: parsedEnd.label,
     });
+
+    if (result?.error) {
+      setValidationErrors([result.error]);
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+      return;
+    }
+
+    setTitle("");
+    setStart("0");
+    setEnd("2024");
+    setDetailLevel(1);
+    setDetailSlider(50);
+    setValidationErrors([]);
   };
 
   const handleCancel = () => {
@@ -142,11 +157,13 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
               <input
                 type="text"
                 className="settings-input"
+                ref={titleInputRef}
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value);
                   if (validationErrors.length) setValidationErrors([]);
                 }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreate(); } }}
                 placeholder="Enter timeline name"
                 autoFocus
                 maxLength={100}

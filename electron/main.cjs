@@ -45,7 +45,14 @@ const sanitizeTimelinePath = (value) => {
 };
 
 // Notes/assets folders are keyed by immutable file.uid; older timelines fall back to file.id
-const deriveStorageId = (file) => file?.uid || file?.id?.replace('-timeline', '') || null;
+const deriveStorageId = (file) => file?.uid || file?.id?.replace(/-timeline$/, '') || null;
+
+// Write via temp file + rename so a crash mid-write can't truncate the target
+async function writeFileAtomic(filePath, content) {
+  const tmpPath = `${filePath}.tmp`;
+  await fs.writeFile(tmpPath, content, 'utf8');
+  await fs.rename(tmpPath, filePath);
+}
 
 async function listTimelineFilesRecursive(dir, baseDir) {
   const results = [];
@@ -461,14 +468,17 @@ ipcMain.on('close-window', () => {
 });
 
 // IPC Handlers for file operations
-ipcMain.handle('save-timeline', async (event, { data, filename }) => {
+ipcMain.handle('save-timeline', async (event, { data, filename, create }) => {
   try {
     const dataDir = await getTimelinesDir();
     const safePath = sanitizeTimelinePath(filename);
     const filePath = path.join(dataDir, `${safePath}.timeline`);
+    if (create && fsSync.existsSync(filePath)) {
+      return { success: false, error: 'EXISTS' };
+    }
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     const dataToSave = { ...data, elements: await stripThumbnails(data.elements, deriveStorageId(data.file)) };
-    await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    await writeFileAtomic(filePath, JSON.stringify(dataToSave, null, 2));
     return { success: true, message: 'Timeline saved successfully', path: filePath };
   } catch (error) {
     console.error('Error saving timeline:', error);
@@ -525,8 +535,8 @@ ipcMain.handle('load-timeline', async (event, filename) => {
     const data = JSON.parse(content);
     if (data.file && !data.file.uid) {
       // One-time migration: stamp the immutable storage uid
-      data.file.uid = data.file.id?.replace('-timeline', '') || safePath.split('/').pop();
-      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8')
+      data.file.uid = data.file.id?.replace(/-timeline$/, '') || safePath.split('/').pop();
+      await writeFileAtomic(filePath, JSON.stringify(data, null, 2))
         .catch((e) => console.warn('Could not persist timeline uid:', e.message));
     }
     const storageId = deriveStorageId(data.file);
@@ -763,7 +773,7 @@ ipcMain.handle('import-timeline', async (event, payload) => {
 
     data.file = data.file && typeof data.file === 'object' ? data.file : {};
     if (!data.file.uid) {
-      data.file.uid = data.file.id?.replace('-timeline', '')
+      data.file.uid = data.file.id?.replace(/-timeline$/, '')
         || safeName(path.basename(sourcePath).replace(/\.(timeline|json)$/i, ''))
         || `timeline-${Date.now()}`;
     }
@@ -913,6 +923,14 @@ ipcMain.handle('delete-timeline', async (event, payload) => {
       if (remaining.length === 0) await fs.rmdir(dir).catch(() => {});
     }
 
+    if (deleteNotes || deleteAssets) {
+      // Legacy title-derived uids can collide; never wipe storage another timeline still uses
+      const otherOwner = await findTimelineByUid(storageId);
+      if (otherOwner) {
+        console.warn(`Skipped deleting shared storage "${storageId}" still used by ${otherOwner.relativeId}`);
+        return { success: true, sharedStorage: true };
+      }
+    }
     if (deleteNotes) {
       const notesDir = await getNotesDir(storageId);
       await fs.rm(notesDir, { recursive: true, force: true });
@@ -948,12 +966,34 @@ ipcMain.handle('update-timeline-title', async (event, { id, title }) => {
   try {
     const baseDir = await getTimelinesDir();
     const safePath = sanitizeTimelinePath(id);
+    const parts = safePath.split('/');
+    const folderPrefix = parts.length > 1 ? `${parts.slice(0, -1).join('/')}/` : '';
+    const nextBaseName = safeName(title);
+    if (!nextBaseName) return { success: false, error: 'INVALID_TITLE' };
+
+    const nextPath = `${folderPrefix}${nextBaseName}`;
     const filePath = path.join(baseDir, `${safePath}.timeline`);
+    const nextFilePath = path.join(baseDir, `${nextPath}.timeline`);
     const content = await fs.readFile(filePath, 'utf8');
     const data = JSON.parse(content);
-    data.file = { ...data.file, title };
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return { success: true };
+
+    data.file = {
+      ...data.file,
+      title,
+      id: `${nextBaseName}-timeline`,
+    };
+
+    if (safePath === nextPath) {
+      await writeFileAtomic(filePath, JSON.stringify(data, null, 2));
+      return { success: true, oldId: safePath, newId: nextPath, title, fileId: data.file.id };
+    }
+
+    if (fsSync.existsSync(nextFilePath)) return { success: false, error: 'EXISTS' };
+
+    await fs.mkdir(path.dirname(nextFilePath), { recursive: true });
+    await fs.rename(filePath, nextFilePath);
+    await writeFileAtomic(nextFilePath, JSON.stringify(data, null, 2));
+    return { success: true, oldId: safePath, newId: nextPath, title, fileId: data.file.id };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1177,10 +1217,10 @@ ipcMain.handle('write-note', async (event, { timelineId, filename, content }) =>
     if (!timelineId || !filename) {
       return { success: false, error: 'Missing timelineId or filename' };
     }
-    const notesDir = await getNotesDir(timelineId);
-    await fs.mkdir(notesDir, { recursive: true });
     const filePath = await resolveNotePath(timelineId, filename);
-    await fs.writeFile(filePath, content ?? '', 'utf8');
+    // Slash refs resolve against the notes root, so mkdir the actual target folder
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await writeFileAtomic(filePath, content ?? '');
     return { success: true };
   } catch (error) {
     console.error('Error writing note:', error);
@@ -1195,20 +1235,19 @@ ipcMain.handle('rename-note', async (event, { timelineId, oldFilename, newFilena
     }
     const oldPath = await resolveNotePath(timelineId, oldFilename);
     const nextPath = await resolveNotePath(timelineId, newFilename);
+    if (oldPath === nextPath) return { success: true };
+    // Case-only renames on Windows point at the same file and are safe to pass through
+    const samePath = process.platform === 'win32' && oldPath.toLowerCase() === nextPath.toLowerCase();
+    // fs.rename silently replaces the destination, so refuse instead of destroying another note
+    if (!samePath && fsSync.existsSync(nextPath)) return { success: false, error: 'EXISTS' };
+    await fs.mkdir(path.dirname(nextPath), { recursive: true });
     try {
       await fs.rename(oldPath, nextPath);
     } catch (error) {
       if (error.code === 'ENOENT') {
         return { success: false, error: 'Note file not found' };
       }
-
-      if (error.code !== 'EEXIST') {
-        throw error;
-      }
-
-      const content = await fs.readFile(oldPath, 'utf8');
-      await fs.writeFile(nextPath, content, 'utf8');
-      await fs.unlink(oldPath);
+      throw error;
     }
     return { success: true };
   } catch (error) {
@@ -1223,8 +1262,11 @@ ipcMain.handle('rename-timeline', async (event, { oldId, newId }) => {
     const timelinesDir = await getTimelinesDir();
     const safeOldPath = sanitizeTimelinePath(oldId);
     const safeNewPath = sanitizeTimelinePath(newId);
+    if (safeOldPath === safeNewPath) return { success: true };
     const oldFilePath = path.join(timelinesDir, `${safeOldPath}.timeline`);
     const newFilePath = path.join(timelinesDir, `${safeNewPath}.timeline`);
+    // fs.rename silently replaces the destination, so refuse instead of destroying another timeline
+    if (fsSync.existsSync(newFilePath)) return { success: false, error: 'EXISTS' };
 
     await fs.mkdir(path.dirname(newFilePath), { recursive: true });
     await fs.rename(oldFilePath, newFilePath).catch(e => { if (e.code !== 'ENOENT') throw e; });
@@ -1289,7 +1331,7 @@ ipcMain.handle('set-app-settings', async (event, settings) => {
         merged[key] = settings[key];
       }
     }
-    await fs.writeFile(filePath, JSON.stringify(merged, null, 2), 'utf8');
+    await writeFileAtomic(filePath, JSON.stringify(merged, null, 2));
     return { success: true };
   } catch (error) {
     console.error('Error saving app settings:', error);

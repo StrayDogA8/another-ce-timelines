@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useMemo } from "react";
 import { File, FilePlus, Copy, Trash2, Settings, ArrowLeft, Folder, FolderPlus, FolderOpen, Store, X, LayoutGrid, List, MoreVertical, Pencil, RotateCcw, ArrowUpAZ, ArrowDownAZ, Clock, ChevronRight, Search, Import } from "lucide-react";
 import { createFolder, listFolders, moveTimeline, renameFolder, updateTimelineTitle, deleteFolder, moveFolder } from "../utils/electronApi.js";
+import { generateIdFromTitle, generateStorageUid } from "../utils/idUtils.js";
 import { getAppSettings, saveAppSettings } from "../utils/appSettings.js";
 
 function MovePicker({ folders, currentFolder, onConfirm, onCancel }) {
@@ -93,6 +94,8 @@ export default function HomePage({
   settingsOnly = false,
   reuseExistingBackdrop = false,
   onSelectTimeline,
+  onRenameTimeline,
+  onTimelineRenamed,
   onCreateTimeline,
   onImportTimeline,
   appThemeKey,
@@ -145,6 +148,7 @@ export default function HomePage({
   const [availableFolders, setAvailableFolders] = useState([]);
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameName, setRenameName] = useState("");
+  const [renameError, setRenameError] = useState("");
   const [folderContextMenu, setFolderContextMenu] = useState(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
   const [moveFolderTarget, setMoveFolderTarget] = useState(null);
@@ -159,6 +163,7 @@ export default function HomePage({
   const [themeMigrationStatus, setThemeMigrationStatus] = useState(null); // null | 'migrating' | { count }
   const [recordingKey, setRecordingKey] = useState(null);
   const recordingKeyRef = useRef(null);
+  const renameInputRef = useRef(null);
   const previousViewRef = useRef("home");
   const menuRef = useRef(null);
   const defaultThemeKey = (themeConfig?.activeTheme || "").toLowerCase();
@@ -276,7 +281,26 @@ export default function HomePage({
     }
   }, [settingsOnly]);
 
+  const restoreRenameFocus = () => {
+    window.setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+  };
+
+  const closeRenameDialog = () => {
+    setRenameTarget(null);
+    setRenameName("");
+    setRenameError("");
+  };
+
   useEffect(() => { recordingKeyRef.current = recordingKey; }, [recordingKey]);
+
+  useEffect(() => {
+    if (!renameTarget) return;
+    setRenameError("");
+    restoreRenameFocus();
+  }, [renameTarget]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -352,9 +376,10 @@ export default function HomePage({
     setIsNewTimelineModalOpen(true);
   };
 
-  const handleCreateTimeline = (timelineConfig) => {
-    setIsNewTimelineModalOpen(false);
-    onCreateTimeline({ ...timelineConfig, folder: currentFolder || '' });
+  const handleCreateTimeline = async (timelineConfig) => {
+    const result = await onCreateTimeline({ ...timelineConfig, folder: currentFolder || '' });
+    if (result?.success) setIsNewTimelineModalOpen(false);
+    return result;
   };
 
   const openTimelineFile = (file) => {
@@ -428,26 +453,32 @@ export default function HomePage({
       // Load the original timeline
       const originalData = await window.electron.loadTimeline(file.id);
 
-      // Create duplicate with new name
-      const duplicateName = `${file.name} Copy`;
-      const duplicateId = duplicateName.toLowerCase().replace(/\s+/g, '-');
+      const folderPrefix = file.id.includes('/') ? file.id.slice(0, file.id.lastIndexOf('/') + 1) : '';
+      let duplicateData = null;
+      for (let counter = 1; counter <= 50 && !duplicateData; counter++) {
+        const duplicateName = `${file.name} Copy${counter > 1 ? ` ${counter}` : ''}`;
+        const duplicateId = generateIdFromTitle(duplicateName, "timeline").replace(/^timeline-/, "");
+        const candidateData = {
+          ...originalData,
+          file: {
+            ...originalData.file,
+            id: `${duplicateId}-timeline`,
+            uid: generateStorageUid(duplicateId),
+            title: duplicateName,
+          },
+        };
+        const result = await window.electron.saveTimeline(candidateData, `${folderPrefix}${duplicateId}`, { create: true });
+        if (result?.success) {
+          duplicateData = candidateData;
+        } else if (result?.error !== 'EXISTS') {
+          throw new Error(result?.error || 'Save failed');
+        }
+      }
+      if (!duplicateData) throw new Error('Could not find a free name for the copy');
 
-      const duplicateData = {
-        ...originalData,
-        file: {
-          ...originalData.file,
-          id: `${duplicateId}-timeline`,
-          uid: duplicateId,
-          title: duplicateName,
-        },
-      };
-
-      // Save the duplicate
-      await window.electron.saveTimeline(duplicateData, duplicateId);
-
-      const sourceId = originalData.file?.uid || originalData.file?.id?.replace('-timeline', '') || file.id.split('/').pop();
+      const sourceId = originalData.file?.uid || originalData.file?.id?.replace(/-timeline$/, '') || file.id.split('/').pop();
       if (window.electron?.copyTimelineStorage) {
-        await window.electron.copyTimelineStorage({ sourceId, targetId: duplicateId });
+        await window.electron.copyTimelineStorage({ sourceId, targetId: duplicateData.file.uid });
       }
 
       // Reload timeline list
@@ -498,10 +529,27 @@ export default function HomePage({
         setCurrentFolder(parts.join('/'));
       }
     } else {
-      await updateTimelineTitle(renameTarget.id, name);
+      const result = onRenameTimeline
+        ? await onRenameTimeline(renameTarget.id, name)
+        : await updateTimelineTitle(renameTarget.id, name);
+      if (!result?.success) {
+        if (result?.error === 'EXISTS') {
+          setRenameError(`A timeline named "${name}" already exists in that folder.`);
+          restoreRenameFocus();
+          return;
+        }
+        if (result?.error === 'INVALID_TITLE') {
+          setRenameError("Timeline name must include at least one letter or number.");
+          restoreRenameFocus();
+          return;
+        }
+        setRenameError(result?.error || 'Rename failed');
+        restoreRenameFocus();
+        return;
+      }
+      onTimelineRenamed?.(result);
     }
-    setRenameTarget(null);
-    setRenameName("");
+    closeRenameDialog();
     await refreshLocal();
   };
 
@@ -1540,18 +1588,28 @@ export default function HomePage({
       )}
 
       {renameTarget && (
-        <div className="settings-backdrop" onClick={() => setRenameTarget(null)}>
+        <div className="settings-backdrop" onClick={closeRenameDialog}>
           <div className="folder-modal" onClick={(e) => e.stopPropagation()}>
             <input
+              ref={renameInputRef}
               className="folder-modal-input"
               type="text"
               value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleRename()}
+              onChange={(e) => {
+                setRenameName(e.target.value);
+                if (renameError) setRenameError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleRename();
+                }
+              }}
               autoFocus
             />
+            {renameError && <p className="folder-modal-text folder-modal-error">{renameError}</p>}
             <div className="folder-modal-actions">
-              <button className="folder-modal-btn" onClick={() => setRenameTarget(null)}>Cancel</button>
+              <button className="folder-modal-btn" onClick={closeRenameDialog}>Cancel</button>
               <button className="folder-modal-btn folder-modal-btn-primary" onClick={handleRename} disabled={!renameName.trim()}>Rename</button>
             </div>
           </div>
