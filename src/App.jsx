@@ -1467,7 +1467,7 @@ function App() {
           uid: generateStorageUid(timelineId),
           type: "timeline",
         title: timelineConfig.title,
-        appVersion: "0.6.0-alpha.1",
+        appVersion: "0.6.0-alpha.2",
         start: timelineConfig.start,
         end: timelineConfig.end,
           detailLevel: timelineConfig.detailLevel,
@@ -2100,7 +2100,7 @@ function App() {
   if (!timelineData) {
     return (
       <>
-        <TopBar title="Timelines" version="v0.6.0-alpha.1" />
+        <TopBar title="Timelines" version="v0.6.0-alpha.2" />
         <div className={`app-shell ${isElectron ? 'with-title-bar' : ''}`}>
           <HomePage
             onSelectTimeline={handleLoadTimeline}
