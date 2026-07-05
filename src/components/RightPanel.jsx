@@ -1202,7 +1202,6 @@ export default function RightPanel({
                             {parentSuggestions.length > 0 ? parentSuggestions.map((span) => (
                               <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); const next = { ...formData, parents: [span.id], groupId: span.groupId ?? formData.groupId }; setFormData(next); commitDraft(next); setParentQuery(""); setIsParentMenuOpen(false); }}>
                                 <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                <span className="branch-suggestion-id">{span.id}</span>
                               </button>
                             )) : <div className="branch-suggestion-empty">No matching spans</div>}
                           </div>
@@ -1294,7 +1293,6 @@ export default function RightPanel({
                               {suggestions.length > 0 ? suggestions.map((span) => (
                                 <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); if (spanRelationType === "branch") setSpanParent(span.id); else setExtendFrom(span.id); }}>
                                   <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                  <span className="branch-suggestion-id">{span.id}</span>
                                 </button>
                               )) : <div className="branch-suggestion-empty">{emptyMsg}</div>}
                             </div>
@@ -1337,7 +1335,6 @@ export default function RightPanel({
                             {mergeParentSuggestions.length > 0 ? mergeParentSuggestions.map((span) => (
                               <button key={span.id} type="button" className="branch-suggestion-item" onMouseDown={(e) => { e.preventDefault(); setMergeParent(span.id); }}>
                                 <span className="branch-suggestion-title">{span.title || span.id}</span>
-                                <span className="branch-suggestion-id">{span.id}</span>
                               </button>
                             )) : <div className="branch-suggestion-empty">No matching spans</div>}
                           </div>

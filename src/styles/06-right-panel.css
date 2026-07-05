@@ -846,11 +846,6 @@
   color: var(--text-primary);
 }
 
-.branch-suggestion-id {
-  font-size: var(--text-2xs);
-  color: var(--text-subtle);
-}
-
 .branch-suggestion-empty {
   padding: 6px 8px;
   font-size: var(--text-xs);
