@@ -1461,25 +1461,27 @@ function App() {
   const handleCreateTimeline = async (timelineConfig) => {
     // Create new timeline data structure
     const timelineId = generateIdFromTitle(timelineConfig.title, "timeline").replace(/^timeline-/, "");
-    const newTimeline = {
-      file: {
-        id: `${timelineId}-timeline`,
-        uid: generateStorageUid(timelineId),
-        type: "timeline",
+      const newTimeline = {
+        file: {
+          id: `${timelineId}-timeline`,
+          uid: generateStorageUid(timelineId),
+          type: "timeline",
         title: timelineConfig.title,
         appVersion: "0.6.0-alpha.1",
         start: timelineConfig.start,
         end: timelineConfig.end,
-        detailLevel: timelineConfig.detailLevel,
-        theme: timelineConfig.theme || defaultThemeKey,
-        startLabel: timelineConfig.startLabel,
-        endLabel: timelineConfig.endLabel,
-        layout: timelineConfig.layout || "Horizontal",
-        branchOrdering: timelineConfig.branchOrdering || "later-first",
-        groups: [DEFAULT_GROUP],
-      },
-      elements: []
-    };
+          detailLevel: timelineConfig.detailLevel,
+          theme: timelineConfig.theme || defaultThemeKey,
+          startLabel: timelineConfig.startLabel,
+          endLabel: timelineConfig.endLabel,
+          layout: timelineConfig.layout || "Horizontal",
+          branchOrdering: timelineConfig.branchOrdering || "later-first",
+          useSpreadsheet: timelineConfig.useSpreadsheet || undefined,
+          useMaps: timelineConfig.useMaps || undefined,
+          groups: [DEFAULT_GROUP],
+        },
+        elements: []
+      };
 
     if (!timelineConfig.startLabel) delete newTimeline.file.startLabel;
     if (!timelineConfig.endLabel) delete newTimeline.file.endLabel;

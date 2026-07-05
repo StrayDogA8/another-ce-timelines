@@ -10,6 +10,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
   const [end, setEnd] = useState("2024");
   const [detailLevel, setDetailLevel] = useState(1);
   const [detailSlider, setDetailSlider] = useState(50);
+  const [useSpreadsheet, setUseSpreadsheet] = useState(false);
+  const [useMaps, setUseMaps] = useState(false);
   const [showDetailTooltip, setShowDetailTooltip] = useState(false);
   const [detailTooltipLeft, setDetailTooltipLeft] = useState(0);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -95,6 +97,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
       detailLevel: Number(detailLevel),
       startLabel: parsedStart.label,
       endLabel: parsedEnd.label,
+      useSpreadsheet,
+      useMaps,
     });
 
     if (result?.error) {
@@ -109,6 +113,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     setEnd("2024");
     setDetailLevel(1);
     setDetailSlider(50);
+    setUseSpreadsheet(false);
+    setUseMaps(false);
     setValidationErrors([]);
   };
 
@@ -119,6 +125,8 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
     setEnd("2024");
     setDetailLevel(1);
     setDetailSlider(50);
+    setUseSpreadsheet(false);
+    setUseMaps(false);
     setValidationErrors([]);
     onClose();
   };
@@ -253,6 +261,44 @@ export default function NewTimelineModal({ isOpen, onClose, onCreate }) {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Spreadsheet View</div>
+              <div className="settings-row-description">Enable a table view for bulk editing elements.</div>
+            </div>
+            <div className="settings-row-right">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={useSpreadsheet}
+                  onChange={(e) => setUseSpreadsheet(e.target.checked)}
+                />
+                <span className="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-left">
+              <div className="settings-row-label">Maps</div>
+              <div className="settings-row-description">Enable adding coordinates to events, eras, and spans to view them on a map.</div>
+            </div>
+            <div className="settings-row-right">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={useMaps}
+                  onChange={(e) => setUseMaps(e.target.checked)}
+                />
+                <span className="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div className="settings-form-note">
+            These options can be changed later in timeline settings.
           </div>
 
         </div>
