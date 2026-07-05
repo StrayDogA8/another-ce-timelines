@@ -847,9 +847,10 @@ export function layoutEvents({
 
   // Use continuous vertical packing instead of discrete lanes
   const VERTICAL_GAP = Math.max(0, LANE_SPACING - singleLineHeight);
+  const SPAN_BAND_CLEARANCE = 17;
   const LANE0_TOP = belowLine
     ? BASE_LINE_Y + spanBandHeight + BOX_OFFSET
-    : BASE_LINE_Y - spanBandHeight - BOX_OFFSET;
+    : BASE_LINE_Y - spanBandHeight - Math.max(BOX_OFFSET, singleLineHeight + SPAN_BAND_CLEARANCE);
   const placed = []; // { left, right, top, boxHeight }
 
   const finalEvents = laidOut.map((event) => {
